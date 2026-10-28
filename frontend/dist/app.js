@@ -16,6 +16,8 @@ const BUSY_MS = 1500;
 const DEFAULT_LEFT = 290;
 const DEFAULT_RIGHT = 330;
 const FONT_KEY = "quarters.fontSize";
+// Phones read like a chat app; pinch the terminal to change it.
+const defaultFontSize = () => (matchMedia("(max-width: 760px)").matches ? 15 : 13);
 
 const state = {
   projects: [],
@@ -35,7 +37,7 @@ const state = {
   openSec: { mcp: true, skills: false }, // stats sections unfolded
   collapsed: new Set(), // folded project groups
   tokenView: "session",
-  fontSize: Number(localStorage.getItem(FONT_KEY)) || (matchMedia("(max-width: 760px)").matches ? 11 : 13),
+  fontSize: Number(localStorage.getItem(FONT_KEY)) || defaultFontSize(),
   byKey: {}, // tab key -> tab (a key names a session across windows)
   groups: {}, // automation run id -> split group
   me: "", // this window's name among the windows sharing sessions
@@ -1058,7 +1060,7 @@ function onMenu(action) {
       setFontSize(state.fontSize - 1);
       break;
     case "font-reset":
-      setFontSize(13);
+      setFontSize(defaultFontSize());
       break;
     default:
       if (action.startsWith("tab-")) selectEntry(Number(action.slice(4)) - 1);
@@ -2311,6 +2313,35 @@ function wireActiveList() {
   });
 }
 
+// Pinching a terminal with two fingers changes the text size (phones,
+// tablets); it is kept per device, like ⌘+ and ⌘- on the Mac.
+function wirePinch() {
+  const terms = $("#terms");
+  let start = 0, base = 0, last = 0;
+  const gap = (t) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
+  terms.addEventListener("touchstart", (e) => {
+    if (e.touches.length !== 2) return;
+    start = gap(e.touches);
+    base = last = state.fontSize;
+  }, { passive: true });
+  terms.addEventListener("touchmove", (e) => {
+    if (e.touches.length !== 2 || !start) return;
+    e.preventDefault(); // not the page's own zoom
+    const n = Math.round(base * (gap(e.touches) / start));
+    if (n !== last) {
+      last = n;
+      setFontSize(n);
+    }
+  }, { passive: false });
+  terms.addEventListener("gesturestart", (e) => e.preventDefault()); // Safari's own pinch zoom
+  terms.addEventListener("touchend", (e) => {
+    if (e.touches.length < 2 && start) {
+      start = 0;
+      if (last !== base) flash(`text size ${state.fontSize}`);
+    }
+  });
+}
+
 function wireMobile() {
   $("#btn-drawer").addEventListener("click", () => openDrawer("left"));
   $("#btn-stats").addEventListener("click", () => openDrawer("right"));
@@ -2321,6 +2352,7 @@ function wireMobile() {
   });
   wireKeybar();
   wireViewport();
+  wirePinch();
   // The key bar shows while a terminal has the keyboard.
   const typing = () => document.body.classList.toggle("typing", !!document.activeElement?.closest?.(".xterm"));
   document.addEventListener("focusin", typing);

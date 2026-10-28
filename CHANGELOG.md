@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Phones show the terminal at 15px (was 11px), closer to a chat app, and
+  pinching a terminal with two fingers changes the text size.
+
 - Each window works on its own. A Claude tab in a window you're not using
   pauses ("In use on another device") instead of following the other
   window's size and keystrokes; clicking or typing there takes it back,
