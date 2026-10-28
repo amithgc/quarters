@@ -259,7 +259,10 @@ func TestClaudeRemoteControl(t *testing.T) {
 		}
 	}, nil)
 	defer a.sessions.CloseAll()
-	if err := a.editConfig(func(c *config.Config) error { c.Command = []string{"/bin/sh", "-c", `echo "ARGS: $*"; sleep 5`, "sh"} // stays up so its output is read; return nil }); err != nil {
+	if err := a.editConfig(func(c *config.Config) error {
+		c.Command = []string{"/bin/sh", "-c", `echo "ARGS: $*"; sleep 5`, "sh"}
+		return nil
+	}); err != nil {
 		t.Fatal(err)
 	}
 	if err := a.SetClaudeRemote(true); err != nil || !a.Settings().ClaudeRemote {
