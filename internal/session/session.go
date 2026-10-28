@@ -303,11 +303,18 @@ func (m *Manager) Resize(client string, id, cols, rows int) {
 }
 
 // Claim makes client the owner of a session and gives it client's size.
+// The program always redraws (the new owner clears its screen for that):
+// at an unchanged size, it is nudged with a one-row-smaller size first.
 func (m *Manager) Claim(client string, id, cols, rows int) {
-	if s := m.get(id); s != nil {
-		m.claim(s, client)
-		m.Resize(client, id, cols, rows)
+	s := m.get(id)
+	if s == nil || cols <= 0 || rows <= 0 {
+		return
 	}
+	m.claim(s, client)
+	if cur, err := pty.GetsizeFull(s.pty); err == nil && int(cur.Cols) == cols && int(cur.Rows) == rows && rows > 3 {
+		_ = pty.Setsize(s.pty, &pty.Winsize{Cols: uint16(cols), Rows: uint16(rows - 1)})
+	}
+	m.Resize(client, id, cols, rows)
 }
 
 func (m *Manager) claim(s *session, client string) {

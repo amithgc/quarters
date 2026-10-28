@@ -364,6 +364,8 @@ async function newTab(path, kind = "claude", opts = {}) {
     }
   }
   fit.fit();
+  // Phones: no AutoFill bar (passwords, cards) over the keyboard.
+  term.textarea?.setAttribute("autocomplete", "off");
 
   // Shift+Enter makes a new line in Claude Code: it sends Ctrl+J (line
   // feed), which Claude Code always reads as "new line", never "send".
@@ -413,10 +415,20 @@ async function newTab(path, kind = "claude", opts = {}) {
     if (!tab.exited) Go().Write(tab.id, stickyCtrl(d));
   });
   term.onBinary((d) => canType() && !tab.exited && Go().Write(tab.id, d));
-  term.onResize(({ cols, rows }) => tab.owner === state.me && Go().Resize(tab.id, cols, rows));
+  let resizing = 0;
+  term.onResize(() => {
+    clearTimeout(resizing); // dragging a panel resizes many times: send the size it settles on
+    resizing = setTimeout(() => {
+      if (tab.owner !== state.me || tab.exited) return;
+      if (tab.ptyCols && tab.ptyCols !== term.cols) freshScreen(tab);
+      tab.ptyCols = term.cols;
+      Go().Resize(tab.id, term.cols, term.rows);
+    }, 120);
+  });
   await syncOutput(tab);
   if (adopt && adopt.exited) markExited(tab, adopt.code);
   if (!adopt) Go().Resize(tab.id, term.cols, term.rows);
+  tab.ptyCols = adopt ? 0 : term.cols;
   if (!opts.background) {
     setFocus("terminal");
     term.focus();
@@ -463,7 +475,19 @@ function writeChunk(tab, { data, off }) {
 function claimTab(tab) {
   if (!tab || !tab.id || tab.exited || tab.owner === state.me) return;
   tab.owner = state.me;
+  freshScreen(tab); // the Mac redraws the program for the new size (claim always does)
+  tab.ptyCols = tab.term.cols;
   Go().Claim(tab.id, tab.term.cols, tab.term.rows);
+}
+
+// freshScreen scrolls what's on screen into the scrollback before Claude
+// redraws at a new width. Otherwise its earlier frames, rewrapped to the
+// new width, stay behind as stacks of ──── lines. Shells don't redraw, so
+// they keep their screen.
+function freshScreen(tab) {
+  if (tab.kind === "shell" || tab.autoKey) return;
+  const t = tab.term;
+  t.write(`\x1b[${t.rows};1H` + "\n".repeat(t.rows) + "\x1b[H");
 }
 
 function claimActive() {
@@ -1436,6 +1460,27 @@ function render() {
   renderTitle();
   renderProjects();
   renderTabs();
+  renderActiveList();
+}
+
+// renderActiveList shows, on the welcome screen, the projects with open
+// sessions: working ones first, then those waiting for you.
+function renderActiveList() {
+  const el = $("#active-list");
+  const rank = { busy: 0, waiting: 1 };
+  const live = orderedProjects()
+    .map((p) => ({ p, st: projectStatus(p.path), n: tabsOf(p.path).filter((t) => !t.exited).length }))
+    .filter((x) => x.st !== "idle")
+    .sort((a, b) => rank[a.st] - rank[b.st]);
+  const html = live.length
+    ? `<div class="al-head muted">Active now · ${live.length}</div>` +
+      live.map(({ p, st, n }) => `<button type="button" class="al-row" data-open="${esc(p.path)}">${iconHTML(p)}<span class="al-name">${esc(p.name)}</span>
+        <span class="al-st">${STATUS_ICON[st]} ${st === "busy" ? "working" : "waiting for you"}${n > 1 ? ` · ${n} tabs` : ""}</span></button>`).join("")
+    : "";
+  if (el.dataset.html === html) return;
+  el.dataset.html = html;
+  el.innerHTML = html;
+  el.classList.toggle("hidden", !live.length);
 }
 
 function renderTitle() {
@@ -2216,6 +2261,13 @@ function wireViewport() {
   vv.addEventListener("resize", fit);
   vv.addEventListener("scroll", fit);
   fit();
+}
+
+function wireActiveList() {
+  $("#active-list").addEventListener("click", (e) => {
+    const b = e.target.closest("[data-open]");
+    if (b) openProject(b.dataset.open);
+  });
 }
 
 function wireMobile() {
@@ -3089,6 +3141,7 @@ async function main() {
 
   wireEvents();
   wireResize();
+  wireActiveList();
   wireProjects();
   wireTabs();
   wirePalette();
@@ -3145,6 +3198,7 @@ async function main() {
     renderTitle();
     renderProjects();
     if (Object.keys(state.tabs).length) renderTabs();
+    renderActiveList();
   }, 1000);
   setInterval(refreshStats, 2000);
   setInterval(refreshLinks, 4000);

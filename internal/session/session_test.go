@@ -118,3 +118,44 @@ func TestSnapshotAndOwner(t *testing.T) {
 		t.Error("no session:close event")
 	}
 }
+
+// Taking over a session makes its program redraw, even at the same size
+// (the new window cleared its screen for the redraw).
+func TestClaimRedraws(t *testing.T) {
+	var mu sync.Mutex
+	var out strings.Builder
+	m := NewManager(func(event string, data any) {
+		if o, ok := data.(Output); ok {
+			b, _ := base64.StdEncoding.DecodeString(o.Data)
+			mu.Lock()
+			out.Write(b)
+			mu.Unlock()
+		}
+	}, nil)
+	defer m.CloseAll()
+	script := `trap 'echo "WINCH $(stty size)"' WINCH; echo READY; while :; do sleep 0.05; done`
+	id, err := m.Start(t.TempDir(), []string{"/bin/bash", "-c", script}, 80, 24, "", nil, "mac")
+	if err != nil {
+		t.Fatal(err)
+	}
+	wait := func(s string) bool {
+		for deadline := time.Now().Add(5 * time.Second); time.Now().Before(deadline); time.Sleep(50 * time.Millisecond) {
+			mu.Lock()
+			ok := strings.Contains(out.String(), s)
+			mu.Unlock()
+			if ok {
+				return true
+			}
+		}
+		return false
+	}
+	if !wait("READY") {
+		t.Fatal("script never started")
+	}
+	m.Claim("phone", id, 80, 24) // same size
+	if !wait("WINCH 24 80") {
+		mu.Lock()
+		defer mu.Unlock()
+		t.Fatalf("no redraw signal at the same size; got %q", out.String())
+	}
+}

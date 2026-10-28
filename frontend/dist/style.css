@@ -210,6 +210,12 @@ body.remote .legend { display: none; }
 .mascot-text { display: flex; flex-direction: column; min-width: 0; }
 #mascot-title { font-weight: 700; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 #mascot-sub { font-size: 12px; line-height: 18px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.active-list { width: min(560px, 100%); display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
+.al-head { font-size: 12px; letter-spacing: .04em; padding-left: 2px; }
+.al-row { display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 8px 14px; border: 1px solid var(--border); border-radius: 10px; text-align: left; width: 100%; }
+.al-row:hover { border-color: var(--accent); }
+.al-name { flex: 1; min-width: 0; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.al-st { font-size: 12px; color: var(--muted); white-space: nowrap; }
 .welcome-card { border: 1px solid var(--accent); border-radius: 10px; padding: 18px 22px; max-width: 560px; display: flex; flex-direction: column; gap: 10px; }
 .wc-title { font-size: 15px; }
 .wc-keys { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; color: var(--muted); }

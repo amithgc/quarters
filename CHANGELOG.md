@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- The welcome screen lists the projects with open sessions (working or
+  waiting for you); tap one to open it.
+- A session taken over by a window of another width (phone ↔ Mac) is
+  redrawn cleanly instead of leaving copies of Claude's input box behind.
+  The phone keyboard no longer shows the AutoFill bar over the terminal.
+
 - **Password sign-in:** a username and password, set on the Mac, for
   browsers that can't use a passkey. Stored as an argon2id hash, with the
   same lockouts as passkeys. `Quarters --set-password <name>` sets it
