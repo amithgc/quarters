@@ -408,7 +408,9 @@ func (s *Server) pairBegin(w http.ResponseWriter, r *http.Request) {
 	}
 	var exclude []protocol.CredentialDescriptor
 	for _, d := range s.auth.st.devices() {
-		exclude = append(exclude, d.Credential.Descriptor())
+		if len(d.Credential.ID) > 0 {
+			exclude = append(exclude, d.Credential.Descriptor())
+		}
 	}
 	opts, data, err := s.auth.wa.BeginRegistration(owner{s.auth.st},
 		webauthn.WithAuthenticatorSelection(protocol.AuthenticatorSelection{
@@ -424,7 +426,7 @@ func (s *Server) pairBegin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id := s.auth.putCeremony(&ceremony{kind: "pair", data: *data, expires: time.Now().Add(ceremonyTTL), code: req.Code, name: name})
-	setCeremonyCookie(w, s.secure, id)
+	setCeremonyCookie(w, s.reqSecure(r), id)
 	writeJSON(w, http.StatusOK, opts)
 }
 
@@ -432,7 +434,7 @@ func (s *Server) pairBegin(w http.ResponseWriter, r *http.Request) {
 func (s *Server) pairFinish(w http.ResponseWriter, r *http.Request) {
 	ip := s.clientIP(r)
 	c := s.auth.takeCeremony(ceremonyID(r), "pair")
-	clearCeremonyCookie(w, s.secure)
+	clearCeremonyCookie(w, s.reqSecure(r))
 	if c == nil {
 		writeJSON(w, http.StatusBadRequest, jsonErr{"That took too long. Start again."})
 		return
@@ -461,13 +463,13 @@ func (s *Server) pairFinish(w http.ResponseWriter, r *http.Request) {
 	}
 	s.auth.log.add("paired", dev.Name, ip, r.UserAgent())
 	s.alert("Quarters: new device paired", fmt.Sprintf("“%s” can now use Quarters remotely (from %s).", dev.Name, ip))
-	s.signIn(w, dev, ip)
+	s.signIn(w, r, dev, ip)
 	writeJSON(w, http.StatusOK, map[string]string{"name": dev.Name})
 }
 
 // loginBegin → passkey request options (any paired passkey).
 func (s *Server) loginBegin(w http.ResponseWriter, r *http.Request) {
-	if len(s.auth.st.devices()) == 0 {
+	if !s.hasPasskeys() {
 		writeJSON(w, http.StatusConflict, jsonErr{"No device is paired yet. On the Mac: Remote Access → Pair a device."})
 		return
 	}
@@ -477,7 +479,7 @@ func (s *Server) loginBegin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id := s.auth.putCeremony(&ceremony{kind: "login", data: *data, expires: time.Now().Add(ceremonyTTL)})
-	setCeremonyCookie(w, s.secure, id)
+	setCeremonyCookie(w, s.reqSecure(r), id)
 	writeJSON(w, http.StatusOK, opts)
 }
 
@@ -485,7 +487,7 @@ func (s *Server) loginBegin(w http.ResponseWriter, r *http.Request) {
 func (s *Server) loginFinish(w http.ResponseWriter, r *http.Request) {
 	ip := s.clientIP(r)
 	c := s.auth.takeCeremony(ceremonyID(r), "login")
-	clearCeremonyCookie(w, s.secure)
+	clearCeremonyCookie(w, s.reqSecure(r))
 	if c == nil {
 		writeJSON(w, http.StatusBadRequest, jsonErr{"That took too long. Try again."})
 		return
@@ -496,7 +498,7 @@ func (s *Server) loginFinish(w http.ResponseWriter, r *http.Request) {
 			return nil, errors.New("unknown user")
 		}
 		d, ok := s.auth.st.device(credID(rawID))
-		if !ok {
+		if !ok || len(d.Credential.ID) == 0 {
 			return nil, errors.New("unknown passkey (removed device?)")
 		}
 		dev = d
@@ -522,24 +524,34 @@ func (s *Server) loginFinish(w http.ResponseWriter, r *http.Request) {
 	_ = s.auth.st.used(dev.ID, *cred, ip)
 	s.auth.log.add("sign-in", dev.Name, ip, r.UserAgent())
 	s.alert("Quarters: remote sign-in", fmt.Sprintf("“%s” signed in from %s.", dev.Name, ip))
-	s.signIn(w, dev, ip)
+	s.signIn(w, r, dev, ip)
 	writeJSON(w, http.StatusOK, map[string]string{"name": dev.Name})
 }
 
-func (s *Server) signIn(w http.ResponseWriter, dev Device, ip string) {
+func (s *Server) signIn(w http.ResponseWriter, r *http.Request, dev Device, ip string) {
 	tok := s.auth.newSession(dev, ip)
-	http.SetCookie(w, &http.Cookie{Name: s.cookieName(), Value: tok, Path: "/", MaxAge: int(sessionMax.Seconds()),
-		HttpOnly: true, Secure: s.secure, SameSite: http.SameSiteStrictMode})
+	http.SetCookie(w, &http.Cookie{Name: s.cookieName(r), Value: tok, Path: "/", MaxAge: int(sessionMax.Seconds()),
+		HttpOnly: true, Secure: s.reqSecure(r), SameSite: http.SameSiteStrictMode})
+}
+
+// hasPasskeys reports whether any device is paired with a passkey.
+func (s *Server) hasPasskeys() bool {
+	for _, d := range s.auth.st.devices() {
+		if len(d.Credential.ID) > 0 {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
-	if c, err := r.Cookie(s.cookieName()); err == nil {
+	if c, err := r.Cookie(s.cookieName(r)); err == nil {
 		h := hashToken(c.Value)
 		s.auth.dropSession(h)
 		s.hub.closeSession(h)
 	}
-	http.SetCookie(w, &http.Cookie{Name: s.cookieName(), Value: "", Path: "/", MaxAge: -1,
-		HttpOnly: true, Secure: s.secure, SameSite: http.SameSiteStrictMode})
+	http.SetCookie(w, &http.Cookie{Name: s.cookieName(r), Value: "", Path: "/", MaxAge: -1,
+		HttpOnly: true, Secure: s.reqSecure(r), SameSite: http.SameSiteStrictMode})
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 

@@ -230,8 +230,15 @@ is then at `http://localhost:8421`, which another computer can reach through
 SSH (`ssh -L 8421:localhost:8421 your-mac`, then open
 `http://localhost:8421` and the pairing link there). Phones need the tunnel.
 
+**At home, without a tunnel:** turn on **Home network** in Remote Access and
+set a **username and password** there. Phones and computers on the same Wi-Fi
+then open `http://<the Mac's IP>:8421` (the dialog shows the addresses and a
+QR code) and sign in with the password, since passkeys don't work on a plain
+IP address. The connection isn't encrypted, so keep it to networks you trust.
+
 For a machine with no screen, `Quarters.app/Contents/MacOS/Quarters --serve`
-runs only the server (it uses the same settings and prints a pairing link).
+runs only the server (it uses the same settings and prints a pairing link);
+`Quarters --set-password <name>` sets the password.
 
 ## Configuration
 

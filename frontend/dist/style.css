@@ -442,6 +442,9 @@ body.remote.offline .offline-badge { display: inline; color: var(--yellow); }
 .rm-actions { display: flex; gap: 8px; margin-top: 4px; }
 .btn:disabled { opacity: .45; pointer-events: none; }
 .rm-pairing { display: flex; gap: 16px; align-items: center; padding: 12px; border: 1px dashed var(--accent); border-radius: 10px; margin-top: 6px; }
+.rm-pw { display: grid; grid-template-columns: 1fr 1fr 1fr auto; gap: 8px; margin-top: 6px; }
+.rm-pw input { min-width: 0; }
+.rm-lan-row { margin-top: 4px; }
 .rm-pairing img { width: 180px; height: 180px; border-radius: 8px; background: #fff; padding: 6px; image-rendering: pixelated; flex-shrink: 0; }
 .rm-pair-text { display: flex; flex-direction: column; gap: 6px; min-width: 0; align-items: flex-start; }
 .rm-pair-text code { font-size: 11px; line-height: 15px; word-break: break-all; user-select: text; -webkit-user-select: text; color: var(--soft); }

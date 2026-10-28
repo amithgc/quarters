@@ -1,4 +1,5 @@
-// Sign-in and pairing pages: passkeys (WebAuthn) only.
+// Sign-in and pairing pages: passkeys (WebAuthn), and a username and
+// password where a passkey can't be used.
 
 const $ = (s) => document.querySelector(s);
 const page = document.body.dataset.page;
@@ -94,12 +95,50 @@ async function pair(code) {
   }
 }
 
-if (!window.PublicKeyCredential) {
-  say("This browser cannot use passkeys. Use Safari or Chrome on a recent iOS, Android or computer.", "err");
-  $("#go").disabled = true;
-} else if (page === "login") {
+async function passwordLogin(e) {
+  e.preventDefault();
+  $("#pw-go").disabled = true;
+  say("Signing in…");
+  try {
+    await post("/auth/password", { user: $("#user").value.trim(), password: $("#pass").value });
+    say("Signed in.", "ok");
+    location.replace("/");
+  } catch (err) {
+    say(friendly(err), "err");
+    $("#pass").value = "";
+    $("#pw-go").disabled = false;
+  }
+}
+
+// Passkeys need HTTPS (or localhost) and a name, never an IP address.
+const passkeysWork = !!window.PublicKeyCredential && window.isSecureContext;
+
+async function setupLogin() {
   fetch("/auth/me", { credentials: "same-origin" }).then((r) => r.ok && location.replace("/"));
+  const info = await fetch("/auth/info", { credentials: "same-origin" }).then((r) => r.json()).catch(() => ({}));
+  const passkey = passkeysWork && info.passkeyHere !== false;
+  $("#go").classList.toggle("hidden", !passkey);
   $("#go").addEventListener("click", login);
+  if (info.password) {
+    $("#pw").classList.remove("hidden");
+    $("#or").classList.toggle("hidden", !passkey);
+    $("#pw-go").classList.toggle("quiet", passkey && info.passkeys);
+    $("#pw").addEventListener("submit", passwordLogin);
+    if (!passkey) {
+      $("#foot").textContent = "Passkeys don't work at this address, so sign in with the username and password set on the Mac.";
+      $("#user").focus();
+    }
+  } else if (!passkey) {
+    say("Passkeys don't work at this address, and no password is set. On the Mac: Remote Access → Password sign-in.", "err");
+    $("#foot").classList.add("hidden");
+  }
+}
+
+if (page === "login") {
+  setupLogin();
+} else if (!passkeysWork) {
+  say("Pairing makes a passkey, which needs an https:// address or localhost. Here, sign in with the username and password instead.", "err");
+  $("#go").disabled = true;
 } else if (page === "pair") {
   // The code is in the link's #fragment, which browsers never send to a server.
   const code = location.hash.slice(1);

@@ -18,8 +18,18 @@
   <h1><span class="accent">◆</span> Quarters</h1>
   <p class="muted">Your Claude Code sessions, from anywhere.</p>
   <button id="go" class="primary" type="button">Sign in with passkey</button>
+  <form id="pw" class="pw hidden" autocomplete="on">
+    <div id="or" class="or muted hidden">or</div>
+    <label class="field">Username
+      <input id="user" name="username" type="text" autocomplete="username" autocapitalize="off" spellcheck="false" required>
+    </label>
+    <label class="field">Password
+      <input id="pass" name="password" type="password" autocomplete="current-password" required>
+    </label>
+    <button id="pw-go" class="primary" type="submit">Sign in</button>
+  </form>
   <p id="msg" class="msg" role="status"></p>
-  <p class="foot muted">Face ID, Touch ID or your device PIN unlocks your passkey.<br>New device? Pair it from the Mac: <b>Remote Access → Pair a device</b>.</p>
+  <p id="foot" class="foot muted">Face ID, Touch ID or your device PIN unlocks your passkey.<br>New device? Pair it from the Mac: <b>Remote Access → Pair a device</b>.</p>
 </main>
 <script type="module" src="/auth-ui/auth.js"></script>
 </body>

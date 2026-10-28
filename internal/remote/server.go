@@ -41,9 +41,12 @@ type Options struct {
 	URL     string // public address, e.g. https://quarters.example.com; empty: http://localhost:<port>
 	Listen  string // local address, e.g. 127.0.0.1:8421
 	TLSCert string // needed when Listen is not loopback
-	TLSKey  string
-	Dir     string // where remote.json and remote.log are kept
-	App     fs.FS  // the web app (frontend/dist)
+	// LAN also opens it on the home network, at the Mac's private
+	// addresses and its .local name (plain HTTP: password sign-in only).
+	LAN    bool
+	TLSKey string
+	Dir    string // where remote.json and remote.log are kept
+	App    fs.FS  // the web app (frontend/dist)
 }
 
 // Server is the remote-access web server.
@@ -55,6 +58,8 @@ type Server struct {
 	secure  bool            // URL is https
 	local   bool            // URL is this Mac (no tunnel)
 	site    string          // host[:port] of URL
+	port    string          // of Listen
+	mdns    string          // this Mac's .local name, lowercase
 	auth    *auth
 	hub     *hub
 	log     *auditLog
@@ -98,7 +103,7 @@ func New(opts Options, b Backend) (*Server, error) {
 	if err != nil {
 		return nil, fmt.Errorf("listen address %q: %v", opts.Listen, err)
 	}
-	if !isLoopbackName(lh) && (opts.TLSCert == "" || opts.TLSKey == "") {
+	if !isLoopbackName(lh) && (opts.TLSCert == "" || opts.TLSKey == "") && !opts.LAN {
 		return nil, fmt.Errorf("listening on %s (not this Mac only) needs tls_cert and tls_key; or keep 127.0.0.1 and put a tunnel in front", opts.Listen)
 	}
 	log := &auditLog{path: filepath.Join(opts.Dir, "remote.log")}
@@ -111,6 +116,7 @@ func New(opts Options, b Backend) (*Server, error) {
 	// The tunnel may pass the local address as Host. Only exact loopback
 	// names are accepted, which still stops DNS-rebinding attacks.
 	_, port, _ := net.SplitHostPort(opts.Listen)
+	s.port, s.mdns = port, localName()
 	for _, h := range []string{"127.0.0.1", "localhost", "[::1]"} {
 		s.hosts[h+":"+port] = true
 	}
@@ -133,7 +139,11 @@ func isLoopbackName(h string) bool {
 
 // Start listens in the background.
 func (s *Server) Start() error {
-	ln, err := net.Listen("tcp", s.opts.Listen)
+	addr := s.opts.Listen
+	if s.opts.LAN {
+		addr = ":" + s.port // every interface; ServeHTTP turns away public addresses
+	}
+	ln, err := net.Listen("tcp", addr)
 	if err != nil {
 		return fmt.Errorf("cannot listen on %s: %v", s.opts.Listen, err)
 	}
@@ -146,7 +156,7 @@ func (s *Server) Start() error {
 	s.mu.Lock()
 	s.srv, s.running = srv, true
 	s.mu.Unlock()
-	s.log.add("started", s.origin, "listening on "+s.opts.Listen)
+	s.log.add("started", s.origin, "listening on "+addr)
 	go s.hub.sweep()
 	go func() {
 		var err error
@@ -219,6 +229,16 @@ func (s *Server) NewPairing() (Pairing, error) {
 	}
 	code.Scale = 6
 	return Pairing{URL: link, QR: "data:image/png;base64," + base64.StdEncoding.EncodeToString(code.PNG()), Expires: p.expires.UnixMilli()}, nil
+}
+
+// QR is a data: URL of a PNG QR code for link.
+func QR(link string) (string, error) {
+	code, err := qr.Encode(link, qr.M)
+	if err != nil {
+		return "", err
+	}
+	code.Scale = 6
+	return "data:image/png;base64," + base64.StdEncoding.EncodeToString(code.PNG()), nil
 }
 
 // CancelPairing makes the current pairing link useless.
@@ -317,8 +337,8 @@ func RemoveDeviceFile(dir, id string) error {
 
 func (s *Server) alert(title, body string) { s.backend.Alert(title, body) }
 
-func (s *Server) cookieName() string {
-	if s.secure {
+func (s *Server) cookieName(r *http.Request) string {
+	if s.reqSecure(r) {
 		return "__Host-quarters" // only ever sent to this exact host, over https
 	}
 	return "quarters"
@@ -373,13 +393,18 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if s.secure {
 		h.Set("Strict-Transport-Security", "max-age=31536000")
 	}
-	if !s.hosts[strings.ToLower(r.Host)] {
+	lan := s.lanHost(r.Host)
+	if !s.hosts[strings.ToLower(r.Host)] && !lan {
 		http.Error(w, "unknown host", http.StatusMisdirectedRequest)
+		return
+	}
+	if s.opts.LAN && !s.nearby(r) {
+		http.Error(w, "only open on the home network", http.StatusForbidden)
 		return
 	}
 	// Without a tunnel, 127.0.0.1 and localhost are different sites to a
 	// browser and passkeys only work on the URL's: send page loads there.
-	if s.local && r.Header.Get("Sec-Fetch-Mode") == "navigate" && strings.ToLower(r.Host) != s.site {
+	if s.local && !lan && r.Header.Get("Sec-Fetch-Mode") == "navigate" && strings.ToLower(r.Host) != s.site {
 		http.Redirect(w, r, s.origin+r.URL.RequestURI(), http.StatusFound)
 		return
 	}
@@ -432,7 +457,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) sessionOf(r *http.Request) (*session, [32]byte) {
-	c, err := r.Cookie(s.cookieName())
+	c, err := r.Cookie(s.cookieName(r))
 	if err != nil {
 		return nil, [32]byte{}
 	}
@@ -441,7 +466,7 @@ func (s *Server) sessionOf(r *http.Request) (*session, [32]byte) {
 
 // sameOrigin is the CSRF check: the request must come from our own page.
 func (s *Server) sameOrigin(r *http.Request) bool {
-	if r.Header.Get("Origin") != s.origin {
+	if r.Header.Get("Origin") != s.originOf(r) {
 		return false
 	}
 	site := r.Header.Get("Sec-Fetch-Site")
@@ -449,6 +474,11 @@ func (s *Server) sameOrigin(r *http.Request) bool {
 }
 
 func (s *Server) serveAuth(w http.ResponseWriter, r *http.Request, p string) {
+	if p == "/auth/info" && r.Method == http.MethodGet { // what the sign-in page offers
+		writeJSON(w, http.StatusOK, map[string]bool{"password": s.auth.st.password() != nil, "passkeys": s.hasPasskeys(),
+			"passkeyHere": !s.lanHost(r.Host)})
+		return
+	}
 	if p == "/auth/me" && r.Method == http.MethodGet {
 		sess, _ := s.sessionOf(r)
 		if sess == nil {
@@ -489,6 +519,8 @@ func (s *Server) serveAuth(w http.ResponseWriter, r *http.Request, p string) {
 		s.loginBegin(w, r)
 	case "/auth/login/finish":
 		s.loginFinish(w, r)
+	case "/auth/password":
+		s.passwordLogin(w, r)
 	default:
 		http.NotFound(w, r)
 	}

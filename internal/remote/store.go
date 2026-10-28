@@ -47,6 +47,8 @@ type store struct {
 	// VAPID keys sign Web Push messages (made the first time).
 	VAPIDPublic  string `json:"vapid_public,omitempty"`
 	VAPIDPrivate string `json:"vapid_private,omitempty"`
+	// Password is the username and password sign-in (password.go).
+	Password *passwordHash `json:"password,omitempty"`
 }
 
 func loadStore(dir string) (*store, error) {
@@ -144,6 +146,9 @@ func (st *store) remove(id string) (Device, error) {
 	for i, d := range st.Devices {
 		if d.ID == id {
 			st.Devices = append(st.Devices[:i], st.Devices[i+1:]...)
+			if id == passwordDevice {
+				st.Password = nil
+			}
 			return d, st.saveLocked()
 		}
 	}
@@ -159,7 +164,9 @@ func (o owner) WebAuthnDisplayName() string { return "Quarters" }
 func (o owner) WebAuthnCredentials() []webauthn.Credential {
 	var out []webauthn.Credential
 	for _, d := range o.st.devices() {
-		out = append(out, d.Credential)
+		if len(d.Credential.ID) > 0 { // not the password
+			out = append(out, d.Credential)
+		}
 	}
 	return out
 }

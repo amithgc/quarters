@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- **Password sign-in:** a username and password, set on the Mac, for
+  browsers that can't use a passkey. Stored as an argon2id hash, with the
+  same lockouts as passkeys. `Quarters --set-password <name>` sets it
+  without a window.
+- **Home network:** Remote Access can also open Quarters at the Mac's
+  address on your Wi-Fi (`http://192.168.x.x:8421`), with a QR code, for
+  private addresses only.
+
 - The public URL in Remote Access is optional: without one, the server runs
   at `http://localhost:8421`, for this Mac or an SSH tunnel.
 - Opening `http://127.0.0.1:<port>` without a public URL goes to

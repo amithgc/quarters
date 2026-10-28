@@ -12,7 +12,7 @@ import (
 // settings, pairing, devices, dialogs, Finder and config editing.
 func TestRemoteCannotCallMacOnly(t *testing.T) {
 	b := remoteBackend{a: &App{}, access: func(string) string { return "" }}
-	for _, m := range []string{"SetRemote", "RemoteStatus", "PairDevice", "CancelPairing", "RemoveDevice",
+	for _, m := range []string{"SetRemote", "SetRemotePassword", "RemoteStatus", "PairDevice", "CancelPairing", "RemoveDevice",
 		"SignOutAllDevices", "OpenConfig", "RevealProject", "Confirm", "ChooseFolder", "ChooseIcon",
 		"Notify", "SetBadge", "SaveLayout", "Call", "Alert", "startup", "NoSuchThing",
 		"SetDeviceAccess", "SetYolo", "SetHotkey", "SetViewing2", "background", "Settings2"} {

@@ -176,7 +176,7 @@
   <div class="dialog-box remote-box" role="dialog" aria-labelledby="rm-title">
     <div class="pal-head"><span id="rm-title" class="panel-title accent">REMOTE ACCESS</span><span id="rm-state" class="muted"></span></div>
     <div class="fields">
-      <div class="rm-intro muted">Use Quarters from your phone or any browser, over the internet. Devices sign in with a <b>passkey</b> (Face ID, Touch ID or PIN) and can only be paired from here, on this Mac.</div>
+      <div class="rm-intro muted">Use Quarters from your phone or any browser, over the internet. Devices sign in with a <b>passkey</b> (Face ID, Touch ID or PIN), paired from here on this Mac, or with the <b>username and password</b> you set below.</div>
       <div class="rm-power">
         <span id="rm-power-text" class="grow"></span>
         <button id="rm-toggle" class="btn primary" type="button">Start server</button>
@@ -189,6 +189,18 @@
       <div class="field">
         <label for="rm-listen">Local address</label>
         <input id="rm-listen" type="text" placeholder="127.0.0.1:8421" spellcheck="false" autocomplete="off">
+      </div>
+      <label class="set-row rm-lan-row"><span class="set-text"><b>Home network</b><span class="muted">Also open it at this Mac's address on your Wi-Fi, e.g. http://192.168.1.20:8421, for devices on the same network only. Passkeys can't work there, so browsers sign in with the password. Traffic on the network isn't encrypted: use it on a network you trust.</span></span><input type="checkbox" class="switch" id="rm-lan"></label>
+      <div id="rm-lan-info" class="rm-pairing hidden"></div>
+      <div class="field">
+        <span class="field-label">Password sign-in</span>
+        <div id="rm-pw-state" class="muted"></div>
+        <div class="rm-pw">
+          <input id="rm-user" type="text" placeholder="username" spellcheck="false" autocomplete="off" autocapitalize="off">
+          <input id="rm-pass" type="password" placeholder="password" autocomplete="new-password">
+          <input id="rm-pass2" type="password" placeholder="again" autocomplete="new-password">
+          <button id="rm-pw-set" class="btn" type="button">Set password</button>
+        </div>
       </div>
       <div id="rm-error" class="pd-error"></div>
       <div class="field">
@@ -221,7 +233,7 @@ cloudflared tunnel run --url http://127.0.0.1:8421 quarters</pre>
       <span class="muted rm-foot">A lost phone? Remove it here; it is cut off at once.</span>
       <span class="push"></span>
       <button id="rm-close" class="btn" type="button">Close</button>
-      <button id="rm-save" class="btn" type="button">Save addresses</button>
+      <button id="rm-save" class="btn" type="button">Save</button>
     </div>
   </div>
 </div>

@@ -88,7 +88,10 @@ type Remote struct {
 	URL string `json:"url,omitempty"`
 	// Listen is the local address of the web server. Default 127.0.0.1:8421.
 	// Anything other than loopback needs TLSCert and TLSKey.
-	Listen  string `json:"listen,omitempty"`
+	Listen string `json:"listen,omitempty"`
+	// LAN also opens it at this Mac's address on the home network (plain
+	// HTTP, password sign-in only), e.g. http://192.168.1.20:8421.
+	LAN     bool   `json:"lan,omitempty"`
 	TLSCert string `json:"tls_cert,omitempty"`
 	TLSKey  string `json:"tls_key,omitempty"`
 }

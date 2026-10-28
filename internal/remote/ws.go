@@ -75,7 +75,7 @@ func newHub(s *Server) *hub {
 		EnableCompression: true,
 		// Only our own page may open the socket (cookies alone would let
 		// another site's page in: cross-site WebSocket hijacking).
-		CheckOrigin: func(r *http.Request) bool { return r.Header.Get("Origin") == s.origin },
+		CheckOrigin: func(r *http.Request) bool { return r.Header.Get("Origin") == s.originOf(r) },
 	}
 	return h
 }
@@ -86,7 +86,7 @@ func (h *hub) serve(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "sign in first", http.StatusUnauthorized)
 		return
 	}
-	if r.Header.Get("Origin") != h.s.origin {
+	if r.Header.Get("Origin") != h.s.originOf(r) {
 		h.s.log.add("BLOCKED", "cross-origin websocket", h.s.clientIP(r), r.Header.Get("Origin"))
 		http.Error(w, "cross-origin request blocked", http.StatusForbidden)
 		return

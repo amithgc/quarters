@@ -20,6 +20,10 @@ button.primary:disabled { opacity: .55; cursor: default; }
 .field { width: 100%; display: flex; flex-direction: column; gap: 6px; text-align: left; color: var(--muted); font-size: 12px; margin-top: 6px; }
 .field input { width: 100%; min-height: 44px; padding: 8px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); color: var(--text); font: inherit; font-size: 16px; outline: none; }
 .field input:focus { border-color: var(--accent); }
+.hidden { display: none !important; }
+.pw { width: 100%; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.or { margin: 6px 0 0; font-size: 12px; }
+button.primary.quiet { background: transparent; color: var(--accent); border: 1px solid var(--accent); }
 .msg { min-height: 22px; font-size: 13px; }
 .msg.err { color: var(--red); }
 .msg.ok { color: var(--green); }

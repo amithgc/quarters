@@ -2297,6 +2297,9 @@ async function openRemoteDialog() {
   const v = await Go().RemoteStatus();
   $("#rm-url").value = v.url || "";
   $("#rm-listen").value = v.listen || "";
+  $("#rm-lan").checked = !!v.lan;
+  $("#rm-user").value = v.user || "";
+  $("#rm-pass").value = $("#rm-pass2").value = "";
   rmd.devices = (v.devices || []).length;
   renderRemote(v);
   clearInterval(rmd.timer);
@@ -2341,6 +2344,19 @@ function renderRemote(v) {
         <select class="rm-access" data-access="${esc(d.id)}" title="What this device may do">${[["full", "full control"], ["type", "type only"], ["view", "watch only"]].map(([v, l]) => `<option value="${v}"${(d.access || "full") === v ? " selected" : ""}>${l}</option>`).join("")}</select>
         <button class="btn danger" type="button" data-remove="${esc(d.id)}">Remove</button></div>`).join("")
     : '<div class="muted">No devices yet. Turn remote access on, then pair your phone.</div>';
+  $("#rm-pw-state").innerHTML = v.user
+    ? `On for <b>${esc(v.user)}</b>. Set a new password to change it (its browsers are signed out); remove <i>Password · ${esc(v.user)}</i> under Devices to turn it off.`
+    : "Off. Set one (10+ characters) for browsers that can't use a passkey, such as at the Mac's home-network address.";
+  $("#rm-pw-set").textContent = v.user ? "Change password" : "Set password";
+  const li = $("#rm-lan-info"), lanOn = v.running && v.lan && (v.lanURLs || []).length > 0;
+  li.classList.toggle("hidden", !lanOn);
+  if (lanOn && li.dataset.key !== v.lanURLs.join() + "|" + v.user) { // rebuilt only when it changes
+    li.dataset.key = v.lanURLs.join() + "|" + v.user;
+    li.innerHTML = `<img src="${v.lanQR}" alt="QR code of ${esc(v.lanURLs[0])}" width="132" height="132">
+      <div><b>On your home network</b><div class="muted">Scan with your phone's camera, or open:</div>
+      ${v.lanURLs.map((u) => `<div><code>${esc(u)}</code></div>`).join("")}
+      <div class="muted">${v.user ? `Sign in as <b>${esc(v.user)}</b>.` : '<span class="red">Set a password below first.</span>'}</div></div>`;
+  }
   $("#rm-pair").disabled = !v.running;
   $("#rm-signout").disabled = !v.running;
   const pb = $("#rm-pairing");
@@ -2387,7 +2403,7 @@ function wireRemoteDialog() {
   const setRemote = async (on) => {
     $("#rm-error").textContent = "";
     try {
-      await Go().SetRemote(on, $("#rm-url").value, $("#rm-listen").value);
+      await Go().SetRemote(on, $("#rm-url").value, $("#rm-listen").value, $("#rm-lan").checked);
       return true;
     } catch (e) {
       $("#rm-error").textContent = String(e).replace(/^Error: /, "");
@@ -2396,7 +2412,21 @@ function wireRemoteDialog() {
       refreshRemoteDialog();
     }
   };
-  $("#rm-save").addEventListener("click", async () => (await setRemote(!!(rmd.status && rmd.status.enabled))) && flash("addresses saved"));
+  $("#rm-save").addEventListener("click", async () => (await setRemote(!!(rmd.status && rmd.status.enabled))) && flash("remote access saved"));
+  $("#rm-lan").addEventListener("change", async () => (await setRemote(!!(rmd.status && rmd.status.enabled))) && flash($("#rm-lan").checked ? "home network on" : "home network off"));
+  $("#rm-pw-set").addEventListener("click", async () => {
+    const user = $("#rm-user").value.trim(), pw = $("#rm-pass").value;
+    $("#rm-error").textContent = "";
+    if (pw !== $("#rm-pass2").value) return ($("#rm-error").textContent = "the two passwords are different");
+    try {
+      await Go().SetRemotePassword(user, pw);
+      $("#rm-pass").value = $("#rm-pass2").value = "";
+      flash(`password set for ${user}`);
+    } catch (e) {
+      $("#rm-error").textContent = String(e).replace(/^Error: /, "");
+    }
+    refreshRemoteDialog();
+  });
   $("#rm-power-text").addEventListener("click", (e) => {
     if (!e.target.closest(".rm-addr")) return;
     e.preventDefault();
@@ -2435,7 +2465,9 @@ function wireRemoteDialog() {
     const b = e.target.closest("[data-remove]");
     if (!b) return;
     const name = b.closest(".rm-dev").querySelector("b").textContent;
-    if (!(await Go().Confirm(`Remove ${name}?`, "It is signed out at once and its passkey stops working here. You can pair it again later.", "Remove"))) return;
+    if (b.dataset.remove === "password") {
+      if (!(await Go().Confirm("Turn off password sign-in?", "Browsers signed in with the password are signed out at once. You can set a password again later.", "Turn off"))) return;
+    } else if (!(await Go().Confirm(`Remove ${name}?`, "It is signed out at once and its passkey stops working here. You can pair it again later.", "Remove"))) return;
     try {
       await Go().RemoveDevice(b.dataset.remove);
     } catch (err) {

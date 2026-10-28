@@ -28,11 +28,32 @@ unless you configure TLS certificates. The internet reaches it through a
 tunnel you run (Cloudflare Tunnel, Tailscale Funnel, …), so no ports are
 opened on your router.
 
+**Home network** (off by default) also opens it at the Mac's address on your
+Wi-Fi, over plain HTTP. Then:
+
+- Only connections from this Mac and private addresses (192.168.x.x,
+  10.x.x.x, 172.16–31.x.x, Tailscale's 100.64.x.x) are answered, and only
+  when the page was opened at one of those addresses or the Mac's `.local`
+  name.
+- Passkeys can't work there (they need HTTPS and a name), so browsers sign
+  in with the password.
+- **Traffic isn't encrypted.** Anyone who can watch your network can see
+  the password and the session. Use it on a network you trust, or use a
+  tunnel instead.
+
 ### Signing in
 
-- **Passkeys only** (WebAuthn, user verification required: Face ID, Touch ID
-  or the device PIN). There are no passwords. Passkeys are bound to your
-  domain, so a look-alike site can't use them.
+- **Passkeys** (WebAuthn, user verification required: Face ID, Touch ID or
+  the device PIN). Passkeys are bound to your domain, so a look-alike site
+  can't use them.
+- **A username and password**, only if you set one on the Mac (Remote
+  Access → Password sign-in, or `Quarters --set-password <name>`). It is
+  stored as an argon2id hash (64 MiB, 3 passes, random salt), never the
+  password itself, needs at least 10 characters, and has the same rate
+  limits and lockouts as passkeys. It shows up as one device,
+  *Password · name*, with its own access level; setting a new password signs
+  out its browsers, and removing it turns password sign-in off. A passkey is
+  stronger: prefer one wherever it works.
 - **Pairing only from the Mac.** Remote Access → Pair a device makes a link
   (shown as a QR code) carrying a one-time code in the URL fragment, which is
   never sent to a server or logged. It works for one device, for 10 minutes,

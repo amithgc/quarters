@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -55,7 +56,7 @@ func (a *App) startRemote() {
 	if listen == "" {
 		listen = config.DefaultListen
 	}
-	opts := remote.Options{URL: rc.URL, Listen: listen, Dir: remoteDir(), App: a.assets}
+	opts := remote.Options{URL: rc.URL, Listen: listen, LAN: rc.LAN, Dir: remoteDir(), App: a.assets}
 	if rc.TLSCert != "" || rc.TLSKey != "" {
 		opts.TLSCert, opts.TLSKey = config.ExpandPath(rc.TLSCert), config.ExpandPath(rc.TLSKey)
 	}
@@ -88,6 +89,10 @@ type RemoteView struct {
 	URL     string              `json:"url"`
 	Address string              `json:"address"` // where browsers open it while running
 	Listen  string              `json:"listen"`
+	LAN     bool                `json:"lan"`
+	LANURLs []string            `json:"lanURLs"` // home-network addresses, while running
+	LANQR   string              `json:"lanQR"`   // QR code of the first
+	User    string              `json:"user"`    // password sign-in's username ("" = off)
 	Running bool                `json:"running"`
 	Error   string              `json:"error"`
 	Devices []remote.DeviceView `json:"devices"`
@@ -100,9 +105,16 @@ func (a *App) RemoteStatus() RemoteView {
 	a.mu.Lock()
 	srv, rerr := a.remote, a.remoteErr
 	a.mu.Unlock()
-	v := RemoteView{Enabled: rc.Enabled, URL: rc.URL, Listen: rc.Listen, Error: rerr}
+	v := RemoteView{Enabled: rc.Enabled, URL: rc.URL, Listen: rc.Listen, LAN: rc.LAN, Error: rerr, User: remote.PasswordUserIn(remoteDir())}
 	if v.Listen == "" {
 		v.Listen = config.DefaultListen
+	}
+	if srv != nil && rc.LAN {
+		_, port, _ := net.SplitHostPort(v.Listen)
+		v.LANURLs = remote.LANAddresses(port)
+		if len(v.LANURLs) > 0 {
+			v.LANQR, _ = remote.QR(v.LANURLs[0] + "/login")
+		}
 	}
 	if srv != nil {
 		v.Running = srv.Running()
@@ -117,19 +129,19 @@ func (a *App) RemoteStatus() RemoteView {
 }
 
 // SetRemote turns remote access on or off and sets its addresses.
-func (a *App) SetRemote(enabled bool, url, listen string) error {
+func (a *App) SetRemote(enabled bool, url, listen string, lan bool) error {
 	url = strings.TrimRight(strings.TrimSpace(url), "/")
 	listen = strings.TrimSpace(listen)
 	if listen == config.DefaultListen {
 		listen = ""
 	}
 	if enabled {
-		if _, err := remote.New(remote.Options{URL: url, Listen: orDefault(listen, config.DefaultListen), Dir: remoteDir()}, remoteBackend{a: a}); err != nil {
+		if _, err := remote.New(remote.Options{URL: url, Listen: orDefault(listen, config.DefaultListen), LAN: lan, Dir: remoteDir()}, remoteBackend{a: a}); err != nil {
 			return err
 		}
 	}
 	if err := a.editConfig(func(c *config.Config) error {
-		c.Remote.Enabled, c.Remote.URL, c.Remote.Listen = enabled, url, listen
+		c.Remote.Enabled, c.Remote.URL, c.Remote.Listen, c.Remote.LAN = enabled, url, listen, lan
 		return nil
 	}); err != nil {
 		return err
@@ -186,6 +198,17 @@ func (a *App) RemoveDevice(id string) error {
 		return srv.RemoveDevice(id)
 	}
 	return remote.RemoveDeviceFile(remoteDir(), id)
+}
+
+// SetRemotePassword sets the username and password browsers can sign in
+// with instead of a passkey. Browsers signed in with an earlier one are
+// signed out.
+func (a *App) SetRemotePassword(user, password string) error {
+	user = strings.TrimSpace(user)
+	if srv := a.remoteServer(); srv != nil {
+		return srv.SetPassword(user, password)
+	}
+	return remote.SetPasswordFile(remoteDir(), user, password)
 }
 
 // SignOutAllDevices ends every browser session (devices stay paired).

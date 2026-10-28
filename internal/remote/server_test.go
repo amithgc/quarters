@@ -64,7 +64,7 @@ func signedIn(t *testing.T, s *Server) *http.Cookie {
 	if err := s.auth.st.add(dev); err != nil {
 		t.Fatal(err)
 	}
-	return &http.Cookie{Name: s.cookieName(), Value: s.auth.newSession(dev, "127.0.0.1")}
+	return &http.Cookie{Name: s.cookieName(httptest.NewRequest("GET", "/", nil)), Value: s.auth.newSession(dev, "127.0.0.1")}
 }
 
 func get(t *testing.T, ts *httptest.Server, path string, mod func(*http.Request)) *http.Response {
@@ -164,7 +164,9 @@ func TestSignedInGetsApp(t *testing.T) {
 		t.Fatalf("GET /app.js signed in: %d", res.StatusCode)
 	}
 	// a made-up cookie gets nothing
-	res = get(t, ts, "/app.js", func(r *http.Request) { r.AddCookie(&http.Cookie{Name: s.cookieName(), Value: "forged"}) })
+	res = get(t, ts, "/app.js", func(r *http.Request) {
+		r.AddCookie(&http.Cookie{Name: s.cookieName(httptest.NewRequest("GET", "/", nil)), Value: "forged"})
+	})
 	if res.StatusCode != http.StatusUnauthorized {
 		t.Errorf("forged cookie: %d", res.StatusCode)
 	}
