@@ -2470,7 +2470,7 @@ function wireViewport() {
   let last = "";
   const fit = () => {
     // the whole window, unless the keyboard covers part of it
-    const h = vv.height < window.innerHeight - 40 ? vv.height + "px" : "100%";
+    const h = vv.height < window.innerHeight - 40 ? vv.height + "px" : "100dvh";
     if (h !== last) {
       last = h;
       document.documentElement.style.setProperty("--vvh", h);

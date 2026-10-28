@@ -611,7 +611,8 @@ body.typing .compose { padding-bottom: 8px; }
 
 /* ---------- narrow screens: phones ---------- */
 @media (max-width: 760px) {
-  html, body { position: fixed; inset: 0; overscroll-behavior: none; }
+  /* the dynamic viewport: it grows when a browser's toolbar slides away (fixed-position pages otherwise keep the smaller size) */
+  html, body { position: fixed; inset: 0 0 auto 0; height: 100dvh; overscroll-behavior: none; }
   #app { height: var(--vvh, 100dvh); padding: 0; grid-template-rows: auto minmax(0, 1fr) 0; }
   #titlebar, body.remote #titlebar { padding: env(safe-area-inset-top) 6px 0 4px; min-height: calc(46px + env(safe-area-inset-top)); gap: 6px; border-bottom: 1px solid var(--line); background: var(--panel); }
   .mobile-only, .tb-btn.mobile-only { display: inline-flex; }
