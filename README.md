@@ -151,7 +151,7 @@ Mac, answer it from your phone, finish on the laptop.
 
 ## Install
 
-**Requirements:** macOS 11 or later (or Linux for the server, below), and [Claude Code](https://docs.anthropic.com/en/docs/claude-code)
+**Requirements:** macOS 11 or later (or Linux, or Windows through WSL, for the server, below), and [Claude Code](https://docs.anthropic.com/en/docs/claude-code)
 installed and signed in (`claude` on your `PATH`). Quarters is developed and
 tested on current macOS on Apple silicon; Intel builds should work but are
 untested.
@@ -232,6 +232,18 @@ WantedBy=default.target
 systemctl --user enable --now quarters
 loginctl enable-linger $USER    # keep it running when you're logged out
 ```
+
+### Windows: the server in WSL
+
+On Windows, run the Linux server inside [WSL](https://learn.microsoft.com/windows/wsl/install)
+(`wsl --install` in an administrator PowerShell, then open Ubuntu), with
+Claude Code and your projects in WSL too. Follow the Linux steps above inside
+Ubuntu, start `quarters`, and open `http://localhost:8421` in Edge or Chrome
+on Windows: WSL passes `localhost` through, so passkeys (Windows Hello) and
+installing it as an app work. To reach it from a phone, turn on WSL's
+mirrored networking and the home network. The
+[install guide](https://quarters.amithgc.com/docs#install-windows) has every
+step.
 
 ## Getting started
 
