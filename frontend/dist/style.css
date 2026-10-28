@@ -840,3 +840,5 @@ body.typing .compose { padding-bottom: 8px; }
 .gitn + .gitn { margin-left: 4px; }
 .rc-ic { display: inline-flex; color: var(--accent); margin-right: 6px; vertical-align: -2px; }
 body.short-web .compose { padding-bottom: 8px; }
+.end-btn { display: block; width: 100%; margin: 4px 0 12px; padding: 9px 12px; border-radius: 10px; border: 1px solid color-mix(in srgb, var(--red) 45%, var(--border-strong)); color: var(--red); background: transparent; text-align: center; }
+.end-btn:active, .end-btn:hover { background: color-mix(in srgb, var(--red) 12%, transparent); }

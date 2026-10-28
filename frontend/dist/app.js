@@ -1857,6 +1857,8 @@ function renderStats() {
   const live = tabsOf(path).some((t) => !t.exited);
   const state_ = live ? '<span class="green">● live</span>' : s.has ? `<span class="muted">last ${fmtAgo(s.last)}</span>` : '<span class="muted">○ none yet</span>';
   let h = plan + `<div class="sec-row"><span class="panel-title">SESSION</span>${state_}</div>`;
+  const cur = activeTab();
+  if (cur && cur.path === path) h += `<button class="end-btn" type="button" data-end-tab title="Ends the session in this tab">${cur.exited ? "Close tab" : cur.kind === "shell" || cur.autoKey ? "End this shell" : "End this Claude session"}</button>`;
 
   if (s.has) {
     if (s.title) h += `<div class="title-line" title="${esc(s.title)}">${esc(s.title)}</div>`;
@@ -2505,6 +2507,15 @@ function wireViewport() {
   document.addEventListener("focusout", () => setTimeout(fit, 50));
   setInterval(fit, 400); // toolbars and the keyboard don't always say when they move
   fit();
+}
+
+function wireEndTab() {
+  $("#stats").addEventListener("click", async (e) => {
+    if (!e.target.closest("[data-end-tab]")) return;
+    if (!canChange()) return watchOnly();
+    closeDrawers();
+    await requestCloseTab(activeTab());
+  });
 }
 
 function wireClaudeRemote() {
@@ -3556,6 +3567,7 @@ async function main() {
   wireResize();
   wireActiveList();
   wireClaudeRemote();
+  wireEndTab();
   wireProjects();
   wireTabs();
   wirePalette();

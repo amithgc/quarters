@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- **End this Claude session** in the side panel (⋯ on a phone), for the tab
+  you're looking at; it asks first.
+
 - iPhone home-screen app: the status bar is opaque (`black`), so the page
   reaches the bottom of the screen; with the translucent bar iOS cut it 62
   points short (re-add the app to the home screen to pick this up). The
