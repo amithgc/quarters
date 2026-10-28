@@ -134,6 +134,22 @@ async function setupLogin() {
   }
 }
 
+// Android's Chrome installs web apps only from secure addresses: on the
+// home network's plain HTTP, show how to let it trust this one address.
+if (page === "login" && !window.isSecureContext && /Android/i.test(navigator.userAgent)) {
+  $("#install-help").classList.remove("hidden");
+  $("#install-origin").textContent = location.origin;
+  $("#install-copy").addEventListener("click", async () => {
+    try {
+      await navigator.clipboard.writeText(location.origin);
+      $("#install-copy").textContent = "copied";
+    } catch {
+      getSelection().selectAllChildren($("#install-origin")); // no clipboard on plain HTTP: select it instead
+      $("#install-copy").textContent = "selected: copy it";
+    }
+  });
+}
+
 if (page === "login") {
   setupLogin();
 } else if (!passkeysWork) {

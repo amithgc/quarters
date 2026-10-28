@@ -21,6 +21,13 @@ button.primary:disabled { opacity: .55; cursor: default; }
 .field input { width: 100%; min-height: 44px; padding: 8px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); color: var(--text); font: inherit; font-size: 16px; outline: none; }
 .field input:focus { border-color: var(--accent); }
 .hidden { display: none !important; }
+.install-help { width: 100%; text-align: left; font-size: 13px; color: var(--muted); margin-top: 6px; }
+.install-help summary { cursor: pointer; color: var(--accent); }
+.install-help ol { padding-left: 20px; margin: 8px 0 0; }
+.install-help li { margin: 6px 0; }
+.install-help b { color: var(--text); font-weight: 600; word-break: break-all; }
+.install-help code { color: var(--text); word-break: break-all; }
+.install-help .link { background: none; border: 0; color: var(--accent); font: inherit; text-decoration: underline; cursor: pointer; padding: 0 4px; }
 .pw { width: 100%; display: flex; flex-direction: column; align-items: center; gap: 4px; }
 .or { margin: 6px 0 0; font-size: 12px; }
 button.primary.quiet { background: transparent; color: var(--accent); border: 1px solid var(--accent); }

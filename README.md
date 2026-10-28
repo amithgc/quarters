@@ -304,6 +304,12 @@ set a **username and password** there. Phones and computers on the same Wi-Fi
 then open `http://<the Mac's IP>:8421` (the dialog shows the addresses and a
 QR code) and sign in with the password, since passkeys don't work on a plain
 IP address. The connection isn't encrypted, so keep it to networks you trust.
+iPhones can add it to the home screen as is. Android's Chrome installs web
+apps only from secure addresses, so on the home network tell it to trust
+this one, once: in `chrome://flags/#unsafely-treat-insecure-origin-as-secure`
+enter the address (e.g. `http://192.168.1.20:8421`), set it to Enabled and
+relaunch; then ⋮ → Install app. The sign-in page shows these steps on
+Android.
 
 For a Mac with no screen, `Quarters.app/Contents/MacOS/Quarters --serve`
 runs only the server (it uses the same settings and prints a pairing link);

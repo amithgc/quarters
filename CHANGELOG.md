@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- On Android over the home network's plain HTTP, the sign-in page shows how
+  to let Chrome install the app (it installs only from secure addresses;
+  Chrome's per-address setting is enough, no HTTPS needed).
+
 - **Linux:** the remote-access server alone (no window) builds for Linux
   (`make server`, amd64 and arm64, no dependencies) and runs from the
   command line: `--set-password`, `--pair`, `--devices`, `--remove-device`.

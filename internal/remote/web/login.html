@@ -29,6 +29,16 @@
     <button id="pw-go" class="primary" type="submit">Sign in</button>
   </form>
   <p id="msg" class="msg" role="status"></p>
+  <details id="install-help" class="install-help hidden">
+    <summary>Install Quarters on this tablet or phone</summary>
+    <p>Android's Chrome installs apps only from secure addresses, and this one is plain HTTP (your home network). Tell Chrome to trust this one address, once:</p>
+    <ol>
+      <li>Open <b>chrome://flags/#unsafely-treat-insecure-origin-as-secure</b> in a new tab (type or paste it).</li>
+      <li>In the box, enter <code id="install-origin"></code> <button id="install-copy" type="button" class="link">copy</button></li>
+      <li>Set it to <b>Enabled</b>, then tap <b>Relaunch</b>.</li>
+      <li>Come back here, sign in, and choose <b>⋮ → Install app</b> (or Add to home screen → Install).</li>
+    </ol>
+  </details>
   <p id="foot" class="foot muted">Face ID, Touch ID or your device PIN unlocks your passkey.<br>New device? Pair it from the Mac: <b>Remote Access → Pair a device</b>.</p>
 </main>
 <script type="module" src="/auth-ui/auth.js"></script>
