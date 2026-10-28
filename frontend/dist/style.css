@@ -168,6 +168,7 @@ body.remote .legend { display: none; }
 .term { position: absolute; inset: 0; padding: 10px 6px 6px 14px; display: none; flex-direction: column; }
 .term.active { display: flex; }
 .term-body { flex: 1; min-height: 0; position: relative; }
+.term-paused { position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%); z-index: 5; padding: 6px 14px; border: 1px solid var(--border-strong); border-radius: 999px; background: var(--pop); color: var(--soft); font-size: 12px; white-space: nowrap; pointer-events: none; }
 .term .xterm { height: 100%; }
 .pane-head { display: none; }
 

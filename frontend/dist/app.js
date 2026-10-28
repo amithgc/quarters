@@ -313,7 +313,10 @@ async function newTab(path, kind = "claude", opts = {}) {
   head.innerHTML = `<span class="pane-name">${esc(opts.title || kind)}</span><span class="pane-status"></span><span class="pane-dir muted">${esc((opts.dir || "").split("/").slice(-2).join("/"))}</span>`;
   const body = document.createElement("div");
   body.className = "term-body";
-  el.append(head, body);
+  const paused = document.createElement("div");
+  paused.className = "term-paused hidden";
+  paused.textContent = isTouch() ? "In use on another device · tap to continue here" : "In use on another device · click to continue here";
+  el.append(head, body, paused);
   $("#terms").appendChild(el);
 
   const term = new Terminal({
@@ -413,6 +416,7 @@ async function newTab(path, kind = "claude", opts = {}) {
   term.onData((d) => {
     if (!canType()) return watchOnly();
     tab.lastInput = Date.now();
+    if (isPaused(tab)) claimTab(tab);
     if (!tab.exited) Go().Write(tab.id, stickyCtrl(d));
   });
   term.onBinary((d) => canType() && !tab.exited && Go().Write(tab.id, d));
@@ -421,15 +425,16 @@ async function newTab(path, kind = "claude", opts = {}) {
     clearTimeout(resizing); // dragging a panel resizes many times: send the size it settles on
     resizing = setTimeout(() => {
       if (tab.owner !== state.me || tab.exited) return;
-      if (tab.ptyCols && tab.ptyCols !== term.cols) freshScreen(tab);
-      tab.ptyCols = term.cols;
+      const size = `${term.cols}x${term.rows}`;
+      if (tab.sent && tab.sent !== size && !mirrors(tab)) term.reset(); // Claude reprints it all at the new size
+      tab.sent = size;
       Go().Resize(tab.id, term.cols, term.rows);
     }, 120);
   });
   await syncOutput(tab);
   if (adopt && adopt.exited) markExited(tab, adopt.code);
   if (!adopt) Go().Resize(tab.id, term.cols, term.rows);
-  tab.ptyCols = adopt ? 0 : term.cols;
+  tab.sent = adopt ? "" : `${term.cols}x${term.rows}`;
   if (!opts.background) {
     setFocus("terminal");
     term.focus();
@@ -468,28 +473,44 @@ function writeChunk(tab, { data, off }) {
   if (typeof off === "number" && off < tab.off) return; // already shown
   const bytes = b64ToBytes(data);
   tab.off = (off ?? tab.off) + bytes.length;
+  if (isPaused(tab)) return setPaused(tab, true); // drawn for another window's size
   tab.term.write(bytes);
+}
+
+// Shells and automations mirror live in every window. A Claude tab is
+// drawn by the window in use only; others pause, and catch up when used
+// (Claude reprints the whole conversation for the new size).
+const mirrors = (tab) => tab.kind === "shell" || !!tab.autoKey;
+const isPaused = (tab) => !mirrors(tab) && !!tab.owner && tab.owner !== state.me;
+
+function setPaused(tab, on) {
+  if (tab.paused === on) return;
+  tab.paused = on;
+  tab.el.querySelector(".term-paused")?.classList.toggle("hidden", !on);
 }
 
 // claimTab gives a session this window's terminal size (the window you
 // are using decides; the others just watch).
 function claimTab(tab) {
-  if (!tab || !tab.id || tab.exited || tab.owner === state.me) return;
+  if (!tab || !tab.id || tab.exited || (tab.owner === state.me && !tab.paused)) return;
   tab.owner = state.me;
   fitTab(tab); // back to this window's size
-  freshScreen(tab); // the Mac redraws the program for the new size (claim always does)
-  tab.ptyCols = tab.term.cols;
+  // Claude reprints the whole conversation for this size (a claim always
+  // makes it redraw), so start from an empty terminal.
+  if (!mirrors(tab)) tab.term.reset();
+  setPaused(tab, false);
+  tab.sent = `${tab.term.cols}x${tab.term.rows}`;
   Go().Claim(tab.id, tab.term.cols, tab.term.rows);
 }
 
-// fitTab sizes a tab's terminal: to this window when it drives the session,
-// otherwise to the session's own size (scaled down if it doesn't fit), so
-// output that moves the cursor lands where the program meant it to.
+// fitTab sizes a tab's terminal: to this window, or for a shell another
+// window drives, to the session's own size (scaled down if it doesn't fit),
+// so output that moves the cursor lands where the program meant it to.
 function fitTab(t) {
   if (!t) return;
   const x = t.term.element;
   if (!x) return;
-  if (!(t.owner && t.owner !== state.me && t.pty)) {
+  if (!(mirrors(t) && t.owner && t.owner !== state.me && t.pty)) {
     if (x.style.transform) x.style.width = x.style.height = x.style.transform = "";
     t.fit.fit();
     return;
@@ -503,16 +524,6 @@ function fitTab(t) {
   x.style.height = h + "px";
   x.style.transformOrigin = "0 0";
   x.style.transform = `scale(${s})`;
-}
-
-// freshScreen scrolls what's on screen into the scrollback before Claude
-// redraws at a new width. Otherwise its earlier frames, rewrapped to the
-// new width, stay behind as stacks of ──── lines. Shells don't redraw, so
-// they keep their screen.
-function freshScreen(tab) {
-  if (tab.kind === "shell" || tab.autoKey) return;
-  const t = tab.term;
-  t.write(`\x1b[${t.rows};1H` + "\n".repeat(t.rows) + "\x1b[H");
 }
 
 function claimActive() {
@@ -948,6 +959,7 @@ function wireEvents() {
     if (!tab) return;
     tab.owner = owner;
     if (cols) tab.pty = { cols, rows };
+    if (owner === state.me && tab.paused) return claimTab(tab); // typed here while paused: catch up
     fitTab(tab);
     if (owner === state.me) Go().Resize(id, tab.term.cols, tab.term.rows);
   });
