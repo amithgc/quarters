@@ -1599,6 +1599,12 @@ function renderTitle() {
     $("#tb-icon").dataset.html = ic;
   }
   $("#tb-path").textContent = p ? p.shortPath : "";
+  // phones: what the tab you're looking at is doing, under the title
+  const cur = activeTab();
+  const st = cur && tabStatus(cur);
+  const what = cur ? cur.fixedTitle || cur.title || (cur.kind === "shell" ? "shell" : "claude") : "";
+  const doing = { busy: "working", waiting: cur && (cur.kind === "shell" || cur.autoKey) ? "ready" : "your turn", ended: "ended" }[st] || "";
+  $("#tb-sub").textContent = cur ? `${what} · ${doing}` : p ? "press C to start Claude" : "";
   let busy = 0, waiting = 0;
   for (const list of Object.values(state.tabs))
     for (const t of list) {
@@ -1635,6 +1641,31 @@ function visibleProjects() {
 }
 
 let lastProjectsHTML = "";
+function projectRow(p, pos, filtering, live) {
+  const sel = p.path === state.selected;
+  const st = projectStatus(p.path);
+  const n = tabsOf(p.path).length;
+  const gitBits = p.git ? `${p.dirty ? ` <span class="yellow" title="${p.dirty} changed file${p.dirty === 1 ? "" : "s"}">●${p.dirty}</span>` : ""}${p.ahead ? ` <span class="green" title="${p.ahead} commit(s) to push">↑${p.ahead}</span>` : ""}${p.behind ? ` <span class="red" title="${p.behind} commit(s) to pull">↓${p.behind}</span>` : ""}` : "";
+  const branch = p.missing ? "folder missing" : p.branch ? `⎇ ${esc(p.branch)}${gitBits}` : esc(p.shortPath);
+  const attn = tabsOf(p.path).some((t) => t.unseen);
+  return `<div class="proj${sel ? " selected" : ""}${attn ? " attn" : ""}${p.path === state.current ? " current" : ""}${p.missing ? " missing" : ""}" data-path="${esc(p.path)}" data-raw="${esc(p.group || "")}"${filtering || live ? "" : ' draggable="true"'} role="button" tabindex="-1" title="${esc(p.path)}">
+    <span class="l1"><span class="name"><span class="marker">${sel ? "▸" : ""}</span>${iconHTML(p)}<span class="nm">${pos.length ? highlight(p.name, pos) : esc(p.name)}</span></span>
+      <span class="status">${(p.automations || []).some((a) => autoRunning(p.path, a)) ? '<span class="tabs-count green" title="An automation is running">▶</span>' : ""}${n > 1 ? `<span class="tabs-count">${n}×</span>` : ""}${STATUS_ICON[st]}</span></span>
+    <span class="l2"><span class="branch">${branch}</span><span>${fmtAgo(p.lastActive)}</span></span>
+    <span class="actions">
+      ${(p.automations || []).length ? `<button class="act act-auto" type="button" data-act="auto" title="Automations">▶</button>` : ""}
+      <button class="act" type="button" data-act="claude" title="New Claude tab">+</button>
+      <button class="act" type="button" data-act="continue" title="Continue last conversation">↻</button>
+      <button class="act" type="button" data-act="shell" title="Shell tab">›_</button>
+      <button class="act" type="button" data-act="reveal" title="Show in Finder">⌕</button>
+      <button class="act" type="button" data-act="edit" title="Edit name, folder or group">✎</button>
+    </span>
+  </div>`;
+}
+
+// The ACTIVE section's key in the folded-groups list.
+const ACTIVE_GROUP = "\u2605active";
+
 function renderProjects() {
   const vis = visibleProjects();
   $("#project-count").textContent = state.projects.length;
@@ -1647,6 +1678,17 @@ function renderProjects() {
   let group = null;
   const grouped = state.projects.some((p) => p.group);
   const filtering = !!$("#filter").value.trim();
+  // ACTIVE: projects with open sessions, working ones first (they also stay in their group)
+  const rank = { busy: 0, waiting: 1 };
+  const live = filtering ? [] : state.projects.filter((p) => projectStatus(p.path) !== "idle").sort((a, b) => rank[projectStatus(a.path)] - rank[projectStatus(b.path)]);
+  if (live.length) {
+    const folded = state.collapsed.has(ACTIVE_GROUP);
+    const gst = live.some((p) => projectStatus(p.path) === "busy") ? STATUS_ICON.busy : STATUS_ICON.waiting;
+    html += `<div class="active-sec"><button class="group active-head${folded ? " folded" : ""}" type="button" data-group="${ACTIVE_GROUP}" title="${folded ? "Expand" : "Collapse"}">
+      <span class="chev">▾</span>ACTIVE ${gst}<span class="gcount">${live.length}</span></button>`;
+    if (!folded) for (const p of live) html += projectRow(p, [], false, true);
+    html += `</div>`;
+  }
   for (const { p, pos } of vis) {
     const g = p.group || "Other";
     if (grouped && g !== group) {
@@ -1659,25 +1701,7 @@ function renderProjects() {
         <span class="chev">▾</span>${esc(g)}${folded && gst ? ` <span class="gstat">${gst}</span>` : ""}<span class="gcount">${members.length}</span></button>`;
     }
     if (grouped && !filtering && state.collapsed.has(g)) continue;
-    const sel = p.path === state.selected;
-    const st = projectStatus(p.path);
-    const n = tabsOf(p.path).length;
-    const gitBits = p.git ? `${p.dirty ? ` <span class="yellow" title="${p.dirty} changed file${p.dirty === 1 ? "" : "s"}">●${p.dirty}</span>` : ""}${p.ahead ? ` <span class="green" title="${p.ahead} commit(s) to push">↑${p.ahead}</span>` : ""}${p.behind ? ` <span class="red" title="${p.behind} commit(s) to pull">↓${p.behind}</span>` : ""}` : "";
-    const branch = p.missing ? "folder missing" : p.branch ? `⎇ ${esc(p.branch)}${gitBits}` : esc(p.shortPath);
-    const attn = tabsOf(p.path).some((t) => t.unseen);
-    html += `<div class="proj${sel ? " selected" : ""}${attn ? " attn" : ""}${p.path === state.current ? " current" : ""}${p.missing ? " missing" : ""}" data-path="${esc(p.path)}" data-raw="${esc(p.group || "")}"${filtering ? "" : ' draggable="true"'} role="button" tabindex="-1" title="${esc(p.path)}">
-      <span class="l1"><span class="name"><span class="marker">${sel ? "▸" : ""}</span>${iconHTML(p)}<span class="nm">${pos.length ? highlight(p.name, pos) : esc(p.name)}</span></span>
-        <span class="status">${(p.automations || []).some((a) => autoRunning(p.path, a)) ? '<span class="tabs-count green" title="An automation is running">▶</span>' : ""}${n > 1 ? `<span class="tabs-count">${n}×</span>` : ""}${STATUS_ICON[st]}</span></span>
-      <span class="l2"><span class="branch">${branch}</span><span>${fmtAgo(p.lastActive)}</span></span>
-      <span class="actions">
-        ${(p.automations || []).length ? `<button class="act act-auto" type="button" data-act="auto" title="Automations">▶</button>` : ""}
-        <button class="act" type="button" data-act="claude" title="New Claude tab">+</button>
-        <button class="act" type="button" data-act="continue" title="Continue last conversation">↻</button>
-        <button class="act" type="button" data-act="shell" title="Shell tab">›_</button>
-        <button class="act" type="button" data-act="reveal" title="Show in Finder">⌕</button>
-        <button class="act" type="button" data-act="edit" title="Edit name, folder or group">✎</button>
-      </span>
-    </div>`;
+    html += projectRow(p, pos, filtering, false);
   }
   if (html !== lastProjectsHTML && !projDrag.path) {
     lastProjectsHTML = html;
@@ -2169,6 +2193,7 @@ function wireProjectDrag() {
     e.preventDefault();
     e.dataTransfer.dropEffect = "move";
     clearDropMarks();
+    if (e.target.closest(".active-sec")) return void (projDrag.target = null); // ACTIVE fills itself
     const row = e.target.closest(".proj"), head = e.target.closest(".group");
     if (row && row.dataset.path !== projDrag.path) {
       const r = row.getBoundingClientRect();
@@ -2407,6 +2432,17 @@ function wireActiveList() {
 // return; the terminal's own hidden input is never used for typing.
 function wireCompose() {
   const form = $("#compose"), box = $("#compose-text");
+  // On a phone the tab bar's tools (new tab, shell, automations, prompts,
+  // past conversations, worktrees) sit in the message card, as in the
+  // Claude app; on a wider screen they go back to the tab bar.
+  const tools = ["#btn-new-tab", "#btn-new-shell", "#btn-auto", "#btn-prompts", "#btn-history", "#btn-wt"].map((s) => $(s));
+  const narrow = matchMedia("(max-width: 760px)");
+  const place = () => {
+    if (narrow.matches) $("#compose-tools").append(...tools);
+    else $("#tab-path").before(...tools);
+  };
+  narrow.addEventListener("change", place);
+  place();
   const grow = () => {
     box.style.height = "auto";
     box.style.height = Math.min(box.scrollHeight, 132) + "px";

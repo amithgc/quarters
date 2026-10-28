@@ -26,7 +26,7 @@
       <span class="brand">◆ Quarters</span>
       <span class="sep">│</span>
       <span id="tb-icon" class="tb-icon"></span>
-      <span id="tb-name" class="tb-name"></span>
+      <span class="tb-title"><span id="tb-name" class="tb-name"></span><span id="tb-sub" class="tb-sub"></span></span>
       <span id="tb-path" class="muted"></span>
     </div>
     <div class="tb-right">
@@ -35,7 +35,7 @@
       <span id="tb-clock" class="soft"></span>
       <button id="btn-remote" class="tb-remote hidden" type="button" title="Remote access"></button>
       <span class="offline-badge">offline · reconnecting…</span>
-      <button id="btn-stats" class="tb-btn mobile-only" type="button" aria-label="Stats">◔</button>
+      <button id="btn-stats" class="tb-btn mobile-only" type="button" aria-label="Session, plan and tools">⋯</button>
     </div>
   </header>
 
@@ -98,8 +98,13 @@
         </div>
       </div>
       <form id="compose" class="compose" autocomplete="off">
-        <textarea id="compose-text" rows="1" placeholder="Message Claude…" enterkeyhint="send" autocapitalize="sentences" spellcheck="true" aria-label="Message"></textarea>
-        <button id="compose-send" type="submit" aria-label="Send">↑</button>
+        <div class="compose-card">
+          <textarea id="compose-text" rows="1" placeholder="Message Claude…" enterkeyhint="send" autocapitalize="sentences" spellcheck="true" aria-label="Message"></textarea>
+          <div class="compose-row">
+            <div id="compose-tools" class="compose-tools"></div>
+            <button id="compose-send" type="submit" aria-label="Send">↑</button>
+          </div>
+        </div>
       </form>
       <div id="keybar" role="toolbar" aria-label="Keys">
         <button type="button" data-key="esc">esc</button>

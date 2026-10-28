@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Phones look and feel like the Claude app: a round ☰, a centred title
+  with what the tab is doing, a status pill with ⋯ for Quarters' extras
+  (plan, session, tokens, git, servers, MCP, skills), tabs as pills, and a
+  message card with the tools (new tab, shell, automations, prompts,
+  conversations, worktrees) and a round send button.
+- An **ACTIVE** section at the top of the project list shows the projects
+  with open sessions, working ones first.
+
 - Phones type into a real text field (autocorrect, dictation, selection,
   a backspace that repeats) and send with ↑ or return; backspace in an
   empty field deletes in Claude's input. Tapping the terminal opens it.
