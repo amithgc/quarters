@@ -351,7 +351,7 @@ async function newTab(path, kind = "claude", opts = {}) {
   const meta = adopt ? adopt.meta : null;
   const autoOpts = opts.autoKey ? { title: opts.title, dir: opts.dir, command: opts.command, autoKey: opts.autoKey, group: opts.group } : null;
   const startOpts = { resume: opts.resume || "", cwd: opts.cwd || "", title: opts.title || "" };
-  const tab = { key: meta ? meta.key : newKey(), started: meta ? meta.started : Date.now(), group: opts.group || null, head, autoOpts, startOpts, id: 0, kind, path, term, fit, el, title: "", fixedTitle: opts.title || "", wt: opts.cwd && opts.cwd !== path ? opts.cwd.split("/").pop() : "", autoKey: opts.autoKey || "", lastData: 0, exited: false, code: 0, owner: adopt ? adopt.owner : state.me, pty: adopt && adopt.cols ? { cols: adopt.cols, rows: adopt.rows } : null, off: 0, synced: false, early: [] };
+  const tab = { key: meta ? meta.key : newKey(), started: meta ? meta.started : Date.now(), group: opts.group || null, head, autoOpts, startOpts, id: 0, kind, path, term, fit, el, title: "", fixedTitle: opts.title || "", wt: opts.cwd && opts.cwd !== path ? opts.cwd.split("/").pop() : "", autoKey: opts.autoKey || "", lastData: 0, exited: false, code: 0, rc: meta ? !!meta.rc : kind !== "shell" && !opts.autoKey && !!state.settings?.claudeRemote, owner: adopt ? adopt.owner : state.me, pty: adopt && adopt.cols ? { cols: adopt.cols, rows: adopt.rows } : null, off: 0, synced: false, early: [] };
   state.byKey[tab.key] = tab;
   const list = (state.tabs[path] = tabsOf(path).concat(tab));
   if (!adopt) state.active[path] = list.length - 1;
@@ -1717,12 +1717,13 @@ function projectRow(p, pos, filtering, live) {
   const sel = p.path === state.selected;
   const st = projectStatus(p.path);
   const n = tabsOf(p.path).length;
-  const gitBits = p.git ? `${p.dirty ? ` <span class="yellow" title="${p.dirty} changed file${p.dirty === 1 ? "" : "s"}">●${p.dirty}</span>` : ""}${p.ahead ? ` <span class="green" title="${p.ahead} commit(s) to push">↑${p.ahead}</span>` : ""}${p.behind ? ` <span class="red" title="${p.behind} commit(s) to pull">↓${p.behind}</span>` : ""}` : "";
+  const gitBits = p.git ? `${p.dirty ? ` <span class="yellow gitn" title="${p.dirty} changed file${p.dirty === 1 ? "" : "s"}"><i>●</i>${p.dirty}</span>` : ""}${p.ahead ? ` <span class="green gitn" title="${p.ahead} commit(s) to push"><i>↑</i>${p.ahead}</span>` : ""}${p.behind ? ` <span class="red gitn" title="${p.behind} commit(s) to pull"><i>↓</i>${p.behind}</span>` : ""}` : "";
+  const rc = tabsOf(p.path).some((t) => t.rc && !t.exited);
   const branch = p.missing ? "folder missing" : p.branch ? `⎇ ${esc(p.branch)}${gitBits}` : esc(p.shortPath);
   const attn = tabsOf(p.path).some((t) => t.unseen);
   return `<div class="proj${sel ? " selected" : ""}${attn ? " attn" : ""}${p.path === state.current ? " current" : ""}${p.missing ? " missing" : ""}" data-path="${esc(p.path)}" data-raw="${esc(p.group || "")}"${filtering || live ? "" : ' draggable="true"'} role="button" tabindex="-1" title="${esc(p.path)}">
     <span class="l1"><span class="name"><span class="marker">${sel ? "▸" : ""}</span>${iconHTML(p)}<span class="nm">${pos.length ? highlight(p.name, pos) : esc(p.name)}</span></span>
-      <span class="status">${(p.automations || []).some((a) => autoRunning(p.path, a)) ? '<span class="tabs-count green" title="An automation is running">▶</span>' : ""}${n > 1 ? `<span class="tabs-count">${n}×</span>` : ""}${STATUS_ICON[st]}</span></span>
+      <span class="status">${rc ? `<span class="rc-ic" title="Claude Remote Control: continue in claude.ai/code or the Claude app">${RC_ICON}</span>` : ""}${(p.automations || []).some((a) => autoRunning(p.path, a)) ? '<span class="tabs-count green" title="An automation is running">▶</span>' : ""}${n > 1 ? `<span class="tabs-count">${n}×</span>` : ""}${STATUS_ICON[st]}</span></span>
     <span class="l2"><span class="branch">${branch}</span><span>${fmtAgo(p.lastActive)}</span></span>
     <span class="actions">
       ${(p.automations || []).length ? `<button class="act act-auto" type="button" data-act="auto" title="Automations">▶</button>` : ""}
@@ -1734,6 +1735,9 @@ function projectRow(p, pos, filtering, live) {
     </span>
   </div>`;
 }
+
+// Claude Remote Control is on for a session in the project (a broadcast mark).
+const RC_ICON = '<svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true"><circle cx="8" cy="8" r="1.7" fill="currentColor"/><path d="M5.2 10.8a4 4 0 0 1 0-5.6M10.8 5.2a4 4 0 0 1 0 5.6M3.1 12.9a7 7 0 0 1 0-9.8M12.9 3.1a7 7 0 0 1 0 9.8" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>';
 
 // The ACTIVE section's key in the folded-groups list.
 const ACTIVE_GROUP = "\u2605active";
@@ -1836,7 +1840,7 @@ function renderClaudeRemote() {
   if (!state.settings) return "";
   const on = !!state.settings.claudeRemote;
   return `<label class="cr-row" title="Starts new Claude tabs with claude --remote-control <project>">
-    <span class="cr-text"><b>Claude Remote Control</b><span class="muted">${on ? "new Claude tabs also open in claude.ai/code and the Claude app" : "continue new Claude tabs in the Claude app"}</span></span>
+    <span class="cr-text"><b>Claude Remote Control</b><span class="muted">${on ? "new Claude tabs also open in claude.ai/code and the Claude app" : "off here · Claude Code's own setting (/config) may still turn it on"}</span></span>
     <input type="checkbox" class="switch" data-claude-remote${on ? " checked" : ""}${canChange() ? "" : " disabled"}></label>`;
 }
 
@@ -2471,8 +2475,19 @@ function wireViewport() {
   // may pan) only the visual viewport for the keyboard or a browser
   // toolbar, so a page sized any other way ends up under the keyboard or
   // short of the bottom.
+  // An iPhone home-screen app whose page area stops above the home
+  // indicator (it is shorter than the screen by the status bar) needs no
+  // bottom inset under the message box.
+  const iosApp = navigator.standalone === true;
+  const probe = document.createElement("div");
+  probe.style.cssText = "position:fixed;top:0;left:0;width:0;height:env(safe-area-inset-top);visibility:hidden;pointer-events:none";
+  document.body.appendChild(probe);
   let last = "";
   const fit = () => {
+    if (iosApp) {
+      const screenH = window.innerWidth > window.innerHeight ? screen.width : screen.height;
+      document.body.classList.toggle("short-web", probe.offsetHeight > 0 && screenH - window.innerHeight >= probe.offsetHeight - 3);
+    }
     const key = `${Math.round(vv.height)}:${Math.round(vv.offsetTop)}`;
     if (key !== last) {
       last = key;
@@ -3806,3 +3821,4 @@ function wireChat() {
   });
   setInterval(pollChat, 1000);
 }
+

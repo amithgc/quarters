@@ -835,3 +835,8 @@ body.typing .compose { padding-bottom: 8px; }
   .compose-tools .auto-btn::before { font-size: 13px; }
   #compose-send { width: 34px; height: 34px; font-size: 18px; }
 }
+/* git counts: a little room between the mark and the number (● 6, ↑ 3) */
+.gitn i { font-style: normal; margin-right: 3px; }
+.gitn + .gitn { margin-left: 4px; }
+.rc-ic { display: inline-flex; color: var(--accent); margin-right: 6px; vertical-align: -2px; }
+body.short-web .compose { padding-bottom: 8px; }

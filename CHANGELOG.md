@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- iPhone home-screen app: the status bar is opaque (`black`), so the page
+  reaches the bottom of the screen; with the translucent bar iOS cut it 62
+  points short (re-add the app to the home screen to pick this up). The
+  page follows the visual viewport, so the message box stays above the
+  keyboard.
+- The phone chat follows the log Claude Code actually writes, and no longer
+  mistakes ❯ lines from earlier prompts for a menu.
+- Project list: a little room in git counts (● 6, ↑ 3), and a broadcast
+  icon on projects with a session under Claude Remote Control.
+
 - **Chat view on phones:** a Claude tab reads like the Claude app. The
   conversation comes from Claude Code's own log: your messages as bubbles,
   Claude's replies formatted, tool use folded into rows such as "Ran a
