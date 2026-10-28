@@ -225,6 +225,11 @@ that gives it a public HTTPS address.
 4. On the phone, add the page to the home screen. From then on, open it and
    sign in with Face ID.
 
+**No tunnel?** Leave the public URL empty and press **Start server**: Quarters
+is then at `http://localhost:8421`, which another computer can reach through
+SSH (`ssh -L 8421:localhost:8421 your-mac`, then open
+`http://localhost:8421` and the pairing link there). Phones need the tunnel.
+
 For a machine with no screen, `Quarters.app/Contents/MacOS/Quarters --serve`
 runs only the server (it uses the same settings and prints a pairing link).
 

@@ -104,6 +104,7 @@ func TestNewRejectsUnsafeSettings(t *testing.T) {
 		{URL: "https://quarters.example.com", Listen: "0.0.0.0:8421"},           // open to the network without TLS
 		{URL: "quarters.example.com", Listen: "127.0.0.1:8421"},                 // no scheme
 		{URL: "https://user:pw@quarters.example.com", Listen: "127.0.0.1:8421"}, // credentials
+		{Listen: "0.0.0.0:8421", TLSCert: "c", TLSKey: "k"},                     // no URL beyond this Mac
 	} {
 		o.Dir = t.TempDir()
 		if _, err := New(o, &fakeBackend{}); err == nil {
@@ -112,6 +113,10 @@ func TestNewRejectsUnsafeSettings(t *testing.T) {
 	}
 	if _, err := New(Options{URL: "https://quarters.example.com", Listen: "127.0.0.1:8421", Dir: t.TempDir()}, &fakeBackend{}); err != nil {
 		t.Errorf("a tunnel setup was refused: %v", err)
+	}
+	s, err := New(Options{Listen: "127.0.0.1:8421", Dir: t.TempDir()}, &fakeBackend{})
+	if err != nil || s.Origin() != "http://localhost:8421" {
+		t.Errorf("no public URL: %v, want http://localhost:8421", err)
 	}
 }
 

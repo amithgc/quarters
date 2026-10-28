@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- The public URL in Remote Access is optional: without one, the server runs
+  at `http://localhost:8421`, for this Mac or an SSH tunnel.
+- Dialogs open in the middle of the window (Settings used to sit at the
+  bottom).
+
 ## 0.3.0 — first public release
 
 - Renamed from "harness" to **Quarters**. Settings move from

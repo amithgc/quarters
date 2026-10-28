@@ -2328,8 +2328,8 @@ function renderRemote(v) {
   $("#rm-state").innerHTML = v.running ? '<span class="green">● running</span>' : v.enabled ? '<span class="red">● failed to start</span>' : '<span class="muted">○ stopped</span>';
   const online = (v.devices || []).reduce((n, d) => n + (d.online || 0), 0);
   $("#rm-power-text").innerHTML = v.running
-    ? `<b class="green">Server running</b> <span class="muted">at ${esc(v.url)}${online ? ` · ${online} connected` : ""}</span>`
-    : `<b>Server stopped</b> <span class="muted">${v.url ? "— nothing can reach this Mac from outside" : "— set the public URL below first"}</span>`;
+    ? `<b class="green">Server running</b> <span class="muted">at ${esc(v.address || v.url)}${online ? ` · ${online} connected` : ""}</span>`
+    : `<b>Server stopped</b> <span class="muted">— nothing can reach this Mac from outside</span>`;
   $("#rm-toggle").textContent = v.running ? "Stop server" : "Start server";
   $("#rm-toggle").classList.toggle("primary", !v.running);
   if (v.error) $("#rm-error").textContent = v.error;

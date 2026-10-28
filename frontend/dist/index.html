@@ -182,9 +182,9 @@
         <button id="rm-toggle" class="btn primary" type="button">Start server</button>
       </div>
       <div class="field">
-        <label for="rm-url">Public URL</label>
+        <label for="rm-url">Public URL <span class="muted">(optional)</span></label>
         <input id="rm-url" type="text" placeholder="https://quarters.example.com" spellcheck="false" autocomplete="off">
-        <span class="rm-hint muted">The HTTPS address of your tunnel (Cloudflare Tunnel or Tailscale Funnel) that forwards to the local address.</span>
+        <span class="rm-hint muted">The HTTPS address of your tunnel (Cloudflare Tunnel or Tailscale Funnel) that forwards to the local address. Leave it empty to use <code>http://localhost</code>: from this Mac, or from another computer through an SSH tunnel (<code>ssh -L 8421:localhost:8421 your-mac</code>).</span>
       </div>
       <div class="field">
         <label for="rm-listen">Local address</label>

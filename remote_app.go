@@ -86,6 +86,7 @@ func (a *App) stopRemote() {
 type RemoteView struct {
 	Enabled bool                `json:"enabled"`
 	URL     string              `json:"url"`
+	Address string              `json:"address"` // where browsers open it while running
 	Listen  string              `json:"listen"`
 	Running bool                `json:"running"`
 	Error   string              `json:"error"`
@@ -105,6 +106,7 @@ func (a *App) RemoteStatus() RemoteView {
 	}
 	if srv != nil {
 		v.Running = srv.Running()
+		v.Address = srv.Origin()
 		v.Devices = srv.Devices()
 		v.Log = srv.Log(40)
 	} else {

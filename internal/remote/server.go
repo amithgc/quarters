@@ -38,7 +38,7 @@ type Backend interface {
 
 // Options configure the server.
 type Options struct {
-	URL     string // public address, e.g. https://quarters.example.com
+	URL     string // public address, e.g. https://quarters.example.com; empty: http://localhost:<port>
 	Listen  string // local address, e.g. 127.0.0.1:8421
 	TLSCert string // needed when Listen is not loopback
 	TLSKey  string
@@ -65,7 +65,17 @@ type Server struct {
 
 // New checks the options and loads the paired devices.
 func New(opts Options, b Backend) (*Server, error) {
-	u, err := url.Parse(strings.TrimSpace(opts.URL))
+	raw := strings.TrimSpace(opts.URL)
+	if raw == "" {
+		// No tunnel: browsers on this Mac, or reaching it through an SSH
+		// tunnel, use localhost (passkeys work there without HTTPS).
+		lh, port, err := net.SplitHostPort(opts.Listen)
+		if err != nil || !isLoopbackName(lh) {
+			return nil, fmt.Errorf("listening beyond this Mac needs the public URL, e.g. https://quarters.example.com")
+		}
+		raw = "http://localhost:" + port
+	}
+	u, err := url.Parse(raw)
 	if err != nil || u.Host == "" || (u.Scheme != "https" && u.Scheme != "http") {
 		return nil, fmt.Errorf("set the public URL, e.g. https://quarters.example.com")
 	}
