@@ -2467,20 +2467,28 @@ function wireKeybar() {
 function wireViewport() {
   const vv = window.visualViewport;
   if (!vv) return;
+  // The page is exactly the visible part of the window: iOS shrinks (and
+  // may pan) only the visual viewport for the keyboard or a browser
+  // toolbar, so a page sized any other way ends up under the keyboard or
+  // short of the bottom.
   let last = "";
   const fit = () => {
-    // the whole window, unless the keyboard covers part of it
-    const h = vv.height < window.innerHeight - 40 ? vv.height + "px" : "100dvh";
-    if (h !== last) {
-      last = h;
-      document.documentElement.style.setProperty("--vvh", h);
+    const key = `${Math.round(vv.height)}:${Math.round(vv.offsetTop)}`;
+    if (key !== last) {
+      last = key;
+      const root = document.documentElement.style;
+      root.setProperty("--vvh", Math.round(vv.height) + "px");
+      root.setProperty("--vvtop", Math.round(vv.offsetTop) + "px");
       fitActive();
+      layComposer();
     }
-    if (isNarrow() || isTouch()) window.scrollTo(0, 0);
   };
   vv.addEventListener("resize", fit);
   vv.addEventListener("scroll", fit);
-  window.addEventListener("resize", fit); // a browser's toolbar sliding away
+  window.addEventListener("resize", fit);
+  document.addEventListener("focusin", () => setTimeout(fit, 50));
+  document.addEventListener("focusout", () => setTimeout(fit, 50));
+  setInterval(fit, 400); // toolbars and the keyboard don't always say when they move
   fit();
 }
 
