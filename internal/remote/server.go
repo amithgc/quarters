@@ -426,11 +426,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if !public(p) {
 		if sess, _ := s.sessionOf(r); sess == nil {
 			if p == "/" || strings.HasSuffix(p, ".html") {
-				to := "/login"
-				if r.URL.Query().Has("app") { // opened from a home-screen icon: keep saying so
-					to += "?app=1"
-				}
-				http.Redirect(w, r, to, http.StatusFound)
+				http.Redirect(w, r, "/login", http.StatusFound)
 			} else {
 				http.Error(w, "sign in first", http.StatusUnauthorized)
 			}

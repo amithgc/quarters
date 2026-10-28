@@ -1875,7 +1875,7 @@ function renderStats() {
   const s = state.stats;
   const path = state.statsPath;
   const el = $("#stats");
-  const plan = (REMOTE && canFullscreen() ? `<button class="fs-btn" type="button" data-fullscreen>${document.fullscreenElement ? "Exit full screen" : "⛶ Full screen"}</button>` : "") + renderPlan() + renderClaudeRemote();
+  const plan = renderPlan() + renderClaudeRemote();
   if (!path || !s) {
     el.dataset.html = "";
     el.innerHTML = plan + `<div class="sec-row"><span class="panel-title">SESSION</span></div><div class="muted">Select a project.</div>`;
@@ -2537,11 +2537,6 @@ function wireViewport() {
 }
 
 function wireEndTab() {
-  $("#stats").addEventListener("click", (e) => {
-    if (!e.target.closest("[data-fullscreen]")) return;
-    closeDrawers();
-    document.fullscreenElement ? document.exitFullscreen() : goFullscreen();
-  });
   $("#stats").addEventListener("click", async (e) => {
     if (!e.target.closest("[data-end-tab]")) return;
     if (!canChange()) return watchOnly();
@@ -3949,26 +3944,4 @@ function wireShortcuts() {
   $("#keys-dialog").addEventListener("mousedown", (e) => e.target.id === "keys-dialog" && closeShortcuts());
   $("#keys-dialog").addEventListener("keydown", (e) => e.key === "Escape" && closeShortcuts());
   document.addEventListener("click", (e) => e.target.closest("[data-shortcuts]") && openShortcuts());
-}
-
-// ---------- full screen (Android home-screen app over plain HTTP) ----------
-//
-// Chrome gives an installed web app its own window only at a secure (HTTPS)
-// address; at the home network's plain HTTP one it opens with its address
-// bar. Full screen works anywhere: opened from the home-screen icon
-// (?app=1), the first tap goes full screen, and ⋯ → Full screen does it by
-// hand.
-function canFullscreen() {
-  return !!document.documentElement.requestFullscreen && isTouch();
-}
-function goFullscreen() {
-  if (!canFullscreen() || document.fullscreenElement) return;
-  document.documentElement.requestFullscreen({ navigationUI: "hide" }).catch(() => {});
-}
-if (REMOTE && canFullscreen() && new URLSearchParams(location.search).has("app") && !matchMedia("(display-mode: standalone)").matches) {
-  const once = () => {
-    document.removeEventListener("pointerup", once, true);
-    goFullscreen();
-  };
-  document.addEventListener("pointerup", once, true); // browsers allow it only from a tap
 }

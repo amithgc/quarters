@@ -862,7 +862,6 @@ body.short-web .compose { padding-bottom: 8px; }
 .hint-btn { color: inherit; font: inherit; padding: 0; }
 .hint-btn:hover { color: var(--text); }
 @media (max-width: 760px) { .keys-box .fields { grid-template-columns: 1fr; } }
-.fs-btn { display: block; width: 100%; margin: 0 0 12px; padding: 9px 12px; border-radius: 10px; border: 1px solid var(--border-strong); background: var(--tile); color: var(--text); text-align: center; }
 /* phones: a shell or automation tab is a plain terminal: no message card,
    the tab bar (with the tools) always shown, and the key bar while typing */
 @media (max-width: 760px) {

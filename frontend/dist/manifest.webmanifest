@@ -3,7 +3,7 @@
   "short_name": "Quarters",
   "description": "Your Claude Code sessions, from anywhere.",
   "id": "/",
-  "start_url": "/?app=1",
+  "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "orientation": "any",
