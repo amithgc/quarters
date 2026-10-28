@@ -3,6 +3,8 @@
 
 const $ = (s) => document.querySelector(s);
 const page = document.body.dataset.page;
+// where to go once signed in (keeps ?app=1 from a home-screen icon)
+const home = new URLSearchParams(location.search).has("app") ? "/?app=1" : "/";
 
 const b64 = {
   toBuf: (s) => Uint8Array.from(atob(s.replace(/-/g, "+").replace(/_/g, "/").padEnd(Math.ceil(s.length / 4) * 4, "=")), (c) => c.charCodeAt(0)).buffer,
@@ -71,7 +73,7 @@ async function login() {
     const cred = await navigator.credentials.get(opts);
     await post("/auth/login/finish", credentialJSON(cred));
     say("Signed in.", "ok");
-    location.replace("/");
+    location.replace(home);
   } catch (e) {
     say(friendly(e), "err");
     $("#go").disabled = false;
@@ -88,7 +90,7 @@ async function pair(code) {
     const cred = await navigator.credentials.create(opts);
     await post("/auth/pair/finish", credentialJSON(cred));
     say("Paired. Opening Quarters…", "ok");
-    setTimeout(() => location.replace("/"), 600);
+    setTimeout(() => location.replace(home), 600);
   } catch (e) {
     say(friendly(e), "err");
     $("#go").disabled = false;
@@ -102,7 +104,7 @@ async function passwordLogin(e) {
   try {
     await post("/auth/password", { user: $("#user").value.trim(), password: $("#pass").value });
     say("Signed in.", "ok");
-    location.replace("/");
+    location.replace(home);
   } catch (err) {
     say(friendly(err), "err");
     $("#pass").value = "";
@@ -114,7 +116,7 @@ async function passwordLogin(e) {
 const passkeysWork = !!window.PublicKeyCredential && window.isSecureContext;
 
 async function setupLogin() {
-  fetch("/auth/me", { credentials: "same-origin" }).then((r) => r.ok && location.replace("/"));
+  fetch("/auth/me", { credentials: "same-origin" }).then((r) => r.ok && location.replace(home));
   const info = await fetch("/auth/info", { credentials: "same-origin" }).then((r) => r.json()).catch(() => ({}));
   const passkey = passkeysWork && info.passkeyHere !== false;
   $("#go").classList.toggle("hidden", !passkey);

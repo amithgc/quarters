@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Opened from a home-screen icon (the app starts at `/?app=1`), the first
+  tap goes full screen, and the side panel has a Full screen button:
+  Android's Chrome keeps its address bar on an installed app at a plain
+  HTTP address.
+
 - On Android over the home network's plain HTTP, the sign-in page shows how
   to let Chrome install the app (it installs only from secure addresses;
   Chrome's per-address setting is enough, no HTTPS needed).
