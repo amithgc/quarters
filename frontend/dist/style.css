@@ -212,6 +212,9 @@ body.remote .legend { display: none; }
 .mascot-text { display: flex; flex-direction: column; min-width: 0; }
 #mascot-title { font-weight: 700; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 #mascot-sub { font-size: 12px; line-height: 18px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cr-row { display: flex; align-items: center; gap: 10px; padding: 10px 0 12px; margin-bottom: 4px; border-bottom: 1px solid var(--line); cursor: pointer; }
+.cr-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; font-size: 12px; line-height: 16px; }
+.cr-text b { font-size: 13px; }
 .active-list { width: min(560px, 100%); display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
 .al-head { font-size: 12px; letter-spacing: .04em; padding-left: 2px; }
 .al-row { display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 8px 14px; border: 1px solid var(--border); border-radius: 10px; text-align: left; width: 100%; }
@@ -571,6 +574,9 @@ body.access-view .ended .btn, body.access-type .ended .btn { display: none !impo
   #hints { display: none; }
   /* only while typing into a terminal: the keyboard is up then */
   body.has-tab.typing:not(.no-keybar) #keybar { display: flex; }
+  /* a real text field to type into, like a chat app */
+  body.has-tab:not(.access-view) #compose { display: flex; }
+  #keybar { order: 1; }
   /* no hover: a tap opens the project; its start screen and tab bar have the actions */
   .proj .actions, .proj:hover .actions { display: none; }
   .proj:hover .status { visibility: visible; }
@@ -582,6 +588,12 @@ body.access-view .ended .btn, body.access-type .ended .btn { display: none !impo
   .img-pop { pointer-events: auto; }
 }
 
+.compose { display: none; align-items: flex-end; gap: 8px; padding: 8px 10px calc(8px + env(safe-area-inset-bottom)); border-top: 1px solid var(--line); background: var(--panel); flex-shrink: 0; }
+body.typing .compose { padding-bottom: 8px; }
+.compose textarea { flex: 1; min-width: 0; max-height: 132px; resize: none; padding: 9px 14px; border-radius: 20px; border: 1px solid var(--border-strong); background: var(--bg); color: var(--text); font: 16px/22px var(--mono); outline: none; user-select: text; -webkit-user-select: text; }
+.compose textarea:focus { border-color: var(--accent); }
+.compose button { flex-shrink: 0; width: 42px; height: 42px; border-radius: 50%; background: var(--accent); color: #1A1110; font-size: 22px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; }
+.compose button:active { transform: scale(.94); }
 #keybar { gap: 6px; padding: 6px 8px calc(6px + env(safe-area-inset-bottom)); border-top: 1px solid var(--line); background: var(--panel); overflow-x: auto; flex-shrink: 0; scrollbar-width: none; }
 #keybar::-webkit-scrollbar { display: none; }
 #keybar button { flex-shrink: 0; min-width: 44px; height: 38px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--border-strong); background: var(--tile); color: var(--text); font-size: 13px; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }

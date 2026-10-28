@@ -200,6 +200,10 @@ type Config struct {
 	Features map[string]bool `json:"features,omitempty"`
 	// Yolo skips Claude Code's permission prompts (default true).
 	Yolo *bool `json:"yolo,omitempty"`
+	// ClaudeRemoteControl starts Claude Code with its own Remote Control,
+	// so new sessions can also be continued from claude.ai/code and the
+	// Claude app (named after the project).
+	ClaudeRemoteControl bool `json:"claude_remote_control,omitempty"`
 	// Prompts are saved prompts, typed into Claude with one tap.
 	Prompts []Prompt `json:"prompts,omitempty"`
 	// UsageAlertAt warns when a plan limit passes this percentage (default 80).

@@ -740,6 +740,7 @@ function showActive() {
   } else placeSplitHandles();
   reportViewing();
   document.body.classList.toggle("has-tab", !!cur);
+  $("#compose-text").placeholder = cur && (cur.kind === "shell" || cur.autoKey) ? "Type a command…" : "Message Claude…";
   renderTabs();
 }
 
@@ -1732,11 +1733,21 @@ function renderTabs() {
   $("#btn-wt").classList.toggle("hidden", !on("worktrees") || !ap || !ap.git);
 }
 
+// Claude Code's own Remote Control: new Claude tabs can also be continued
+// from claude.ai/code and the Claude app.
+function renderClaudeRemote() {
+  if (!state.settings) return "";
+  const on = !!state.settings.claudeRemote;
+  return `<label class="cr-row" title="Starts new Claude tabs with claude --remote-control <project>">
+    <span class="cr-text"><b>Claude Remote Control</b><span class="muted">${on ? "new Claude tabs also open in claude.ai/code and the Claude app" : "continue new Claude tabs in the Claude app"}</span></span>
+    <input type="checkbox" class="switch" data-claude-remote${on ? " checked" : ""}${canChange() ? "" : " disabled"}></label>`;
+}
+
 function renderStats() {
   const s = state.stats;
   const path = state.statsPath;
   const el = $("#stats");
-  const plan = renderPlan();
+  const plan = renderPlan() + renderClaudeRemote();
   if (!path || !s) {
     el.dataset.html = "";
     el.innerHTML = plan + `<div class="sec-row"><span class="panel-title">SESSION</span></div><div class="muted">Select a project.</div>`;
@@ -2368,10 +2379,123 @@ function wireViewport() {
   fit();
 }
 
+function wireClaudeRemote() {
+  $("#stats").addEventListener("change", async (e) => {
+    const box = e.target.closest("[data-claude-remote]");
+    if (!box) return;
+    try {
+      await Go().SetClaudeRemote(box.checked);
+      state.settings.claudeRemote = box.checked;
+      flash(box.checked ? "Claude Remote Control on for new Claude tabs" : "Claude Remote Control off for new Claude tabs");
+    } catch (err) {
+      box.checked = !box.checked;
+      flash(String(err));
+    }
+    renderStats();
+  });
+}
+
 function wireActiveList() {
   $("#active-list").addEventListener("click", (e) => {
     const b = e.target.closest("[data-open]");
     if (b) openProject(b.dataset.open);
+  });
+}
+
+// On a touch screen you type into a real text field (autocorrect,
+// dictation, selection, a backspace that repeats) and send it with ↑ or
+// return; the terminal's own hidden input is never used for typing.
+function wireCompose() {
+  const form = $("#compose"), box = $("#compose-text");
+  const grow = () => {
+    box.style.height = "auto";
+    box.style.height = Math.min(box.scrollHeight, 132) + "px";
+  };
+  const send = () => {
+    const tab = activeTab();
+    if (!tab || tab.exited) return;
+    if (!canType()) return watchOnly();
+    const text = box.value;
+    claimTab(tab);
+    tab.lastInput = Date.now();
+    if (text.includes("\n")) tab.term.paste(text); // several lines arrive as one paste
+    else if (text) Go().Write(tab.id, text);
+    setTimeout(() => Go().Write(tab.id, "\r"), text ? 60 : 0);
+    box.value = "";
+    grow();
+  };
+  form.addEventListener("submit", (e) => {
+    e.preventDefault();
+    send();
+  });
+  box.addEventListener("input", grow);
+  box.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey && !e.isComposing) {
+      e.preventDefault();
+      send();
+    } else if (e.key === "Backspace" && box.value === "") {
+      // nothing left here: delete in Claude's own input instead
+      const tab = activeTab();
+      if (tab && !tab.exited && canType()) Go().Write(tab.id, "\x7f");
+    }
+  });
+  // the send button keeps the keyboard up
+  $("#compose-send").addEventListener("pointerdown", (e) => e.preventDefault());
+  // a tap on the terminal opens the text field's keyboard, not the terminal's
+  document.addEventListener("focusin", (e) => {
+    if (e.target.classList?.contains("xterm-helper-textarea") && getComputedStyle(form).display !== "none") box.focus();
+  });
+}
+
+// Swiping a terminal scrolls its history, with momentum (the terminal
+// itself only scrolls with a mouse wheel).
+function wireTouchScroll() {
+  const terms = $("#terms");
+  let last = 0, acc = 0, v = 0, t0 = 0, coast = 0, moved = false;
+  const lineHeight = (tab) => {
+    const s = tab.term.element?.querySelector(".xterm-screen");
+    return s ? s.getBoundingClientRect().height / tab.term.rows : 20;
+  };
+  const scrollBy = (tab, px) => {
+    acc += px;
+    const lh = lineHeight(tab), n = Math.trunc(acc / lh);
+    if (n) {
+      tab.term.scrollLines(-n);
+      acc -= n * lh;
+    }
+  };
+  terms.addEventListener("touchstart", (e) => {
+    cancelAnimationFrame(coast);
+    if (e.touches.length !== 1) return;
+    last = e.touches[0].clientY;
+    t0 = performance.now();
+    acc = v = 0;
+    moved = false;
+  }, { passive: true });
+  terms.addEventListener("touchmove", (e) => {
+    const tab = activeTab();
+    if (e.touches.length !== 1 || !tab) return;
+    const y = e.touches[0].clientY, dy = y - last, now = performance.now();
+    if (!moved && Math.abs(dy) < 6) return;
+    moved = true;
+    e.preventDefault();
+    scrollBy(tab, dy);
+    v = dy / Math.max(1, now - t0); // px per ms
+    last = y;
+    t0 = now;
+  }, { passive: false });
+  terms.addEventListener("touchend", () => {
+    const tab = activeTab();
+    if (!moved || !tab || Math.abs(v) < 0.2) return;
+    let prev = performance.now();
+    const step = (now) => {
+      const dt = now - prev;
+      prev = now;
+      scrollBy(tab, v * dt);
+      v *= Math.pow(0.995, dt); // slows down like a native list
+      if (Math.abs(v) > 0.03) coast = requestAnimationFrame(step);
+    };
+    coast = requestAnimationFrame(step);
   });
 }
 
@@ -2415,8 +2539,10 @@ function wireMobile() {
   wireKeybar();
   wireViewport();
   wirePinch();
+  wireCompose();
+  wireTouchScroll();
   // The key bar shows while a terminal has the keyboard.
-  const typing = () => document.body.classList.toggle("typing", !!document.activeElement?.closest?.(".xterm"));
+  const typing = () => document.body.classList.toggle("typing", !!document.activeElement?.closest?.(".xterm, #compose"));
   document.addEventListener("focusin", typing);
   document.addEventListener("focusout", () => setTimeout(typing, 0));
   matchMedia("(max-width: 760px)").addEventListener("change", () => {
@@ -3283,6 +3409,7 @@ async function main() {
   wireEvents();
   wireResize();
   wireActiveList();
+  wireClaudeRemote();
   wireProjects();
   wireTabs();
   wirePalette();

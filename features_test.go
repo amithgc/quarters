@@ -1,12 +1,14 @@
 package main
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -251,4 +253,42 @@ func TestSettingsChangeWhileRead(t *testing.T) {
 		}
 	}
 	<-done
+}
+
+// Claude Code's own Remote Control: new Claude sessions get the flag, named
+// after the project; shells don't.
+func TestClaudeRemoteControl(t *testing.T) {
+	a, dir := testApp(t)
+	var mu sync.Mutex
+	var out strings.Builder
+	a.sessions = session.NewManager(func(_ string, data any) {
+		if o, ok := data.(session.Output); ok {
+			b, _ := base64.StdEncoding.DecodeString(o.Data)
+			mu.Lock()
+			out.Write(b)
+			mu.Unlock()
+		}
+	}, nil)
+	defer a.sessions.CloseAll()
+	if err := a.editConfig(func(c *config.Config) error { c.Command = []string{"/bin/echo", "ARGS:"}; return nil }); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.SetClaudeRemote(true); err != nil || !a.Settings().ClaudeRemote {
+		t.Fatalf("SetClaudeRemote: %v", err)
+	}
+	if _, err := a.StartSession(dir, "claude", 120, 20, nil); err != nil {
+		t.Fatal(err)
+	}
+	want := "--remote-control " + filepath.Base(dir)
+	for deadline := time.Now().Add(5 * time.Second); time.Now().Before(deadline); time.Sleep(50 * time.Millisecond) {
+		mu.Lock()
+		got := out.String()
+		mu.Unlock()
+		if strings.Contains(got, want) {
+			return
+		}
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	t.Errorf("Claude started without %q: %q", want, out.String())
 }

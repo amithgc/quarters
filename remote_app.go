@@ -23,7 +23,7 @@ var remoteMethods = map[string]bool{
 	"IconData": true, "FindIcons": true, "SetCollapsed": true, "SaveProject": true, "MoveProject": true,
 	"SaveAutomationSizes": true, "RemoveProject": true, "ConfigPath": true, "PastedImage": true,
 	"CloseSession": true, "Sessions": true, "Snapshot": true,
-	"Settings": true, "SetFeature": true, "SavePrompts": true, "SetUsageAlertAt": true,
+	"Settings": true, "SetFeature": true, "SetClaudeRemote": true, "SavePrompts": true, "SetUsageAlertAt": true,
 	"Conversations": true, "Diff": true, "DevLinks": true, "OpenOnMac": true, "ProjectTools": true,
 	"Worktrees": true, "CreateWorktree": true, "RemoveWorktree": true, "RestoreInfo": true, "DismissRestore": true,
 }

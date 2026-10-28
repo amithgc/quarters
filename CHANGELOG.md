@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Phones type into a real text field (autocorrect, dictation, selection,
+  a backspace that repeats) and send with ↑ or return; backspace in an
+  empty field deletes in Claude's input. Tapping the terminal opens it.
+- Swipe a terminal to scroll its history on touch screens, with momentum.
+- **Claude Remote Control** toggle in the side panel: new Claude tabs start
+  with `claude --remote-control <project>`, so they can also be continued
+  from claude.ai/code and the Claude app.
+
 - Phone-sized interface on phones: 16px text, a bigger title bar (19px
   project name), taller tabs with 44pt buttons, roomier project rows in the
   drawer, and the working/waiting counts as just ● and ◐ with a number.

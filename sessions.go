@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/amithgc/quarters/internal/session"
 )
@@ -42,6 +43,13 @@ func (a *App) startSession(client, path, kind string, cols, rows int, meta map[s
 	default:
 		yolo := cfg.YoloFor(cp) && !(client != macClient && cfg.On("remote_ask"))
 		argv = append([]string{}, cfg.ClaudeCommand(cp, yolo)...)
+		if cfg.ClaudeRemoteControl {
+			name := cp.Name
+			if name == "" {
+				name = filepath.Base(path)
+			}
+			argv = append(argv, "--remote-control", name)
+		}
 		switch kind {
 		case "continue":
 			argv = append(argv, "--continue")

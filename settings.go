@@ -21,6 +21,7 @@ type FeatureView struct {
 type SettingsView struct {
 	Features     []FeatureView   `json:"features"`
 	Yolo         bool            `json:"yolo"`
+	ClaudeRemote bool            `json:"claudeRemote"` // Claude Code's own Remote Control
 	Prompts      []config.Prompt `json:"prompts"`
 	UsageAlertAt int             `json:"usageAlertAt"`
 	Hotkey       string          `json:"hotkey"`
@@ -32,7 +33,7 @@ type SettingsView struct {
 // Settings describes the settings.
 func (a *App) Settings() SettingsView {
 	cfg := a.config()
-	v := SettingsView{Yolo: cfg.Yolo == nil || *cfg.Yolo, Prompts: cfg.Prompts, UsageAlertAt: cfg.AlertAt(),
+	v := SettingsView{Yolo: cfg.Yolo == nil || *cfg.Yolo, ClaudeRemote: cfg.ClaudeRemoteControl, Prompts: cfg.Prompts, UsageAlertAt: cfg.AlertAt(),
 		Hotkey: cfg.Hotkey, ConfigPath: projects.ShortPath(config.Path())}
 	if v.Hotkey == "" {
 		v.Hotkey = "ctrl+alt+space"
@@ -86,6 +87,15 @@ func (a *App) SetFeature(key string, on bool) error {
 func (a *App) SetYolo(on bool) error {
 	return a.editSettings(func(c *config.Config) error {
 		c.Yolo = &on
+		return nil
+	})
+}
+
+// SetClaudeRemote sets whether new Claude sessions start with Claude
+// Code's Remote Control (claude.ai/code and the Claude app).
+func (a *App) SetClaudeRemote(on bool) error {
+	return a.editSettings(func(c *config.Config) error {
+		c.ClaudeRemoteControl = on
 		return nil
 	})
 }

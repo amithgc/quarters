@@ -92,6 +92,9 @@ whether they're answering.
   diff.
 - **Servers:** `localhost` links your terminals printed, up or down.
 - **Tools, MCP servers and skills** available in the project.
+- **Claude Remote Control:** a switch that starts new Claude tabs with
+  Claude Code's own Remote Control, so you can also continue them from
+  claude.ai/code and the Claude app.
 
 </td>
 </tr>
