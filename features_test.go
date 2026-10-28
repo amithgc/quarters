@@ -292,3 +292,37 @@ func TestClaudeRemoteControl(t *testing.T) {
 	defer mu.Unlock()
 	t.Errorf("Claude started without %q: %q", want, out.String())
 }
+
+// Claude Code may name its log differently from the id a tab was started
+// with: the tab then follows the newest log written since it started that
+// no other tab has.
+func TestConversationOfFindsTheRealLog(t *testing.T) {
+	a, dir := testApp(t)
+	logs := projectDir(dir)
+	if err := os.MkdirAll(logs, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	started := time.Now().Add(-time.Minute).UnixMilli()
+	write := func(id string) {
+		if err := os.WriteFile(filepath.Join(logs, id+".jsonl"), []byte("{}\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	other, real := "11111111-1111-4111-8111-111111111111", "22222222-2222-4222-8222-222222222222"
+	write(other)
+	time.Sleep(20 * time.Millisecond)
+	write(real)
+	a.convs[1] = "33333333-3333-4333-8333-333333333333" // no such log
+	a.convs[2] = real                                   // another tab's
+	m := tabMeta{Path: dir, Started: started}
+	if got := a.conversationOf(1, m, nil); got != other {
+		t.Errorf("conversationOf = %s, want %s (the newest log no other tab has)", got, other)
+	}
+	if a.convs[1] != other {
+		t.Error("the log found was not remembered")
+	}
+	a.convs[3] = real
+	if got := a.conversationOf(3, m, nil); got != real {
+		t.Errorf("a tab whose log exists: %s", got)
+	}
+}

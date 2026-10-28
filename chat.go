@@ -44,17 +44,11 @@ func (a *App) chatLog(id int) (string, error) {
 		if m.Kind == "shell" || m.AutoKey != "" {
 			return "", fmt.Errorf("not a Claude tab")
 		}
-		dir := projectDir(orDefault(m.Cwd, m.Path))
-		a.fmu.Lock()
-		conv := a.convs[id]
-		a.fmu.Unlock()
-		if conv == "" {
-			conv = latestConversation(dir, m.Started, nil)
-		}
+		conv := a.conversationOf(id, m, nil)
 		if conv == "" || !uuidRe.MatchString(conv) {
 			return "", nil
 		}
-		return filepath.Join(dir, conv+".jsonl"), nil
+		return filepath.Join(projectDir(orDefault(m.Cwd, m.Path)), conv+".jsonl"), nil
 	}
 	return "", fmt.Errorf("no such session")
 }

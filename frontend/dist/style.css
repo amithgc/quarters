@@ -588,7 +588,7 @@ body.access-view .ended .btn, body.access-type .ended .btn { display: none !impo
   .img-pop { pointer-events: auto; }
 }
 
-.compose { display: none; padding: 6px 12px calc(10px + env(safe-area-inset-bottom)); background: var(--term); flex-shrink: 0; }
+.compose { display: none; padding: 6px 10px max(6px, calc(env(safe-area-inset-bottom) - 16px)); background: var(--term); flex-shrink: 0; } /* just above the home indicator, like the Claude app */
 body.typing .compose { padding-bottom: 8px; }
 .compose-card { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; padding: 12px 10px 10px 16px; border-radius: 26px; background: var(--tile); border: 1px solid var(--border-strong); box-shadow: 0 -8px 30px rgba(0, 0, 0, .25); }
 .compose-card:focus-within { border-color: color-mix(in srgb, var(--accent) 55%, var(--border-strong)); }

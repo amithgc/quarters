@@ -51,12 +51,7 @@ func (a *App) openItems() []RestoreItem {
 				out = append(out, RestoreItem{Path: m.Path, Name: name, Kind: "auto", Auto: m.Group.AutoName, Title: m.Group.AutoName})
 			}
 		case m.Kind != "shell" && m.AutoKey == "":
-			a.fmu.Lock()
-			conv := a.convs[info.ID]
-			a.fmu.Unlock()
-			if conv == "" { // "continue": the log it writes to
-				conv = latestConversation(projectDir(orDefault(m.Cwd, m.Path)), m.Started, used)
-			}
+			conv := a.conversationOf(info.ID, m, used)
 			used[conv] = true
 			out = append(out, RestoreItem{Path: m.Path, Name: name, Kind: "claude", Conv: conv, Cwd: m.Cwd, Title: m.Title})
 		}
@@ -66,6 +61,40 @@ func (a *App) openItems() []RestoreItem {
 
 func projectDir(path string) string {
 	return filepath.Join(projects.ClaudeRoot(), projects.EncodeDir(path))
+}
+
+// conversationOf is the conversation a Claude tab writes to. The id it was
+// started with is not always the log's name (Claude Code may pick its
+// own, and "continue" has none), so when that log doesn't exist it is the
+// newest one written since the tab started that no other tab has (used),
+// remembered once found.
+func (a *App) conversationOf(id int, m tabMeta, used map[string]bool) string {
+	dir := projectDir(orDefault(m.Cwd, m.Path))
+	a.fmu.Lock()
+	conv := a.convs[id]
+	taken := map[string]bool{}
+	for other, c := range a.convs {
+		if other != id {
+			taken[c] = true
+		}
+	}
+	a.fmu.Unlock()
+	if conv != "" {
+		if _, err := os.Stat(filepath.Join(dir, conv+".jsonl")); err == nil {
+			return conv
+		}
+	}
+	for c := range used {
+		taken[c] = true
+	}
+	found := latestConversation(dir, m.Started, taken)
+	if found == "" {
+		return conv
+	}
+	a.fmu.Lock()
+	a.convs[id] = found
+	a.fmu.Unlock()
+	return found
 }
 
 // latestConversation is the newest conversation in dir written since
