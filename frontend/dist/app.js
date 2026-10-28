@@ -318,8 +318,9 @@ async function newTab(path, kind = "claude", opts = {}) {
 
   const term = new Terminal({
     // Fallbacks cover symbols JetBrains Mono lacks (Claude Code's ❯, ⏵, ✻…)
-    // before macOS reaches for the colour emoji font.
-    fontFamily: '"JetBrains Mono", "MesloLGS NF", Menlo, "Apple Symbols", "Symbols Nerd Font", monospace',
+    // before the system reaches for the colour emoji font; Quarters Symbols
+    // has the ones phones would draw as emoji (⏺, ✔…), two cells wide.
+    fontFamily: '"JetBrains Mono", "Quarters Symbols", "MesloLGS NF", Menlo, "Apple Symbols", "Symbols Nerd Font", monospace',
     fontSize: state.fontSize,
     lineHeight: 1.2,
     letterSpacing: 0,
@@ -2280,6 +2281,10 @@ function wireMobile() {
   });
   wireKeybar();
   wireViewport();
+  // The key bar shows while a terminal has the keyboard.
+  const typing = () => document.body.classList.toggle("typing", !!document.activeElement?.closest?.(".xterm"));
+  document.addEventListener("focusin", typing);
+  document.addEventListener("focusout", () => setTimeout(typing, 0));
   matchMedia("(max-width: 760px)").addEventListener("change", () => {
     closeDrawers();
     fitActive();
@@ -2558,6 +2563,7 @@ async function loadSettings() {
     return;
   }
   document.body.classList.toggle("no-prompts", !on("prompts"));
+  document.body.classList.toggle("no-keybar", !on("keybar"));
   if (!on("dev_links")) state.links = [];
   lastProjectsHTML = "";
   render();
@@ -3131,6 +3137,7 @@ async function main() {
   await Promise.all([
     document.fonts.load('13px "JetBrains Mono"'),
     document.fonts.load('bold 13px "JetBrains Mono"'),
+    document.fonts.load('13px "Quarters Symbols"', "⏺"),
   ]).catch(() => {});
 
   const layout = await Go().Layout();

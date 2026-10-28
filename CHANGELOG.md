@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- The phone's key bar (esc, tab, ⇧tab, ctrl, arrows) shows only while you
+  type in a terminal, and can be switched off in Settings (Phone key bar).
+- Claude Code's ⏺, ✔, ⏸, ✳, ⚡… no longer turn into wide colour emoji on
+  phones: a small bundled font (tools/symbols) draws them one cell wide.
+
 - The welcome screen lists the projects with open sessions (working or
   waiting for you); tap one to open it.
 - A session taken over by a window of another width (phone ↔ Mac) is

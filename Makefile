@@ -4,7 +4,7 @@
 WAILS ?= $(shell command -v wails || echo $(HOME)/go/bin/wails)
 APP   := build/bin/Quarters.app
 
-.PHONY: all deps vendor build install run dev test lint fmt mascot clean
+.PHONY: all deps vendor build install run dev test lint fmt mascot symbols clean
 
 all: build
 
@@ -37,6 +37,9 @@ lint: ## gofmt, go vet and staticcheck
 
 fmt: ## format the Go code
 	gofmt -w .
+
+symbols: ## rebuild the terminal's symbols font (needs fonttools and brotli)
+	python3 tools/symbols/build.py
 
 mascot: ## redraw the mascot SVGs from tools/mascot/build.mjs
 	node tools/mascot/build.mjs
