@@ -346,7 +346,7 @@ async function newTab(path, kind = "claude", opts = {}) {
   const meta = adopt ? adopt.meta : null;
   const autoOpts = opts.autoKey ? { title: opts.title, dir: opts.dir, command: opts.command, autoKey: opts.autoKey, group: opts.group } : null;
   const startOpts = { resume: opts.resume || "", cwd: opts.cwd || "", title: opts.title || "" };
-  const tab = { key: meta ? meta.key : newKey(), started: meta ? meta.started : Date.now(), group: opts.group || null, head, autoOpts, startOpts, id: 0, kind, path, term, fit, el, title: "", fixedTitle: opts.title || "", wt: opts.cwd && opts.cwd !== path ? opts.cwd.split("/").pop() : "", autoKey: opts.autoKey || "", lastData: 0, exited: false, code: 0, owner: adopt ? adopt.owner : state.me, off: 0, synced: false, early: [] };
+  const tab = { key: meta ? meta.key : newKey(), started: meta ? meta.started : Date.now(), group: opts.group || null, head, autoOpts, startOpts, id: 0, kind, path, term, fit, el, title: "", fixedTitle: opts.title || "", wt: opts.cwd && opts.cwd !== path ? opts.cwd.split("/").pop() : "", autoKey: opts.autoKey || "", lastData: 0, exited: false, code: 0, owner: adopt ? adopt.owner : state.me, pty: adopt && adopt.cols ? { cols: adopt.cols, rows: adopt.rows } : null, off: 0, synced: false, early: [] };
   state.byKey[tab.key] = tab;
   const list = (state.tabs[path] = tabsOf(path).concat(tab));
   if (!adopt) state.active[path] = list.length - 1;
@@ -364,7 +364,7 @@ async function newTab(path, kind = "claude", opts = {}) {
       /* falls back to the DOM renderer */
     }
   }
-  fit.fit();
+  fitTab(tab);
   // Phones: no AutoFill bar (passwords, cards) over the keyboard.
   term.textarea?.setAttribute("autocomplete", "off");
 
@@ -476,9 +476,33 @@ function writeChunk(tab, { data, off }) {
 function claimTab(tab) {
   if (!tab || !tab.id || tab.exited || tab.owner === state.me) return;
   tab.owner = state.me;
+  fitTab(tab); // back to this window's size
   freshScreen(tab); // the Mac redraws the program for the new size (claim always does)
   tab.ptyCols = tab.term.cols;
   Go().Claim(tab.id, tab.term.cols, tab.term.rows);
+}
+
+// fitTab sizes a tab's terminal: to this window when it drives the session,
+// otherwise to the session's own size (scaled down if it doesn't fit), so
+// output that moves the cursor lands where the program meant it to.
+function fitTab(t) {
+  if (!t) return;
+  const x = t.term.element;
+  if (!x) return;
+  if (!(t.owner && t.owner !== state.me && t.pty)) {
+    if (x.style.transform) x.style.width = x.style.height = x.style.transform = "";
+    t.fit.fit();
+    return;
+  }
+  if (t.term.cols !== t.pty.cols || t.term.rows !== t.pty.rows) t.term.resize(t.pty.cols, t.pty.rows);
+  const screen = x.querySelector(".xterm-screen"), box = x.parentElement;
+  if (!screen || !box || !screen.offsetWidth) return;
+  const w = screen.offsetWidth + 12, h = screen.offsetHeight; // + the scroll bar
+  const s = Math.min(1, box.clientWidth / w, box.clientHeight / h);
+  x.style.width = w + "px";
+  x.style.height = h + "px";
+  x.style.transformOrigin = "0 0";
+  x.style.transform = `scale(${s})`;
 }
 
 // freshScreen scrolls what's on screen into the scrollback before Claude
@@ -519,6 +543,8 @@ async function syncSessions(reconnect) {
     if (!t) await adoptSession(info);
     else {
       t.owner = info.owner;
+      if (info.cols) t.pty = { cols: info.cols, rows: info.rows };
+      fitTab(t);
       if (reconnect) await syncOutput(t, true);
       if (info.exited && !t.exited) markExited(t, info.code);
     }
@@ -629,7 +655,7 @@ function showActive() {
     requestAnimationFrame(() => {
       for (const t of panes) {
         try {
-          t.fit.fit();
+          fitTab(t);
         } catch {}
       }
       if (state.focus === "terminal" && !$("#tab-list .tab-rename") && !isTouch()) cur.term.focus();
@@ -917,10 +943,12 @@ function wireEvents() {
     const tab = state.byId[id];
     if (tab) closeTab(tab, false, true);
   });
-  rt().EventsOn("pty:owner", ({ id, owner }) => {
+  rt().EventsOn("pty:owner", ({ id, owner, cols, rows }) => {
     const tab = state.byId[id];
     if (!tab) return;
     tab.owner = owner;
+    if (cols) tab.pty = { cols, rows };
+    fitTab(tab);
     if (owner === state.me) Go().Resize(id, tab.term.cols, tab.term.rows);
   });
   rt().EventsOn("notify:open", openNotifiedTab);
@@ -1413,7 +1441,7 @@ function fitActive() {
     for (const el of document.querySelectorAll(".term.active")) {
       const t = Object.values(state.byId).find((x) => x.el === el) || activeTab();
       try {
-        t?.fit.fit();
+        fitTab(t);
       } catch {}
     }
     if (!document.body.classList.contains("dragging")) placeSplitHandles();

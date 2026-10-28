@@ -38,6 +38,8 @@ type Info struct {
 	Exited bool            `json:"exited"`
 	Code   int             `json:"code"`
 	Owner  string          `json:"owner"`
+	Cols   int             `json:"cols"` // the terminal's size, set by the owner
+	Rows   int             `json:"rows"`
 }
 
 // Snap is the recent output of a session, for a window that joins late.
@@ -47,9 +49,13 @@ type Snap struct {
 }
 
 // Owner says which window now drives a session's terminal size.
+// Other windows draw the terminal at its size, so output that moves the
+// cursor lands where the program meant it to.
 type Owner struct {
 	ID    int    `json:"id"`
 	Owner string `json:"owner"`
+	Cols  int    `json:"cols"`
+	Rows  int    `json:"rows"`
 }
 
 // keepBytes is how much recent output each session keeps for late joiners.
@@ -93,6 +99,8 @@ type session struct {
 	total   int64
 	code    int
 	owner   string // window (client) whose size the terminal has
+	cols    int
+	rows    int
 
 	// "Claude finished" tracking: output that is not the echo of typing
 	// counts as work.
@@ -194,14 +202,15 @@ func (m *Manager) Start(dir string, argv []string, cols, rows int, input string,
 	cmd := exec.Command(path, argv[1:]...)
 	cmd.Dir = dir
 	cmd.Env = env
-	f, err := pty.StartWithSize(cmd, &pty.Winsize{Cols: uint16(max(cols, 10)), Rows: uint16(max(rows, 3))})
+	cols, rows = max(cols, 10), max(rows, 3)
+	f, err := pty.StartWithSize(cmd, &pty.Winsize{Cols: uint16(cols), Rows: uint16(rows)})
 	if err != nil {
 		return 0, err
 	}
 
 	m.mu.Lock()
 	m.nextID++
-	s := &session{id: m.nextID, cmd: cmd, pty: f, exited: make(chan struct{}), meta: meta, owner: owner}
+	s := &session{id: m.nextID, cmd: cmd, pty: f, exited: make(chan struct{}), meta: meta, owner: owner, cols: cols, rows: rows}
 	m.sessions[s.id] = s
 	m.mu.Unlock()
 	m.emit("session:open", s.info())
@@ -272,7 +281,7 @@ func (m *Manager) get(id int) *session {
 func (s *session) info() Info {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return Info{ID: s.id, Meta: s.meta, Exited: s.done(), Code: s.code, Owner: s.owner}
+	return Info{ID: s.id, Meta: s.meta, Exited: s.done(), Code: s.code, Owner: s.owner, Cols: s.cols, Rows: s.rows}
 }
 
 // Write sends text typed in window client to a session. Typing makes that
@@ -296,9 +305,17 @@ func (m *Manager) Resize(client string, id, cols, rows int) {
 	}
 	s.mu.Lock()
 	mine := s.owner == "" || s.owner == client
+	changed := mine && (s.cols != cols || s.rows != rows)
+	if changed {
+		s.cols, s.rows = cols, rows
+	}
+	owner := s.owner
 	s.mu.Unlock()
 	if mine {
 		_ = pty.Setsize(s.pty, &pty.Winsize{Cols: uint16(cols), Rows: uint16(rows)})
+	}
+	if changed {
+		m.emit("pty:owner", Owner{ID: s.id, Owner: owner, Cols: cols, Rows: rows})
 	}
 }
 
@@ -321,9 +338,10 @@ func (m *Manager) claim(s *session, client string) {
 	s.mu.Lock()
 	changed := s.owner != client
 	s.owner = client
+	cols, rows := s.cols, s.rows
 	s.mu.Unlock()
 	if changed {
-		m.emit("pty:owner", Owner{ID: s.id, Owner: client})
+		m.emit("pty:owner", Owner{ID: s.id, Owner: client, Cols: cols, Rows: rows})
 	}
 }
 

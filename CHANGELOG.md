@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- A window watching a session another window drives (the Mac while you
+  type on the phone, or the other way round) now draws it at that
+  window's size, scaled to fit, instead of garbling Claude's input box.
+
 - The phone's key bar (esc, tab, ⇧tab, ctrl, arrows) shows only while you
   type in a terminal, and can be switched off in Settings (Phone key bar).
 - Claude Code's ⏺, ✔, ⏸, ✳, ⚡… no longer turn into wide colour emoji on
