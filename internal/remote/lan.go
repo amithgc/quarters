@@ -70,8 +70,9 @@ func (s *Server) originOf(r *http.Request) string {
 func (s *Server) reqSecure(r *http.Request) bool { return s.secure && !s.lanHost(r.Host) }
 
 // LANAddresses are the addresses browsers on the home network can open:
-// the Wi-Fi and Ethernet ports' (en0, en1, …) and Tailscale's, not virtual
-// machines' bridges. IP addresses come first: .local needs Bonjour.
+// the Wi-Fi and Ethernet ports' (macOS en0…, Linux eth0, enp3s0, wlan0,
+// wlp2s0…) and Tailscale's, not virtual machines' or containers' bridges.
+// IP addresses come first: .local needs Bonjour (Avahi on Linux).
 func LANAddresses(port string) []string {
 	type addr struct{ ifc, ip string }
 	var found []addr
@@ -86,7 +87,7 @@ func LANAddresses(port string) []string {
 			if !ok || n.IP.To4() == nil || !private(n.IP) || n.IP.IsLinkLocalUnicast() {
 				continue
 			}
-			if strings.HasPrefix(ifc.Name, "en") || cgnat.Contains(n.IP) {
+			if physicalPort(ifc.Name) || cgnat.Contains(n.IP) {
 				found = append(found, addr{ifc.Name, n.IP.String()})
 			}
 		}
@@ -105,4 +106,14 @@ func LANAddresses(port string) []string {
 		ips = append(ips, "http://"+name+":"+port)
 	}
 	return ips
+}
+
+// physicalPort reports whether an interface is a Wi-Fi or Ethernet port.
+func physicalPort(name string) bool {
+	for _, p := range []string{"en", "eth", "wl"} { // en0, enp3s0, eth0, wlan0, wlp2s0
+		if strings.HasPrefix(name, p) {
+			return true
+		}
+	}
+	return false
 }

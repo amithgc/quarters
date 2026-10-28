@@ -3,9 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"strconv"
 	"time"
 
 	"github.com/amithgc/quarters/internal/remote"
@@ -90,9 +88,8 @@ func (a *App) keepAwake() {
 	defer a.fmu.Unlock()
 	switch {
 	case want && a.f.awake == nil:
-		// -i: no idle sleep, -s: no sleep at all on mains power; -w: ends with Quarters
-		cmd := exec.Command("/usr/bin/caffeinate", "-i", "-s", "-w", strconv.Itoa(os.Getpid()))
-		if cmd.Start() == nil {
+		cmd := awakeCmd(os.Getpid())
+		if cmd != nil && cmd.Start() == nil {
 			a.f.awake = cmd
 			go cmd.Wait()
 		}

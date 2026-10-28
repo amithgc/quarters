@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net"
 	"net/url"
-	"os/exec"
 	"regexp"
 	"slices"
 	"strconv"
@@ -167,5 +166,5 @@ func (a *App) OpenOnMac(link string) error {
 	default:
 		return fmt.Errorf("only links to this Mac's own servers")
 	}
-	return exec.Command("open", u.String()).Run()
+	return openWith(u.String(), false).Run()
 }

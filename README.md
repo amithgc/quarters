@@ -151,7 +151,7 @@ Mac, answer it from your phone, finish on the laptop.
 
 ## Install
 
-**Requirements:** macOS 11 or later, and [Claude Code](https://docs.anthropic.com/en/docs/claude-code)
+**Requirements:** macOS 11 or later (or Linux for the server, below), and [Claude Code](https://docs.anthropic.com/en/docs/claude-code)
 installed and signed in (`claude` on your `PATH`). Quarters is developed and
 tested on current macOS on Apple silicon; Intel builds should work but are
 untested.
@@ -171,6 +171,68 @@ an Intel Mac use `wails build -platform darwin/amd64`. The app is signed ad
 hoc, so the first time macOS may ask you to confirm opening it
 (right-click → Open).
 
+### Linux: the server, used from a browser
+
+On Linux, Quarters runs as a server with no window: leave it on the machine
+that has your code (a home server, a big desktop, a box in a cupboard) and
+use it from a browser or the phone app. Everything the browser version does
+works: projects, Claude and shell tabs, automations, the chat view on
+phones, plan usage, past conversations and worktrees. The Mac-only extras
+(the window, the Dock badge, the global hotkey) are left out.
+
+It is a single file with no dependencies besides Claude Code and git. Build
+it (on any machine, for `amd64` and `arm64`) and copy it over:
+
+```sh
+git clone https://github.com/amithgc/quarters && cd quarters
+make server          # build/bin/quarters-linux-amd64 and quarters-linux-arm64
+scp build/bin/quarters-linux-amd64 my-server:/usr/local/bin/quarters
+```
+
+Then, on the server:
+
+```sh
+quarters --set-password amith   # the username and password to sign in with
+quarters                        # start the server (it prints its addresses and a pairing link)
+```
+
+Add your projects from the browser (＋ add) once signed in, or list them in
+`~/.config/quarters/config.json`. To open it on your home network, set
+`"remote": {"lan": true}` there; to reach it from anywhere, put a tunnel in
+front (see [Remote access setup](#remote-access-setup)). Plan usage is read
+from `~/.claude/.credentials.json`, where Claude Code keeps its login on
+Linux.
+
+Managing it without a window:
+
+| command | does |
+| --- | --- |
+| `quarters --set-password NAME` | set (or change) the username and password; signed-in browsers sign in again |
+| `quarters --pair` | a one-time link that pairs a device with a passkey (HTTPS or `localhost` only) |
+| `quarters --devices` | list the paired devices and the password sign-in |
+| `quarters --remove-device NAME` | unpair a device (by name or id); it is signed out at once |
+| `quarters --help` | all of the above |
+
+To keep it running, a systemd user service works well:
+
+```ini
+# ~/.config/systemd/user/quarters.service
+[Unit]
+Description=Quarters
+
+[Service]
+ExecStart=/usr/local/bin/quarters
+Restart=on-failure
+
+[Install]
+WantedBy=default.target
+```
+
+```sh
+systemctl --user enable --now quarters
+loginctl enable-linger $USER    # keep it running when you're logged out
+```
+
 ## Getting started
 
 1. Open Quarters. The first time, it lists the folders you used Claude Code
@@ -186,6 +248,7 @@ hoc, so the first time macOS may ask you to confirm opening it
 
 | keys | action |
 | --- | --- |
+| ⌘/ | all keyboard shortcuts (Help → Keyboard Shortcuts) |
 | click, then **C** / **⇧C** / **S** | open a project, then start Claude / continue / a shell |
 | ⌘P or ⇧⇧ (tap Shift twice) | jump to a project or automation |
 | ⌘T / ⇧⌘T / ⌥⌘T | new Claude tab / continue last conversation / shell tab |
@@ -242,9 +305,10 @@ then open `http://<the Mac's IP>:8421` (the dialog shows the addresses and a
 QR code) and sign in with the password, since passkeys don't work on a plain
 IP address. The connection isn't encrypted, so keep it to networks you trust.
 
-For a machine with no screen, `Quarters.app/Contents/MacOS/Quarters --serve`
+For a Mac with no screen, `Quarters.app/Contents/MacOS/Quarters --serve`
 runs only the server (it uses the same settings and prints a pairing link);
-`Quarters --set-password <name>` sets the password.
+the commands in [Linux](#linux-the-server-used-from-a-browser) (`--set-password`,
+`--pair`, `--devices`, `--remove-device`) work there too.
 
 ## Configuration
 

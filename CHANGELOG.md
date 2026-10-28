@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- **Linux:** the remote-access server alone (no window) builds for Linux
+  (`make server`, amd64 and arm64, no dependencies) and runs from the
+  command line: `--set-password`, `--pair`, `--devices`, `--remove-device`.
+  It reads Claude Code's login from `~/.claude/.credentials.json`, keeps
+  the machine awake with `systemd-inhibit` and opens links with `xdg-open`;
+  home-network addresses include Linux port names (eth0, enp3s0, wlan0…).
+  CI builds and tests it on Linux.
+- Without `$SHELL` (a service, a container), shells use the first of zsh,
+  bash and sh the machine has.
+- **Keyboard shortcuts** dialog on the Mac: Help → Keyboard Shortcuts (⌘/),
+  or "⌘/ shortcuts" in the bottom bar.
+
 - The **Claude Remote Control** switch is about the Claude session in view:
   on when Claude Code has it connected (read from Claude Code's own list,
   whoever turned it on), and flipping it runs `/remote-control` in that

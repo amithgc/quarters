@@ -4,7 +4,7 @@
 WAILS ?= $(shell command -v wails || echo $(HOME)/go/bin/wails)
 APP   := build/bin/Quarters.app
 
-.PHONY: all deps vendor build install run dev test lint fmt mascot symbols clean
+.PHONY: all deps vendor build install run dev test lint fmt mascot symbols server clean
 
 all: build
 
@@ -16,6 +16,10 @@ vendor: deps ## copy xterm.js and the font into frontend/dist/vendor
 
 build: vendor ## build Quarters.app (Apple silicon)
 	$(WAILS) build -clean -platform darwin/arm64
+
+server: vendor ## the remote-access server alone, no window, for Linux (amd64 and arm64)
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -tags server -trimpath -ldflags "-s -w" -o build/bin/quarters-linux-amd64 .
+	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -tags server -trimpath -ldflags "-s -w" -o build/bin/quarters-linux-arm64 .
 
 install: build ## copy the app into /Applications
 	rsync -a --delete $(APP)/ /Applications/Quarters.app/

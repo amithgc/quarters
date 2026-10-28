@@ -1194,6 +1194,9 @@ function onMenu(action) {
     case "font-down":
       setFontSize(state.fontSize - 1);
       break;
+    case "shortcuts":
+      openShortcuts();
+      break;
     case "font-reset":
       setFontSize(defaultFontSize());
       break;
@@ -3601,6 +3604,7 @@ async function main() {
   wireEvents();
   wireResize();
   wireActiveList();
+  wireShortcuts();
   wireClaudeRemote();
   wireEndTab();
   setInterval(pollRemoteControl, 3000);
@@ -3871,3 +3875,64 @@ function wireChat() {
   setInterval(pollChat, 1000);
 }
 
+
+// ---------- keyboard shortcuts (Help → Keyboard Shortcuts, ⌘/) ----------
+
+function shortcutGroups() {
+  const hotkey = (state.settings?.hotkey || "ctrl+alt+space").split("+").map((k) => ({ ctrl: "⌃", alt: "⌥", option: "⌥", cmd: "⌘", shift: "⇧", space: "Space" })[k] || k.toUpperCase()).join("");
+  return [
+    ["Projects", [
+      ["⇧ ⇧  or  ⌘P", "Jump to a project or automation"],
+      ["C", "Start Claude in the open project"],
+      ["⇧C", "Continue the last conversation"],
+      ["S", "Open a shell"],
+      ["⌘O", "Add a project"],
+      ["⇧⌘R", "Show the project in Finder"],
+    ]],
+    ["Tabs", [
+      ["⌘T", "New Claude tab"],
+      ["⇧⌘T", "Continue the last conversation in a new tab"],
+      ["⌥⌘T", "New shell tab"],
+      ["⌘W", "Close the tab"],
+      ["⌘1 … ⌘9", "Go to tab 1–9"],
+      ["⇧⌘[  ⇧⌘]", "Previous / next tab"],
+      ["Double-click", "Rename a tab"],
+    ]],
+    ["In a terminal", [
+      ["⇧↵", "New line in Claude's prompt (without sending)"],
+      ["⌘K", "Clear the scrollback"],
+      ["⌘=  ⌘-  ⌘0", "Bigger / smaller / normal text"],
+      ["Drop files", "Type their paths"],
+    ]],
+    ["Panels and tools", [
+      ["⌘B", "Show or hide the projects panel"],
+      ["⌘I", "Show or hide the side panel"],
+      ["⇧⌘F", "Search past conversations"],
+      ["⇧⌘G", "Worktrees"],
+      ["⌘,", "Settings"],
+      ["⌥⌘,", "Edit config.json"],
+      ["⌥⌘R", "Start or stop the remote-access server"],
+      [hotkey, "From any app: bring Quarters forward or hide it"],
+      ["⌘/", "This list"],
+    ]],
+  ];
+}
+
+function openShortcuts() {
+  $("#keys-list").innerHTML = shortcutGroups()
+    .map(([title, rows]) => `<div class="keys-group"><div class="field-label">${esc(title)}</div>${rows.map(([k, what]) => `<div class="keys-row"><span class="keys-k">${k.split(/\s{2,}/).map((part) => (part === "or" ? '<span class="muted">or</span>' : `<kbd>${esc(part)}</kbd>`)).join(" ")}</span><span class="keys-what">${esc(what)}</span></div>`).join("")}</div>`)
+    .join("");
+  $("#keys-dialog").classList.remove("hidden");
+  $("#keys-close").focus();
+}
+
+function closeShortcuts() {
+  $("#keys-dialog").classList.add("hidden");
+}
+
+function wireShortcuts() {
+  $("#keys-close").addEventListener("click", closeShortcuts);
+  $("#keys-dialog").addEventListener("mousedown", (e) => e.target.id === "keys-dialog" && closeShortcuts());
+  $("#keys-dialog").addEventListener("keydown", (e) => e.key === "Escape" && closeShortcuts());
+  document.addEventListener("click", (e) => e.target.closest("[data-shortcuts]") && openShortcuts());
+}

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -503,7 +502,7 @@ func (a *App) ConfigPath() string { return projects.ShortPath(config.Path()) }
 
 // OpenConfig opens the settings file in the default text editor.
 func (a *App) OpenConfig() error {
-	return exec.Command("open", "-t", config.Path()).Run()
+	return openWith(config.Path(), true).Run()
 }
 
 // RevealProject shows a project folder in Finder.
@@ -511,7 +510,7 @@ func (a *App) RevealProject(path string) error {
 	if _, ok := a.project(path); !ok {
 		return fmt.Errorf("not one of your projects")
 	}
-	return exec.Command("open", "--", path).Run()
+	return openWith(path, false).Run()
 }
 
 // Layout returns the saved panel widths.

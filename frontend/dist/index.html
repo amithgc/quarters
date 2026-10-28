@@ -141,6 +141,7 @@
 
   <footer id="statusbar">
     <div id="hints">
+      <button type="button" class="hint-btn" data-shortcuts title="All keyboard shortcuts (⌘/)"><b>⌘/</b> shortcuts</button>
       <span><b>⇧⇧</b> / <b>⌘P</b> projects</span>
       <span><b>⌘T</b> new tab</span>
       <span><b>⇧⌘T</b> continue</span>
@@ -247,6 +248,15 @@ cloudflared tunnel run --url http://127.0.0.1:8421 quarters</pre>
       <button id="rm-close" class="btn" type="button">Close</button>
       <button id="rm-save" class="btn" type="button">Save</button>
     </div>
+  </div>
+</div>
+
+<!-- Keyboard shortcuts (Help → Keyboard Shortcuts, ⌘/) -->
+<div id="keys-dialog" class="overlay hidden">
+  <div class="dialog-box keys-box" role="dialog" aria-labelledby="keys-title">
+    <div class="pal-head"><span id="keys-title" class="panel-title accent">KEYBOARD SHORTCUTS</span><span class="muted">⌘/</span></div>
+    <div class="fields" id="keys-list"></div>
+    <div class="dialog-actions"><span class="push"></span><button id="keys-close" class="btn" type="button">Close</button></div>
   </div>
 </div>
 

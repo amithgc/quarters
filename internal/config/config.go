@@ -391,7 +391,13 @@ func (c *Config) ShellPath() string {
 	if s := os.Getenv("SHELL"); s != "" {
 		return s
 	}
-	return "/bin/zsh"
+	// no $SHELL (a service, a container): the first one this machine has
+	for _, s := range []string{"/bin/zsh", "/bin/bash", "/bin/sh"} {
+		if _, err := os.Stat(s); err == nil {
+			return s
+		}
+	}
+	return "/bin/sh"
 }
 
 // MouseEnabled reports whether mouse support is on (default true).

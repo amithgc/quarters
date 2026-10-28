@@ -1,22 +1,15 @@
+//go:build !server
+
 // Quarters is a Mac app wrapping Claude Code: projects on the left, Claude
-// Code in the middle, session stats on the right.
+// Code in the middle, session stats on the right. Built with the server
+// tag it is the remote-access server alone, with no window (main_server.go).
 package main
 
 import (
-	"bufio"
 	"context"
-	"embed"
-	"fmt"
 	"io/fs"
 	"log"
-	"net"
 	"os"
-	"os/signal"
-	"strings"
-	"syscall"
-
-	"github.com/amithgc/quarters/internal/config"
-	"github.com/amithgc/quarters/internal/remote"
 
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/menu"
@@ -25,21 +18,12 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
 	"github.com/wailsapp/wails/v2/pkg/options/mac"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
-	"golang.org/x/term"
 )
-
-//go:embed all:frontend/dist
-var assets embed.FS
 
 func main() {
 	app := NewApp()
 	app.assets, _ = fs.Sub(assets, "frontend/dist")
-	if len(os.Args) > 1 && os.Args[1] == "--serve" {
-		serve(app)
-		return
-	}
-	if len(os.Args) > 2 && os.Args[1] == "--set-password" {
-		setPassword(app, os.Args[2])
+	if runCLI(app, os.Args[1:], false) {
 		return
 	}
 
@@ -88,6 +72,8 @@ func main() {
 		view.AddText("Tab "+key, keys.CmdOrCtrl(key), send("tab-"+key))
 	}
 	appMenu.Append(menu.WindowMenu())
+	help := appMenu.AddSubmenu("Help")
+	help.AddText("Keyboard Shortcuts", keys.CmdOrCtrl("/"), send("shortcuts"))
 
 	err := wails.Run(&options.App{
 		Title:            "Quarters",
@@ -119,54 +105,4 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-}
-
-// setPassword sets password sign-in for remote access without a window:
-// Quarters --set-password <username>, then the password on standard input.
-func setPassword(app *App, user string) {
-	fmt.Fprintf(os.Stderr, "password for %s (10+ characters): ", user)
-	var line string
-	if term.IsTerminal(int(os.Stdin.Fd())) {
-		b, err := term.ReadPassword(int(os.Stdin.Fd())) // not echoed
-		if err != nil {
-			log.Fatal(err)
-		}
-		line = string(b)
-	} else {
-		var err error
-		if line, err = bufio.NewReader(os.Stdin).ReadString('\n'); err != nil && line == "" {
-			log.Fatal(err)
-		}
-	}
-	if err := app.SetRemotePassword(user, strings.TrimRight(line, "\r\n")); err != nil {
-		log.Fatal(err)
-	}
-	fmt.Fprintln(os.Stderr, "\npassword set")
-}
-
-// serve runs Quarters without a window: only the remote-access web server
-// (remote access must be set up in config.json). It prints a pairing link.
-func serve(app *App) {
-	app.start()
-	app.mu.Lock()
-	srv, err := app.remote, app.remoteErr
-	app.mu.Unlock()
-	if srv == nil {
-		if err == "" {
-			err = `remote access is off; set "remote": {"enabled": true, "url": "https://…"} in config.json`
-		}
-		log.Fatal(err)
-	}
-	fmt.Printf("Quarters is serving %s (listening on %s)\n", srv.Origin(), app.config().Remote.Listen)
-	if app.config().Remote.LAN {
-		_, port, _ := net.SplitHostPort(orDefault(app.config().Remote.Listen, config.DefaultListen))
-		fmt.Printf("on the home network: %s\n", strings.Join(remote.LANAddresses(port), "  "))
-	}
-	if p, err := srv.NewPairing(); err == nil {
-		fmt.Printf("pair a device (one use, 10 minutes):\n%s\n", p.URL)
-	}
-	stop := make(chan os.Signal, 1)
-	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
-	<-stop
-	app.stop()
 }

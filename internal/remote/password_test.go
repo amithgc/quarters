@@ -133,3 +133,11 @@ func mustRead(t *testing.T, path string) []byte {
 	}
 	return data
 }
+
+func TestPhysicalPorts(t *testing.T) {
+	for name, want := range map[string]bool{"en0": true, "enp3s0": true, "eth0": true, "wlan0": true, "wlp2s0": true, "bridge100": false, "docker0": false, "veth12ab": false, "virbr0": false, "lo": false, "utun3": false} {
+		if physicalPort(name) != want {
+			t.Errorf("physicalPort(%q) = %v", name, !want)
+		}
+	}
+}

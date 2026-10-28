@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"os/exec"
 	"strings"
 	"time"
 )
@@ -26,7 +25,7 @@ type Account struct {
 	Error  string  `json:"error"`
 }
 
-// credentials is the login Claude Code keeps in the macOS Keychain.
+// credentials is the login Claude Code keeps (claudeCredentials).
 type credentials struct {
 	OAuth struct {
 		AccessToken      string `json:"accessToken"`
@@ -35,12 +34,12 @@ type credentials struct {
 	} `json:"claudeAiOauth"`
 }
 
-// FetchAccount reads Claude Code's login from the Keychain and asks
+// FetchAccount reads Claude Code's login and asks
 // Anthropic for the plan's usage. The token is never refreshed here (that
 // would replace Claude Code's own login); when it has expired, opening
 // Claude Code renews it.
 func FetchAccount(ctx context.Context) Account {
-	out, err := exec.CommandContext(ctx, "security", "find-generic-password", "-s", "Claude Code-credentials", "-w").Output()
+	out, err := claudeCredentials(ctx)
 	if err != nil {
 		return Account{Error: "Not signed in — run claude and /login"}
 	}
