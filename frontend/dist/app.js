@@ -478,6 +478,49 @@ function writeChunk(tab, { data, off }) {
   tab.off = (off ?? tab.off) + bytes.length;
   if (isPaused(tab)) return setPaused(tab, true); // drawn for another window's size
   tab.term.write(bytes);
+  if (tab === activeTab()) layComposer();
+}
+
+// On a phone the message card lies over Claude Code's own input box at the
+// bottom of the terminal, so there is one place to type. When Claude shows
+// a menu instead (trust this folder? allow this tool?) the card steps aside
+// to leave the options to tap. The terminal is padded by only as much as
+// the card is taller than Claude's box, so nothing else is covered.
+let composerQueued = false;
+function layComposer() {
+  if (composerQueued) return;
+  composerQueued = true;
+  requestAnimationFrame(() => {
+    composerQueued = false;
+    const tab = activeTab(), body = document.body;
+    const over = !!tab && !tab.exited && !mirrors(tab) && matchMedia("(max-width: 760px)").matches;
+    body.classList.toggle("compose-over", over);
+    if (!over) {
+      body.classList.remove("menu-open");
+      $("#terms").style.paddingBottom = "";
+      return;
+    }
+    const t = tab.term, buf = t.buffer.active, rows = t.rows;
+    const atBottom = buf.viewportY === buf.baseY;
+    const text = (y) => buf.getLine(buf.viewportY + y)?.translateToString(true) ?? "";
+    const rule = (y) => /^\s*─{8,}/.test(text(y));
+    // Claude's box: a rule, the ❯ line(s), a rule, then its status line(s)
+    let top = -1;
+    for (let y = rows - 1; y >= Math.max(1, rows - 10); y--) {
+      if (rule(y) && /^\s*[❯>]/.test(text(y + 1))) {
+        top = y;
+        break;
+      }
+    }
+    body.classList.toggle("menu-open", atBottom && top < 0 && !!menuKeysAt(t));
+    const screen = t.element?.querySelector(".xterm-screen");
+    if (!screen || top < 0) return;
+    const cell = screen.getBoundingClientRect().height / rows;
+    const boxH = (rows - top) * cell, cardH = $("#compose").offsetHeight;
+    const pad = Math.max(0, Math.round(cardH - boxH));
+    const now = parseInt($("#terms").style.paddingBottom || "0", 10);
+    if (Math.abs(pad - now) > cell * 0.75) $("#terms").style.paddingBottom = pad + "px"; // a whole row or more: refit
+  });
 }
 
 // Shells and automations mirror live in every window. A Claude tab is
@@ -526,6 +569,15 @@ function wireMenuTaps(tab) {
     tab.lastInput = Date.now();
     Go().Write(tab.id, keys);
   }, { passive: false });
+}
+
+// menuKeysAt reports whether a Claude menu is on screen (a ❯ option).
+function menuKeysAt(term) {
+  const buf = term.buffer.active, top = buf.viewportY;
+  const text = (y) => buf.getLine(top + y)?.translateToString(true) ?? "";
+  for (let y = 0; y < term.rows; y++)
+    if (/^\s*❯\s+\S/.test(text(y)) && !/^\s*─/.test(text(y - 1)) && !/^\s*─/.test(text(y + 1))) return true;
+  return false;
 }
 
 // menuKeys is what to type for a tap at clientY: arrows to move the menu's
@@ -741,6 +793,7 @@ function showActive() {
   reportViewing();
   document.body.classList.toggle("has-tab", !!cur);
   $("#compose-text").placeholder = cur && (cur.kind === "shell" || cur.autoKey) ? "Type a command…" : "Message Claude…";
+  layComposer();
   renderTabs();
 }
 
@@ -2507,7 +2560,7 @@ function wireTouchScroll() {
     t0 = performance.now();
     acc = v = 0;
     moved = false;
-  }, { passive: true });
+  }, { passive: true, capture: true });
   terms.addEventListener("touchmove", (e) => {
     const tab = activeTab();
     if (e.touches.length !== 1 || !tab) return;
@@ -2515,11 +2568,12 @@ function wireTouchScroll() {
     if (!moved && Math.abs(dy) < 6) return;
     moved = true;
     e.preventDefault();
+    e.stopPropagation(); // the terminal's own gesture handler would scroll too
     scrollBy(tab, dy);
     v = dy / Math.max(1, now - t0); // px per ms
     last = y;
     t0 = now;
-  }, { passive: false });
+  }, { passive: false, capture: true });
   terms.addEventListener("touchend", () => {
     const tab = activeTab();
     if (!moved || !tab || Math.abs(v) < 0.2) return;
@@ -2532,7 +2586,7 @@ function wireTouchScroll() {
       if (Math.abs(v) > 0.03) coast = requestAnimationFrame(step);
     };
     coast = requestAnimationFrame(step);
-  });
+  }, { capture: true });
 }
 
 // Pinching a terminal with two fingers changes the text size (phones,
