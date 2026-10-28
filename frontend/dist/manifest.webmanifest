@@ -1,6 +1,6 @@
 {
-  "name": "quarters",
-  "short_name": "quarters",
+  "name": "Quarters",
+  "short_name": "Quarters",
   "description": "Your Claude Code sessions, from anywhere.",
   "id": "/",
   "start_url": "/",
