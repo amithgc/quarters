@@ -1,0 +1,66 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-6 -20 132 160" role="img" aria-label="Quarters mascot, happy">
+<style>
+* { transform-box: view-box; }
+.move, .squash { transform-origin: 60px 128px; }
+.head { transform-origin: 60px 80px; }
+.ant { transform-origin: 60px 24px; }
+.arm-l { transform-origin: 36.5px 85px; transform: rotate(8deg); }
+.arm-r { transform-origin: 83.5px 85px; transform: rotate(-8deg); }
+.blink { transform-origin: 60px 50px; animation: blink 6.3s infinite; }
+@keyframes blink {
+0%, 41%, 45%, 86%, 89%, 92%, 100% { transform: scaleY(1); }
+43% { transform: scaleY(.08); } 87.5%, 90.5% { transform: scaleY(.08); } }
+.squash { animation: breathe 3.4s ease-in-out infinite; }
+@keyframes breathe { 50% { transform: scale(.99, 1.022); } }
+.shadow { fill: #000; opacity: .2; transform-origin: 60px 133px; }
+.ball { animation: glow 2.6s ease-in-out infinite; } @keyframes glow { 50% { opacity: .55; } }
+@media (prefers-color-scheme: light) { .shadow { opacity: .13; } }
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; } }
+.move { animation: hop 3.2s infinite; }
+@keyframes hop {
+0%, 10% { transform: translateY(0); animation-timing-function: cubic-bezier(.2,.75,.35,1); }
+22% { transform: translateY(-8px); animation-timing-function: cubic-bezier(.6,0,.85,.35); }
+33%, 100% { transform: translateY(0); } }
+.squash { animation: hop-squash 3.2s infinite; }
+@keyframes hop-squash {
+0% { transform: scale(1, 1); } 8% { transform: scale(1.07, .91); } 14% { transform: scale(.95, 1.07); }
+24% { transform: scale(1, 1); } 33% { transform: scale(1.09, .89); } 40% { transform: scale(.97, 1.03); }
+47%, 100% { transform: scale(1, 1); } }
+.shadow { animation: hop-shadow 3.2s infinite; }
+@keyframes hop-shadow { 0%, 10%, 33%, 100% { transform: scale(1); } 22% { transform: scale(.72); opacity: .1; } }
+.head { animation: hop-head 3.2s infinite; }
+@keyframes hop-head {
+0%, 8% { transform: translateY(0); } 14% { transform: translateY(2px); } 24% { transform: translateY(-1px); }
+34% { transform: translateY(3px); } 42% { transform: translateY(-.5px) rotate(-1deg); }
+55%, 92% { transform: translateY(0) rotate(4deg); } 100% { transform: translateY(0); } }
+.ant { animation: hop-ant 3.2s infinite; }
+@keyframes hop-ant { 0%, 12% { transform: rotate(0); } 16% { transform: rotate(8deg); } 33.0% { transform: rotate(-15.0deg); } 37.6% { transform: rotate(10.5deg); } 42.2% { transform: rotate(-6.8deg); } 46.8% { transform: rotate(3.8deg); } 51.4% { transform: rotate(-1.8deg); } 56.0% { transform: rotate(0.0deg); } 100% { transform: rotate(0); } }
+.arm-r { animation: wave 3.2s infinite; }
+@keyframes wave {
+0%, 10% { transform: rotate(-8deg); } 22% { transform: rotate(-26deg); } 33% { transform: rotate(-4deg); }
+44% { transform: rotate(-128deg); animation-timing-function: ease-in-out; }
+52% { transform: rotate(-104deg); } 60% { transform: rotate(-132deg); } 68% { transform: rotate(-102deg); }
+76% { transform: rotate(-128deg); animation-timing-function: cubic-bezier(.6,0,.85,.35); } 90%, 100% { transform: rotate(-8deg); } }
+.arm-l { animation: hop-arm 3.2s infinite; }
+@keyframes hop-arm { 0%, 10% { transform: rotate(8deg); } 22% { transform: rotate(28deg); } 33% { transform: rotate(2deg); } 40% { transform: rotate(12deg); } 50%, 100% { transform: rotate(8deg); } }
+.cheek { animation: blush 3.2s infinite; } @keyframes blush { 50%, 80% { opacity: 1; } 0%, 100% { opacity: .6; } }</style>
+<ellipse class="shadow" cx="60" cy="133" rx="28" ry="4"/>
+<g class="move"><g class="squash">
+<rect x="47" y="110" width="9" height="14" rx="3" fill="#C9653F"/><rect x="64" y="110" width="9" height="14" rx="3" fill="#C9653F"/>
+<rect x="43" y="121" width="16" height="7" rx="3.5" fill="#9B86E0"/><rect x="61" y="121" width="16" height="7" rx="3.5" fill="#9B86E0"/>
+<rect x="38" y="80" width="44" height="34" rx="12" fill="#E8825F"/>
+<rect x="49" y="91" width="22" height="11" rx="4" fill="#C9653F" opacity=".45"/>
+<circle cx="55" cy="96.5" r="2" fill="#F4EADD"/><circle cx="65" cy="96.5" r="2" fill="#9B86E0"/>
+<rect x="54" y="75" width="12" height="7" rx="2" fill="#C9653F"/>
+<g class="head">
+<g class="ant"><path d="M60 24 V12" stroke="#C9653F" stroke-width="3" stroke-linecap="round"/><circle class="ball" cx="60" cy="10" r="5" fill="#FF9B7A"/></g>
+<rect x="14.5" y="40" width="7" height="18" rx="3.5" fill="#9B86E0"/><rect x="98.5" y="40" width="7" height="18" rx="3.5" fill="#9B86E0"/>
+<rect x="20" y="22" width="80" height="58" rx="14" fill="#F4EADD" stroke="#DCCBB6" stroke-width="2"/>
+<rect class="screen" x="29" y="30" width="62" height="42" rx="9" fill="#2A2233"/>
+<g class="look"><g class="blink"><path d="M44 51 q5.5 -7 11 0" fill="none" stroke="#FFB59A" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M65 51 q5.5 -7 11 0" fill="none" stroke="#FFB59A" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></g></g>
+<g class="mouth"><path d="M51 58 q9 8 18 0" fill="none" stroke="#FFB59A" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></g><circle class="cheek" cx="42" cy="58" r="3" fill="#FF8FA3"/><circle class="cheek" cx="78" cy="58" r="3" fill="#FF8FA3"/>
+</g>
+<g class="arm-l"><rect x="32" y="82" width="9" height="22" rx="4.5" fill="#E8825F"/><circle cx="36.5" cy="106" r="5.5" fill="#F4EADD"/></g>
+<g class="arm-r"><rect x="79" y="82" width="9" height="22" rx="4.5" fill="#E8825F"/><circle cx="83.5" cy="106" r="5.5" fill="#F4EADD"/></g>
+</g></g>
+</svg>

@@ -1,0 +1,25 @@
+@font-face { font-family: "JetBrains Mono"; font-weight: 400; src: url(/vendor/fonts/jetbrains-mono-400-normal.woff2) format("woff2"); }
+@font-face { font-family: "JetBrains Mono"; font-weight: 700; src: url(/vendor/fonts/jetbrains-mono-700-normal.woff2) format("woff2"); }
+:root { --bg: #0E0E13; --panel: #13131A; --border: #2A2A36; --text: #E8E6E1; --muted: #8E8C9C; --accent: #E08A6A; --red: #F28B82; --green: #7CD992; color-scheme: dark; }
+@media (prefers-color-scheme: light) {
+  :root { --bg: #F4F2EE; --panel: #FBFAF7; --border: #DAD6CE; --text: #24232A; --muted: #7C7987; --accent: #C8643F; --red: #CC3B30; --green: #2E9A4E; color-scheme: light; }
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; min-height: 100%; background: var(--bg); color: var(--text); font: 14px/1.55 "JetBrains Mono", Menlo, monospace; -webkit-font-smoothing: antialiased; }
+body { display: flex; align-items: center; justify-content: center; min-height: 100dvh; padding: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom)); }
+.card { width: min(420px, 100%); background: var(--panel); border: 1px solid var(--border); border-radius: 16px; padding: 28px 24px 22px; display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center; }
+.mascot { height: 110px; width: auto; }
+h1 { font-size: 20px; margin: 0; }
+p { margin: 0; }
+.accent { color: var(--accent); }
+.muted { color: var(--muted); }
+.foot { font-size: 12px; margin-top: 6px; }
+.foot b { color: var(--text); font-weight: 400; }
+button.primary { width: 100%; min-height: 48px; margin-top: 8px; border: 0; border-radius: 10px; background: var(--accent); color: #1A1110; font: inherit; font-weight: 700; font-size: 15px; cursor: pointer; }
+button.primary:disabled { opacity: .55; cursor: default; }
+.field { width: 100%; display: flex; flex-direction: column; gap: 6px; text-align: left; color: var(--muted); font-size: 12px; margin-top: 6px; }
+.field input { width: 100%; min-height: 44px; padding: 8px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); color: var(--text); font: inherit; font-size: 16px; outline: none; }
+.field input:focus { border-color: var(--accent); }
+.msg { min-height: 22px; font-size: 13px; }
+.msg.err { color: var(--red); }
+.msg.ok { color: var(--green); }

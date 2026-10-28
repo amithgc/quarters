@@ -1,0 +1,360 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+<meta name="theme-color" content="#0E0E13" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#F4F2EE" media="(prefers-color-scheme: light)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="quarters">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" href="icons/icon-192.png">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' ws: wss:; object-src 'none'; base-uri 'none'">
+<title>Quarters</title>
+<link rel="stylesheet" href="vendor/xterm.css">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app">
+
+  <header id="titlebar">
+    <div class="tb-left">
+      <button id="btn-drawer" class="tb-btn mobile-only" type="button" aria-label="Projects">☰</button>
+      <span class="brand">◆ Quarters</span>
+      <span class="sep">│</span>
+      <span id="tb-icon" class="tb-icon"></span>
+      <span id="tb-name" class="tb-name"></span>
+      <span id="tb-path" class="muted"></span>
+    </div>
+    <div class="tb-right">
+      <span id="tb-running" class="tb-count hidden"><span class="dot green">●</span> <span></span> working</span>
+      <span id="tb-waiting" class="tb-count hidden"><span class="dot yellow">◐</span> <span></span> waiting</span>
+      <span id="tb-clock" class="soft"></span>
+      <button id="btn-remote" class="tb-remote hidden" type="button" title="Remote access"></button>
+      <span class="offline-badge">offline · reconnecting…</span>
+      <button id="btn-stats" class="tb-btn mobile-only" type="button" aria-label="Stats">◔</button>
+    </div>
+  </header>
+
+  <main id="main">
+    <!-- LEFT: projects -->
+    <section id="left" class="panel">
+      <div class="panel-head">
+        <span class="panel-title">PROJECTS</span>
+        <span id="project-count" class="muted"></span>
+      </div>
+      <label class="filter">
+        <span class="accent">/</span>
+        <input id="filter" type="text" placeholder="filter projects…" spellcheck="false" autocomplete="off">
+      </label>
+      <button id="config-error" class="config-error hidden" type="button" title="Open config.json (⌘,)"></button>
+      <div id="project-list" class="scroll"></div>
+      <div class="panel-foot">
+        <div class="foot-actions">
+          <button id="btn-add" class="link-btn" type="button" title="Add a project folder (⌘O)">＋ add</button>
+          <button id="btn-config" class="link-btn" type="button" title="Settings (⌘,)">⚙ settings</button>
+          <button id="btn-notify" class="link-btn remote-only hidden" type="button" title="Tell me when Claude is waiting">🔔 notify me</button>
+          <button id="btn-signout" class="link-btn remote-only" type="button" title="Sign out of this browser">⎋ sign out</button>
+        </div>
+        <span class="legend"><span class="green">●</span> run <span class="yellow">◐</span> wait <span class="muted">○</span> idle</span>
+      </div>
+    </section>
+
+    <div class="handle" id="handle-left" title="Drag to resize · double-click to reset"></div>
+
+    <!-- CENTER: terminal -->
+    <section id="center" class="panel">
+      <div id="tabs">
+        <div id="tab-list"></div>
+        <button id="btn-new-tab" class="tab-btn accent" type="button" title="New Claude tab (⌘T)">+</button>
+        <button id="btn-new-shell" class="tab-btn" type="button" title="New shell tab (⌥⌘T)">›_</button>
+        <button id="btn-auto" class="tab-btn auto-btn hidden" type="button" title="Automations">▶ automations</button>
+        <button id="btn-prompts" class="tab-btn hidden" type="button" title="Saved prompts">⚡</button>
+        <button id="btn-history" class="tab-btn hidden" type="button" title="Search past conversations (⇧⌘F)">🕘</button>
+        <button id="btn-wt" class="tab-btn hidden" type="button" title="Git worktrees (⇧⌘G)">⎇</button>
+        <span id="tab-path" class="muted"></span>
+      </div>
+      <div id="pane-bar"></div>
+      <div id="terms">
+        <div id="start" class="hidden"></div>
+        <div id="welcome">
+          <div id="restore" class="restore hidden"></div>
+          <img class="welcome-mascot" src="mascot/excited.svg" alt="" draggable="false">
+          <div class="welcome-card">
+            <div class="wc-title"><span class="accent">✻</span> Welcome to <b>Quarters</b></div>
+            <div class="muted keys-only">Pick a project on the left, or press <b class="kbd">⌘P</b> (or tap <b class="kbd">⇧ ⇧</b>) to jump to one.</div>
+            <div class="muted touch-only">Tap <b class="kbd">☰</b> to pick a project. Sessions you start here also show on the Mac, and the other way round.</div>
+            <div class="wc-keys">
+              <div><b class="kbd">click</b><span>open a project, then <b class="kbd">C</b> starts Claude Code</span></div>
+              <div><b class="kbd">⌘T</b><span>new Claude tab · <b class="kbd">⇧⌘T</b> continue last conversation</span></div>
+              <div><b class="kbd">⌥⌘T</b><span>shell tab · <b class="kbd">⌘W</b> close tab</span></div>
+              <div><b class="kbd">⌘,</b><span>settings · <b class="kbd">⇧⌘F</b> search conversations</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div id="keybar" role="toolbar" aria-label="Keys">
+        <button type="button" data-key="esc">esc</button>
+        <button type="button" data-key="tab">tab</button>
+        <button type="button" data-key="stab" title="Shift+Tab: cycle Claude's mode">⇧tab</button>
+        <button type="button" data-key="ctrl">ctrl</button>
+        <button type="button" data-key="ctrlc">^C</button>
+        <button type="button" data-key="up">↑</button>
+        <button type="button" data-key="down">↓</button>
+        <button type="button" data-key="left">←</button>
+        <button type="button" data-key="right">→</button>
+        <button type="button" data-key="slash">/</button>
+        <button type="button" data-key="nl" title="New line">⇧⏎</button>
+        <button type="button" data-key="enter" class="accent">⏎</button>
+        <button type="button" data-key="prompts" class="kb-prompts" title="Saved prompts">⚡</button>
+        <button type="button" data-key="paste">paste</button>
+        <button type="button" data-key="kbd" title="Show / hide the keyboard">⌨</button>
+      </div>
+    </section>
+
+    <div class="handle" id="handle-right" title="Drag to resize · double-click to reset"></div>
+
+    <!-- RIGHT: stats -->
+    <section id="right" class="panel">
+      <button id="mascot" class="mascot" type="button" title="Click me">
+        <img id="mascot-img" src="mascot/sleepy.svg" alt="" draggable="false">
+        <span class="mascot-text"><span id="mascot-title">Napping</span><span id="mascot-sub" class="muted">no session open</span></span>
+      </button>
+      <div id="stats" class="scroll"></div>
+    </section>
+  </main>
+
+  <footer id="statusbar">
+    <div id="hints">
+      <span><b>⇧⇧</b> / <b>⌘P</b> projects</span>
+      <span><b>⌘T</b> new tab</span>
+      <span><b>⇧⌘T</b> continue</span>
+      <span><b>⌘W</b> close tab</span>
+      <span><b>⌘1-9</b> tabs</span>
+      <span><b>⌘B</b> sidebar</span>
+      <span><b>⌘I</b> stats</span>
+      <span><b>⌘,</b> settings</span>
+    </div>
+    <span id="flash"></span>
+  </footer>
+</div>
+
+<!-- Jump to project -->
+<div id="palette" class="overlay hidden">
+  <div class="palette-box" role="dialog" aria-label="Jump to project">
+    <div class="pal-head">
+      <span class="panel-title accent">JUMP TO PROJECT</span>
+      <span id="pal-count" class="muted"></span>
+    </div>
+    <label class="pal-input">
+      <span class="accent">❯</span>
+      <input id="pal-query" type="text" placeholder="type to search…" spellcheck="false" autocomplete="off">
+    </label>
+    <div id="pal-list"></div>
+    <div class="pal-sep"></div>
+    <button class="pal-action" type="button" data-action="add-project"><span class="violet">＋</span><span>Add project…</span><span class="muted">⌘O</span></button>
+    <button class="pal-action" type="button" data-action="settings"><span class="violet">⚙</span><span>Settings…</span><span class="muted">⌘,</span></button>
+    <button class="pal-action" type="button" data-action="history"><span class="violet">🕘</span><span>Search conversations…</span><span class="muted">⇧⌘F</span></button>
+    <button class="pal-action mac-only" type="button" data-action="edit-config"><span class="violet">{ }</span><span>Edit config.json…</span><span class="muted">⌥⌘,</span></button>
+    <button class="pal-action mac-only" type="button" data-action="remote"><span class="violet">⦿</span><span>Remote access…</span><span class="muted"></span></button>
+    <div class="pal-foot">
+      <span><b>↵</b> open &amp; resume</span>
+      <span><b>⌘↵</b> new tab</span>
+      <span><b>↑↓</b> move</span>
+      <span class="push"><b>⇧⇧</b> / <b>esc</b> close</span>
+    </div>
+  </div>
+</div>
+
+<div id="scrim"></div>
+
+<!-- Remote access (Mac only) -->
+<div id="remote-dialog" class="overlay hidden">
+  <div class="dialog-box remote-box" role="dialog" aria-labelledby="rm-title">
+    <div class="pal-head"><span id="rm-title" class="panel-title accent">REMOTE ACCESS</span><span id="rm-state" class="muted"></span></div>
+    <div class="fields">
+      <div class="rm-intro muted">Use Quarters from your phone or any browser, over the internet. Devices sign in with a <b>passkey</b> (Face ID, Touch ID or PIN) and can only be paired from here, on this Mac.</div>
+      <div class="rm-power">
+        <span id="rm-power-text" class="grow"></span>
+        <button id="rm-toggle" class="btn primary" type="button">Start server</button>
+      </div>
+      <div class="field">
+        <label for="rm-url">Public URL</label>
+        <input id="rm-url" type="text" placeholder="https://quarters.example.com" spellcheck="false" autocomplete="off">
+        <span class="rm-hint muted">The HTTPS address of your tunnel (Cloudflare Tunnel or Tailscale Funnel) that forwards to the local address.</span>
+      </div>
+      <div class="field">
+        <label for="rm-listen">Local address</label>
+        <input id="rm-listen" type="text" placeholder="127.0.0.1:8421" spellcheck="false" autocomplete="off">
+      </div>
+      <div id="rm-error" class="pd-error"></div>
+      <div class="field">
+        <span class="field-label">Devices</span>
+        <div id="rm-devices" class="rm-devices"></div>
+        <div class="rm-actions">
+          <button id="rm-pair" class="btn primary" type="button">Pair a device…</button>
+          <button id="rm-signout" class="btn" type="button">Sign out all browsers</button>
+        </div>
+        <div id="rm-pairing" class="rm-pairing hidden"></div>
+      </div>
+      <details class="rm-more">
+        <summary>Setting up the tunnel</summary>
+        <div class="muted">Quarters only listens on this Mac. A tunnel gives it a public HTTPS address without opening ports on your router.</div>
+        <div><b>Cloudflare Tunnel</b> (your own domain):</div>
+        <pre>brew install cloudflared
+cloudflared tunnel login
+cloudflared tunnel create quarters
+cloudflared tunnel route dns quarters quarters.example.com
+cloudflared tunnel run --url http://127.0.0.1:8421 quarters</pre>
+        <div><b>Tailscale Funnel</b>: <code>tailscale funnel 8421</code>, then use the https://…ts.net address it prints.</div>
+        <div class="muted">Optional extra lock: put Cloudflare Access (email code) in front of the tunnel.</div>
+      </details>
+      <details class="rm-more">
+        <summary>Security log</summary>
+        <pre id="rm-log"></pre>
+      </details>
+    </div>
+    <div class="dialog-actions">
+      <span class="muted rm-foot">A lost phone? Remove it here; it is cut off at once.</span>
+      <span class="push"></span>
+      <button id="rm-close" class="btn" type="button">Close</button>
+      <button id="rm-save" class="btn" type="button">Save addresses</button>
+    </div>
+  </div>
+</div>
+
+<!-- Settings -->
+<div id="settings-dialog" class="overlay hidden">
+  <div class="dialog-box settings-box" role="dialog" aria-labelledby="set-title">
+    <div class="pal-head"><span id="set-title" class="panel-title accent">SETTINGS</span><span id="set-path" class="muted"></span></div>
+    <div class="fields">
+      <div id="set-error" class="pd-error"></div>
+      <div class="field">
+        <span class="field-label">Features</span>
+        <div id="set-features" class="set-list"></div>
+      </div>
+      <div class="field">
+        <span class="field-label">Claude</span>
+        <div class="set-list">
+          <label class="set-row"><span class="set-text"><b>Skip permission prompts (yolo)</b><span class="muted">Claude runs tools without asking. Each project can override this (✎ edit project).</span></span><input type="checkbox" class="switch" id="set-yolo"></label>
+          <div class="set-row"><span class="set-text"><b>Usage warning level</b><span class="muted">Warn when a plan limit passes this.</span></span><span class="set-num"><input type="number" id="set-alert" min="10" max="100" step="5"> %</span></div>
+          <div class="set-row mac-only"><span class="set-text"><b>Hotkey</b><span class="muted" id="set-hotkey-note">e.g. ctrl+alt+space, cmd+shift+h</span></span><input type="text" id="set-hotkey" class="set-input" spellcheck="false" autocomplete="off"></div>
+        </div>
+      </div>
+      <div class="field">
+        <span class="field-label">Saved prompts <span class="soft-note">— ⚡ types them into Claude</span></span>
+        <div id="set-prompts" class="set-prompts"></div>
+        <button id="set-prompt-add" class="btn add-auto" type="button">＋ Add prompt</button>
+      </div>
+    </div>
+    <div class="dialog-actions">
+      <button id="set-config" class="btn mac-only" type="button">Edit config.json…</button>
+      <button id="set-remote" class="btn mac-only" type="button">Remote access…</button>
+      <span class="push"></span>
+      <button id="set-close" class="btn" type="button">Close</button>
+      <button id="set-save" class="btn primary" type="button">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Past conversations -->
+<div id="history-dialog" class="overlay hidden">
+  <div class="dialog-box history-box" role="dialog" aria-labelledby="hi-title">
+    <div class="pal-head"><span id="hi-title" class="panel-title accent">CONVERSATIONS</span><span id="hi-count" class="muted"></span></div>
+    <label class="pal-input">
+      <span class="accent">❯</span>
+      <input id="hi-query" type="text" placeholder="search what you or Claude said…" spellcheck="false" autocomplete="off">
+    </label>
+    <div id="hi-list" class="hi-list"></div>
+    <div class="pal-foot">
+      <span><b>↵</b> resume</span>
+      <span><b>↑↓</b> move</span>
+      <span class="push"><b>esc</b> close</span>
+    </div>
+  </div>
+</div>
+
+<!-- A file's changes -->
+<div id="diff-dialog" class="overlay hidden">
+  <div class="dialog-box diff-box" role="dialog" aria-labelledby="df-title">
+    <div class="pal-head"><span id="df-title" class="panel-title accent">CHANGES</span><span id="df-stat" class="muted"></span></div>
+    <div id="df-note" class="df-note muted"></div>
+    <pre id="df-body" class="df-body"></pre>
+    <div class="dialog-actions">
+      <span id="df-file" class="muted df-file"></span>
+      <span class="push"></span>
+      <button id="df-close" class="btn" type="button">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Saved prompts / worktrees menus -->
+<div id="prompt-menu" class="auto-menu hidden" role="menu"></div>
+<div id="wt-menu" class="auto-menu hidden" role="menu"></div>
+
+<!-- Pasted image shown on hover -->
+<div id="img-pop" class="img-pop hidden"></div>
+
+<!-- Automations menu -->
+<div id="auto-menu" class="auto-menu hidden" role="menu"></div>
+
+<!-- Add / edit project -->
+<div id="proj-dialog" class="overlay hidden">
+  <form id="proj-form" class="dialog-box" role="dialog" aria-labelledby="pd-title" autocomplete="off">
+    <div class="pal-head"><span id="pd-title" class="panel-title accent">ADD PROJECT</span><span class="muted">saved to config.json</span></div>
+    <div class="fields">
+      <div class="field">
+        <label for="pd-path">Folder</label>
+        <div class="path-row">
+          <input id="pd-path" type="text" placeholder="/path/to/project" spellcheck="false">
+          <button id="pd-browse" class="btn" type="button">Browse…</button>
+        </div>
+      </div>
+      <div class="field">
+        <label for="pd-name">Name</label>
+        <input id="pd-name" type="text" placeholder="the folder name" spellcheck="false">
+      </div>
+      <div class="field">
+        <span class="field-label">Icon</span>
+        <div class="icon-row">
+          <span id="pd-icon-preview" class="icon-preview"></span>
+          <button id="pd-icon-choose" class="btn" type="button">Choose image…</button>
+          <button id="pd-icon-clear" class="btn danger hidden" type="button">Remove icon</button>
+        </div>
+        <div id="pd-icon-found" class="icon-found"></div>
+      </div>
+      <div class="field">
+        <label for="pd-group">Group</label>
+        <input id="pd-group" type="text" placeholder="optional — e.g. Web" spellcheck="false">
+        <div id="pd-groups" class="chips"></div>
+      </div>
+      <div class="field">
+        <label for="pd-yolo">Claude permissions</label>
+        <select id="pd-yolo" class="pd-select">
+          <option value="">as in Settings</option>
+          <option value="on">skip permission prompts (yolo)</option>
+          <option value="off">ask before running tools</option>
+        </select>
+      </div>
+      <div class="field">
+        <span class="field-label">Automations <span class="soft-note">— terminals to open together, e.g. backend + frontend</span></span>
+        <div id="pd-autos" class="autos"></div>
+        <button id="pd-auto-add" class="btn add-auto" type="button">＋ Add automation</button>
+      </div>
+      <div id="pd-error" class="pd-error"></div>
+    </div>
+    <div class="dialog-actions">
+      <button id="pd-remove" class="btn danger" type="button">Remove from list</button>
+      <span class="push"></span>
+      <button id="pd-cancel" class="btn" type="button">Cancel</button>
+      <button id="pd-save" class="btn primary" type="submit">Add project</button>
+    </div>
+  </form>
+</div>
+
+<script type="module" src="app.js"></script>
+</body>
+</html>
