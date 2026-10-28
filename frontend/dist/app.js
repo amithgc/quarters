@@ -809,6 +809,8 @@ function showActive() {
   reportViewing();
   document.body.classList.toggle("has-tab", !!cur);
   document.body.classList.toggle("one-tab", tabsOf(state.current).length <= 1); // phones: the title says which
+  document.body.classList.toggle("term-tab", !!cur && mirrors(cur)); // a shell: a plain terminal, typed into directly
+  placeTools();
   $("#compose-text").placeholder = cur && (cur.kind === "shell" || cur.autoKey) ? "Type a command…" : "Message Claude…";
   layComposer();
   renderChat();
@@ -2587,19 +2589,26 @@ function wireActiveList() {
 // On a touch screen you type into a real text field (autocorrect,
 // dictation, selection, a backspace that repeats) and send it with ↑ or
 // return; the terminal's own hidden input is never used for typing.
+// placeTools puts the tab tools (new tab, shell, automations, prompts,
+// past conversations, worktrees) in the message card on a phone's Claude
+// tab, and in the tab bar otherwise (a wide screen, or a phone's shell tab,
+// which is a plain terminal with no message card).
+function placeTools() {
+  const tools = ["#btn-new-tab", "#btn-new-shell", "#btn-auto", "#btn-prompts", "#btn-history", "#btn-wt", "#btn-view"].map((s) => $(s));
+  const inCard = matchMedia("(max-width: 760px)").matches && !document.body.classList.contains("term-tab");
+  const home = inCard ? $("#compose-tools") : $("#tabs");
+  if (tools[0].parentElement === home) return;
+  if (inCard) home.append(...tools);
+  else $("#tab-path").before(...tools);
+}
+
 function wireCompose() {
   const form = $("#compose"), box = $("#compose-text");
   // On a phone the tab bar's tools (new tab, shell, automations, prompts,
   // past conversations, worktrees) sit in the message card, as in the
   // Claude app; on a wider screen they go back to the tab bar.
-  const tools = ["#btn-new-tab", "#btn-new-shell", "#btn-auto", "#btn-prompts", "#btn-history", "#btn-wt", "#btn-view"].map((s) => $(s));
-  const narrow = matchMedia("(max-width: 760px)");
-  const place = () => {
-    if (narrow.matches) $("#compose-tools").append(...tools);
-    else $("#tab-path").before(...tools);
-  };
-  narrow.addEventListener("change", place);
-  place();
+  matchMedia("(max-width: 760px)").addEventListener("change", placeTools);
+  placeTools();
   const grow = () => {
     box.style.height = "auto";
     box.style.height = Math.min(box.scrollHeight, 132) + "px";
