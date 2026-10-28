@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- The **Claude Remote Control** switch is about the Claude session in view:
+  on when Claude Code has it connected (read from Claude Code's own list,
+  whoever turned it on), and flipping it runs `/remote-control` in that
+  session. "Start new Claude tabs with it" is a checkbox below. The
+  project-list mark follows the same live state.
+
 - **End this Claude session** in the side panel (⋯ on a phone), for the tab
   you're looking at; it asks first.
 

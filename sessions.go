@@ -49,10 +49,6 @@ func (a *App) startSession(client, path, kind string, cols, rows int, meta map[s
 				name = filepath.Base(path)
 			}
 			argv = append(argv, "--remote-control", name)
-			if meta == nil {
-				meta = map[string]any{}
-			}
-			meta["rc"] = true // every window can show it
 		}
 		switch kind {
 		case "continue":

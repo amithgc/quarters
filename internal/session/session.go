@@ -272,6 +272,15 @@ func (m *Manager) Start(dir string, argv []string, cols, rows int, input string,
 	return s.id, nil
 }
 
+// Pid is the process id of a session's program (0 when it has ended).
+func (m *Manager) Pid(id int) int {
+	s := m.get(id)
+	if s == nil || s.done() || s.cmd.Process == nil {
+		return 0
+	}
+	return s.cmd.Process.Pid
+}
+
 func (m *Manager) get(id int) *session {
 	m.mu.Lock()
 	defer m.mu.Unlock()

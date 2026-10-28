@@ -847,3 +847,8 @@ body.short-web .compose { padding-bottom: 8px; }
 @media (max-width: 760px) { .tb-sub { display: block; } .tb-sub:empty { display: none; } }
 /* "Press C to start Claude" can wrap in a narrow panel: give it a real line height */
 .st-press { line-height: 1.15; flex-wrap: wrap; justify-content: center; text-align: center; }
+.cr-box { padding-bottom: 10px; margin-bottom: 4px; border-bottom: 1px solid var(--line); }
+.cr-box .cr-row { border-bottom: 0; padding-bottom: 6px; margin-bottom: 0; }
+.cr-always { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); cursor: pointer; }
+.cr-always input { margin: 0; accent-color: var(--accent); }
+.cr-always { justify-content: flex-start; text-align: left; } .cr-always input { flex: none; width: 14px; height: 14px; padding: 0; }

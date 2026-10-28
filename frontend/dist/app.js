@@ -351,7 +351,7 @@ async function newTab(path, kind = "claude", opts = {}) {
   const meta = adopt ? adopt.meta : null;
   const autoOpts = opts.autoKey ? { title: opts.title, dir: opts.dir, command: opts.command, autoKey: opts.autoKey, group: opts.group } : null;
   const startOpts = { resume: opts.resume || "", cwd: opts.cwd || "", title: opts.title || "" };
-  const tab = { key: meta ? meta.key : newKey(), started: meta ? meta.started : Date.now(), group: opts.group || null, head, autoOpts, startOpts, id: 0, kind, path, term, fit, el, title: "", fixedTitle: opts.title || "", wt: opts.cwd && opts.cwd !== path ? opts.cwd.split("/").pop() : "", autoKey: opts.autoKey || "", lastData: 0, exited: false, code: 0, rc: meta ? !!meta.rc : kind !== "shell" && !opts.autoKey && !!state.settings?.claudeRemote, owner: adopt ? adopt.owner : state.me, pty: adopt && adopt.cols ? { cols: adopt.cols, rows: adopt.rows } : null, off: 0, synced: false, early: [] };
+  const tab = { key: meta ? meta.key : newKey(), started: meta ? meta.started : Date.now(), group: opts.group || null, head, autoOpts, startOpts, id: 0, kind, path, term, fit, el, title: "", fixedTitle: opts.title || "", wt: opts.cwd && opts.cwd !== path ? opts.cwd.split("/").pop() : "", autoKey: opts.autoKey || "", lastData: 0, exited: false, code: 0, owner: adopt ? adopt.owner : state.me, pty: adopt && adopt.cols ? { cols: adopt.cols, rows: adopt.rows } : null, off: 0, synced: false, early: [] };
   state.byKey[tab.key] = tab;
   const list = (state.tabs[path] = tabsOf(path).concat(tab));
   if (!adopt) state.active[path] = list.length - 1;
@@ -1718,7 +1718,7 @@ function projectRow(p, pos, filtering, live) {
   const st = projectStatus(p.path);
   const n = tabsOf(p.path).length;
   const gitBits = p.git ? `${p.dirty ? ` <span class="yellow gitn" title="${p.dirty} changed file${p.dirty === 1 ? "" : "s"}"><i>●</i>${p.dirty}</span>` : ""}${p.ahead ? ` <span class="green gitn" title="${p.ahead} commit(s) to push"><i>↑</i>${p.ahead}</span>` : ""}${p.behind ? ` <span class="red gitn" title="${p.behind} commit(s) to pull"><i>↓</i>${p.behind}</span>` : ""}` : "";
-  const rc = tabsOf(p.path).some((t) => t.rc && !t.exited);
+  const rc = tabsOf(p.path).some((t) => rcOn(t));
   const branch = p.missing ? "folder missing" : p.branch ? `⎇ ${esc(p.branch)}${gitBits}` : esc(p.shortPath);
   const attn = tabsOf(p.path).some((t) => t.unseen);
   return `<div class="proj${sel ? " selected" : ""}${attn ? " attn" : ""}${p.path === state.current ? " current" : ""}${p.missing ? " missing" : ""}" data-path="${esc(p.path)}" data-raw="${esc(p.group || "")}"${filtering || live ? "" : ' draggable="true"'} role="button" tabindex="-1" title="${esc(p.path)}">
@@ -1834,14 +1834,36 @@ function renderTabs() {
   $("#btn-wt").classList.toggle("hidden", !on("worktrees") || !ap || !ap.git);
 }
 
-// Claude Code's own Remote Control: new Claude tabs can also be continued
-// from claude.ai/code and the Claude app.
+// Claude Code's own Remote Control (claude.ai/code and the Claude app).
+// The switch is about the Claude tab in view: on when Claude Code has it
+// connected (whoever turned it on); flipping it runs /remote-control in
+// that session. Below it, whether new Claude tabs start with it.
+let rcIds = new Set();
+const rcOn = (t) => !!t && !t.exited && rcIds.has(t.id);
+
+async function pollRemoteControl() {
+  try {
+    const ids = new Set(await Go().RemoteControlled());
+    if ([...ids].join() !== [...rcIds].join()) {
+      rcIds = ids;
+      renderProjects();
+      renderStats();
+    }
+  } catch {}
+}
+
 function renderClaudeRemote() {
   if (!state.settings) return "";
-  const on = !!state.settings.claudeRemote;
-  return `<label class="cr-row" title="Starts new Claude tabs with claude --remote-control <project>">
-    <span class="cr-text"><b>Claude Remote Control</b><span class="muted">${on ? "new Claude tabs also open in claude.ai/code and the Claude app" : "off here · Claude Code's own setting (/config) may still turn it on"}</span></span>
-    <input type="checkbox" class="switch" data-claude-remote${on ? " checked" : ""}${canChange() ? "" : " disabled"}></label>`;
+  const tab = activeTab();
+  const claude = tab && !mirrors(tab) && !tab.exited && tab.path === state.statsPath;
+  const on = claude && rcOn(tab);
+  const always = !!state.settings.claudeRemote;
+  const head = claude
+    ? `<label class="cr-row" title="Runs /remote-control in this session">
+        <span class="cr-text"><b>Claude Remote Control</b><span class="muted">${on ? "this session is open in claude.ai/code and the Claude app" : "continue this session in the Claude app"}</span></span>
+        <input type="checkbox" class="switch" data-rc-session${on ? " checked" : ""}${canType() ? "" : " disabled"}></label>`
+    : `<div class="cr-row"><span class="cr-text"><b>Claude Remote Control</b><span class="muted">No Claude session open here</span></span></div>`;
+  return `<div class="cr-box">${head}<label class="cr-always"><input type="checkbox" data-claude-remote${always ? " checked" : ""}${canChange() ? "" : " disabled"}> Start new Claude tabs with it</label></div>`;
 }
 
 function renderStats() {
@@ -2520,12 +2542,25 @@ function wireEndTab() {
 
 function wireClaudeRemote() {
   $("#stats").addEventListener("change", async (e) => {
+    const sw = e.target.closest("[data-rc-session]");
+    if (sw) {
+      const tab = activeTab();
+      if (!tab || tab.exited) return;
+      if (!canType()) return watchOnly();
+      claimTab(tab);
+      tab.lastInput = Date.now();
+      Go().Write(tab.id, "/remote-control\r");
+      flash(sw.checked ? "turning on Remote Control for this session…" : "Claude asks to confirm: choose “Disconnect this session”");
+      sw.checked = !sw.checked; // shows the real state once Claude has changed it
+      setTimeout(pollRemoteControl, 1500);
+      return;
+    }
     const box = e.target.closest("[data-claude-remote]");
     if (!box) return;
     try {
       await Go().SetClaudeRemote(box.checked);
       state.settings.claudeRemote = box.checked;
-      flash(box.checked ? "Claude Remote Control on for new Claude tabs" : "Claude Remote Control off for new Claude tabs");
+      flash(box.checked ? "new Claude tabs start with Remote Control" : "new Claude tabs start without Remote Control (unless Claude Code's own setting turns it on)");
     } catch (err) {
       box.checked = !box.checked;
       flash(String(err));
@@ -3568,6 +3603,8 @@ async function main() {
   wireActiveList();
   wireClaudeRemote();
   wireEndTab();
+  setInterval(pollRemoteControl, 3000);
+  pollRemoteControl();
   wireProjects();
   wireTabs();
   wirePalette();
