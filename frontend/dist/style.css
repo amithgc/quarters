@@ -842,3 +842,8 @@ body.typing .compose { padding-bottom: 8px; }
 body.short-web .compose { padding-bottom: 8px; }
 .end-btn { display: block; width: 100%; margin: 4px 0 12px; padding: 9px 12px; border-radius: 10px; border: 1px solid color-mix(in srgb, var(--red) 45%, var(--border-strong)); color: var(--red); background: transparent; text-align: center; }
 .end-btn:active, .end-btn:hover { background: color-mix(in srgb, var(--red) 12%, transparent); }
+/* the title's second line (what the tab is doing) is for phones only */
+.tb-sub { display: none; }
+@media (max-width: 760px) { .tb-sub { display: block; } .tb-sub:empty { display: none; } }
+/* "Press C to start Claude" can wrap in a narrow panel: give it a real line height */
+.st-press { line-height: 1.15; flex-wrap: wrap; justify-content: center; text-align: center; }
