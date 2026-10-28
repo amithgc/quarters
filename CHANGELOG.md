@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- **Chat view on phones:** a Claude tab reads like the Claude app. The
+  conversation comes from Claude Code's own log: your messages as bubbles,
+  Claude's replies formatted, tool use folded into rows such as "Ran a
+  command, edited a file ›" (tap for commands, results and diffs), and
+  "✻ Working…" while it works. Claude's menus and questions become
+  buttons, the send button stops Claude while it works, and ▤ switches to
+  the terminal.
+
 - Phones look and feel like the Claude app: a round ☰, a centred title
   with what the tab is doing, a status pill with ⋯ for Quarters' extras
   (plan, session, tokens, git, servers, MCP, skills), tabs as pills, and a

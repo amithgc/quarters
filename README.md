@@ -133,6 +133,9 @@ mini in a cupboard) and use it from any browser: your laptop on the road,
 an iPad, your phone. You see the **same live sessions**: start Claude on the
 Mac, answer it from your phone, finish on the laptop.
 
+- On a phone, Claude tabs read like the Claude app: a chat with your
+  messages, Claude's replies, folded tool rows and buttons for Claude's
+  questions (▤ shows the terminal).
 - Installs as an app on your phone's home screen, with a key bar for the
   keys a phone lacks (esc, tab, ⇧tab, ctrl, arrows) and saved prompts.
 - **Phone alerts** when Claude is waiting, even with the app closed.

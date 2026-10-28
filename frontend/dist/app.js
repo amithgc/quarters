@@ -495,6 +495,7 @@ function layComposer() {
     const tab = activeTab(), body = document.body;
     const over = !!tab && !tab.exited && !mirrors(tab) && matchMedia("(max-width: 760px)").matches;
     body.classList.toggle("compose-over", over);
+    document.documentElement.style.setProperty("--card-h", $("#compose").offsetHeight + "px"); // the chat ends above the card
     if (!over) {
       body.classList.remove("menu-open");
       $("#terms").style.paddingBottom = "";
@@ -794,6 +795,8 @@ function showActive() {
   document.body.classList.toggle("has-tab", !!cur);
   $("#compose-text").placeholder = cur && (cur.kind === "shell" || cur.autoKey) ? "Type a command…" : "Message Claude…";
   layComposer();
+  renderChat();
+  pollChat();
   renderTabs();
 }
 
@@ -2488,7 +2491,7 @@ function wireCompose() {
   // On a phone the tab bar's tools (new tab, shell, automations, prompts,
   // past conversations, worktrees) sit in the message card, as in the
   // Claude app; on a wider screen they go back to the tab bar.
-  const tools = ["#btn-new-tab", "#btn-new-shell", "#btn-auto", "#btn-prompts", "#btn-history", "#btn-wt"].map((s) => $(s));
+  const tools = ["#btn-new-tab", "#btn-new-shell", "#btn-auto", "#btn-prompts", "#btn-history", "#btn-wt", "#btn-view"].map((s) => $(s));
   const narrow = matchMedia("(max-width: 760px)");
   const place = () => {
     if (narrow.matches) $("#compose-tools").append(...tools);
@@ -2507,6 +2510,11 @@ function wireCompose() {
     const text = box.value;
     claimTab(tab);
     tab.lastInput = Date.now();
+    if (!text && !mirrors(tab) && tabStatus(tab) === "busy") return Go().Write(tab.id, "\x1b"); // ■: stop Claude
+    if (text.trim() && chatOn(tab)) {
+      tab.pending = { text: text.trim(), at: Date.now() };
+      setTimeout(renderChat, 0);
+    }
     if (text.includes("\n")) tab.term.paste(text); // several lines arrive as one paste
     else if (text) Go().Write(tab.id, text);
     setTimeout(() => Go().Write(tab.id, "\r"), text ? 60 : 0);
@@ -2555,7 +2563,7 @@ function wireTouchScroll() {
   };
   terms.addEventListener("touchstart", (e) => {
     cancelAnimationFrame(coast);
-    if (e.touches.length !== 1) return;
+    if (e.touches.length !== 1 || e.target.closest?.("#chat")) return void (moved = false, last = NaN);
     last = e.touches[0].clientY;
     t0 = performance.now();
     acc = v = 0;
@@ -2563,7 +2571,7 @@ function wireTouchScroll() {
   }, { passive: true, capture: true });
   terms.addEventListener("touchmove", (e) => {
     const tab = activeTab();
-    if (e.touches.length !== 1 || !tab) return;
+    if (e.touches.length !== 1 || !tab || Number.isNaN(last)) return; // the chat scrolls by itself
     const y = e.touches[0].clientY, dy = y - last, now = performance.now();
     if (!moved && Math.abs(dy) < 6) return;
     moved = true;
@@ -2596,7 +2604,7 @@ function wirePinch() {
   let start = 0, base = 0, last = 0;
   const gap = (t) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
   terms.addEventListener("touchstart", (e) => {
-    if (e.touches.length !== 2) return;
+    if (e.touches.length !== 2 || e.target.closest?.("#chat")) return;
     start = gap(e.touches);
     base = last = state.fontSize;
   }, { passive: true });
@@ -2631,6 +2639,7 @@ function wireMobile() {
   wirePinch();
   wireCompose();
   wireTouchScroll();
+  wireChat();
   // The key bar shows while a terminal has the keyboard.
   const typing = () => document.body.classList.toggle("typing", !!document.activeElement?.closest?.(".xterm, #compose"));
   document.addEventListener("focusin", typing);
@@ -3567,3 +3576,199 @@ async function main() {
 }
 
 main();
+
+// ---------- phones: Claude tabs as a chat ----------
+//
+// On a phone a Claude tab reads like the Claude app: the conversation comes
+// from Claude Code's own log (Chat), Claude's menus and questions are read
+// from the terminal, which keeps running underneath, and become buttons.
+// ▤ switches to the terminal itself.
+
+const VIEW_KEY = "quarters.phoneView";
+let phoneView = (() => {
+  try {
+    return localStorage.getItem(VIEW_KEY) || "chat";
+  } catch {
+    return "chat";
+  }
+})();
+
+const chatOn = (tab) => !!tab && !mirrors(tab) && phoneView === "chat" && matchMedia("(max-width: 760px)").matches;
+
+async function pollChat() {
+  const tab = activeTab();
+  if (!chatOn(tab) || document.hidden || tab.chatBusy) return;
+  tab.chatBusy = true;
+  try {
+    const v = await Go().Chat(tab.id, tab.chatVersion || "");
+    if (v && !v.same) {
+      tab.chat = v.items || [];
+      tab.chatVersion = v.version;
+    }
+  } catch {
+    /* not a Claude tab, or offline: the terminal still works */
+  } finally {
+    tab.chatBusy = false;
+  }
+  renderChat();
+}
+
+// md turns Claude's Markdown into HTML (escaped first; links only http(s)).
+function md(src) {
+  const inline = (s) =>
+    esc(s)
+      .replace(/`([^`]+)`/g, "<code>$1</code>")
+      .replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>")
+      .replace(/(^|[\s(])\*([^*\s][^*]*)\*/g, "$1<i>$2</i>")
+      .replace(/(^|[\s(])_([^_\s][^_]*)_(?=[\s.,;:!?)]|$)/g, "$1<i>$2</i>")
+      .replace(/\[([^\]]+)\]\((https?:[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+  const out = [];
+  const lines = src.replace(/\r/g, "").split("\n");
+  for (let i = 0; i < lines.length; i++) {
+    const l = lines[i];
+    if (/^```/.test(l)) {
+      const code = [];
+      while (++i < lines.length && !/^```/.test(lines[i])) code.push(lines[i]);
+      out.push(`<pre><code>${esc(code.join("\n"))}</code></pre>`);
+    } else if (/^\s*\|/.test(l)) {
+      const rows = [l];
+      while (i + 1 < lines.length && /^\s*\|/.test(lines[i + 1])) rows.push(lines[++i]);
+      out.push(`<pre class="tbl">${esc(rows.join("\n"))}</pre>`);
+    } else if (/^#{1,6}\s/.test(l)) {
+      out.push(`<h4>${inline(l.replace(/^#+\s*/, ""))}</h4>`);
+    } else if (/^\s*([-*•]|\d+\.)\s+/.test(l)) {
+      const ordered = /^\s*\d+\./.test(l), items = [];
+      i--;
+      while (i + 1 < lines.length && /^\s*([-*•]|\d+\.)\s+/.test(lines[i + 1])) items.push(`<li>${inline(lines[++i].replace(/^\s*([-*•]|\d+\.)\s+/, ""))}</li>`);
+      out.push(ordered ? `<ol>${items.join("")}</ol>` : `<ul>${items.join("")}</ul>`);
+    } else if (l.trim() === "") {
+      out.push("");
+    } else {
+      const para = [inline(l)];
+      while (i + 1 < lines.length && lines[i + 1].trim() !== "" && !/^(```|#{1,6}\s|\s*([-*•|]|\d+\.)\s)/.test(lines[i + 1])) para.push(inline(lines[++i]));
+      out.push(`<p>${para.join("<br>")}</p>`);
+    }
+  }
+  return out.join("");
+}
+
+// toolsSummary is "Ran 2 commands, edited 1 file" for a run of tool calls.
+function toolsSummary(tools) {
+  const n = {};
+  for (const t of tools) {
+    const k = t.name === "Bash" ? "ran" : /^(Edit|Write|MultiEdit|NotebookEdit)$/.test(t.name) ? "edited" : /^(Read)$/.test(t.name) ? "read" : /^(Grep|Glob|WebSearch)$/.test(t.name) ? "searched" : "used";
+    n[k] = (n[k] || 0) + 1;
+  }
+  const s = (k, one, many) => (n[k] ? `${n[k] === 1 ? one : `${n[k]} ${many}`}` : "");
+  const parts = [s("ran", "ran a command", "commands"), s("edited", "edited a file", "files edited"), s("read", "read a file", "files read"), s("searched", "searched", "searches"), s("used", "used a tool", "tools used")].filter(Boolean);
+  const text = parts.join(", ").replace(/^(\d+) commands/, "ran $1 commands");
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+function toolRow(t) {
+  let body = "";
+  if (t.old || t.new) {
+    const lines = (s, sign, cls) => (s ? s.split("\n").map((l) => `<div class="${cls}">${sign} ${esc(l)}</div>`).join("") : "");
+    body += `<div class="ct-diff">${lines(t.old, "-", "del")}${lines(t.new, "+", "add")}</div>`;
+  }
+  if (t.result && !(t.name === "Edit" || t.name === "Write") ) body += `<pre class="ct-out${t.error ? " err" : ""}">${esc(t.result)}</pre>`;
+  return `<div class="ct"><div class="ct-head"><span class="${t.error ? "red" : "green"}">●</span> <b>${esc(t.name)}</b> <span class="ct-detail">${esc(t.detail || "")}</span></div>${body}</div>`;
+}
+
+// chatMenu is Claude's menu on screen (a ❯ option outside its input box):
+// the question above it and each option's distance from the chosen one.
+function chatMenu(term) {
+  const buf = term.buffer.active, top = buf.viewportY;
+  const text = (y) => buf.getLine(top + y)?.translateToString(true) ?? "";
+  const rule = (y) => /^\s*[─━]{3,}/.test(text(y));
+  let sel = -1, col = 0;
+  for (let y = 0; y < term.rows; y++) {
+    const m = /^(\s*)❯\s+(?=\S)/.exec(text(y));
+    if (m && !rule(y - 1) && !rule(y + 1)) {
+      sel = y;
+      col = m[0].length;
+    }
+  }
+  if (sel < 0) return null;
+  const isOpt = (y) => text(y).search(/\S/) === col || y === sel;
+  let first = sel, last = sel;
+  for (let y = sel - 1; y >= 0 && (isOpt(y) || text(y).trim() === "") && sel - y < 12; y--) if (isOpt(y)) first = y;
+  for (let y = sel + 1; y < term.rows && (isOpt(y) || text(y).trim() === "") && y - sel < 12; y++) if (isOpt(y)) last = y;
+  const options = [];
+  let idx = 0, selIdx = 0;
+  for (let y = first; y <= last; y++) {
+    if (!isOpt(y)) continue;
+    if (y === sel) selIdx = idx;
+    options.push({ label: text(y).replace(/^\s*❯?\s*/, "").trim(), idx: idx++ });
+  }
+  const q = [];
+  for (let y = first - 1; y >= 0 && q.length < 6 && !rule(y); y--) {
+    const t = text(y).trim();
+    if (t) q.unshift(t);
+    else if (q.length) break;
+  }
+  return { question: q.join(" "), options: options.map((o) => ({ ...o, delta: o.idx - selIdx })) };
+}
+
+function renderChat() {
+  const tab = activeTab(), el = $("#chat"), on = chatOn(tab);
+  document.body.classList.toggle("chat-on", on);
+  el.classList.toggle("hidden", !on);
+  $("#btn-view").textContent = phoneView === "chat" ? "▤" : "💬";
+  $("#btn-view").title = phoneView === "chat" ? "Show the terminal" : "Show the chat";
+  $("#btn-view").classList.toggle("hidden", !tab || mirrors(tab));
+  if (!on) return;
+  const busy = tabStatus(tab) === "busy";
+  const box = $("#compose-text");
+  $("#compose-send").textContent = busy && !box.value ? "■" : "↑";
+  $("#compose-send").setAttribute("aria-label", busy && !box.value ? "Stop Claude" : "Send");
+  const items = tab.chat || [];
+  if (tab.pending && items.some((it) => it.kind === "user" && it.time >= tab.pending.at - 5000 && it.text.startsWith(tab.pending.text.slice(0, 30)))) tab.pending = null;
+  let h = "";
+  if (!items.length && !tab.pending) h += `<div class="chat-empty">${tab.chat ? "Say hello to Claude below." : "Loading the conversation…"}</div>`;
+  items.forEach((it, i) => {
+    if (it.kind === "user") h += `<div class="cm-user">${esc(it.text).replace(/\n/g, "<br>")}</div>`;
+    else if (it.kind === "text") h += `<div class="cm-text">${md(it.text)}</div>`;
+    else h += `<details class="cm-tools" data-k="${i}-${it.tools.length}"><summary><span class="ct-ic">⋮</span>${esc(toolsSummary(it.tools))}<span class="ct-chev">›</span></summary>${it.tools.map(toolRow).join("")}</details>`;
+  });
+  if (tab.pending) h += `<div class="cm-user pending">${esc(tab.pending.text).replace(/\n/g, "<br>")}</div>`;
+  const menu = !busy && !tab.exited ? chatMenu(tab.term) : null;
+  if (menu && menu.options.length > 1) {
+    h += `<div class="cm-ask">${menu.question ? `<div class="cm-q">${esc(menu.question)}</div>` : ""}${menu.options.map((o) => `<button type="button" class="cm-opt" data-delta="${o.delta}">${esc(o.label)}</button>`).join("")}</div>`;
+  }
+  if (busy) h += `<div class="cm-status"><span class="spin">✻</span> Working…</div>`;
+  if (tab.exited) h += `<div class="cm-status muted">Session ended</div>`;
+  if (h === el.dataset.html) return;
+  const list = $("#chat-list");
+  const stick = el.scrollTop + el.clientHeight >= el.scrollHeight - 80;
+  const open = new Set([...list.querySelectorAll("details[open]")].map((d) => d.dataset.k));
+  el.dataset.html = h;
+  list.innerHTML = h;
+  for (const d of list.querySelectorAll("details")) if (open.has(d.dataset.k)) d.open = true;
+  if (stick) el.scrollTop = el.scrollHeight;
+}
+
+function wireChat() {
+  $("#chat-list").addEventListener("click", (e) => {
+    const b = e.target.closest(".cm-opt");
+    const tab = activeTab();
+    if (!b || !tab) return;
+    if (!canType()) return watchOnly();
+    const d = Number(b.dataset.delta);
+    claimTab(tab);
+    tab.lastInput = Date.now();
+    Go().Write(tab.id, (d > 0 ? "\x1b[B".repeat(d) : "\x1b[A".repeat(-d)) + "\r");
+    b.classList.add("chosen");
+  });
+  $("#btn-view").addEventListener("click", () => {
+    phoneView = phoneView === "chat" ? "terminal" : "chat";
+    try {
+      localStorage.setItem(VIEW_KEY, phoneView);
+    } catch {}
+    $("#chat").dataset.html = "";
+    renderChat();
+    layComposer();
+    pollChat();
+  });
+  setInterval(pollChat, 1000);
+}

@@ -772,5 +772,48 @@ body.typing .compose { padding-bottom: 8px; }
 }
 /* swipes on a terminal are ours (scrolling, pinching), not the browser's */
 @media (hover: none) and (pointer: coarse) {
-  #terms, #terms .xterm, #terms .xterm-screen, #terms .xterm-viewport { touch-action: none; }
+  #terms .xterm, #terms .xterm-screen, #terms .xterm-viewport { touch-action: none; }
+}
+
+/* phones: Claude tabs as a chat */
+#tabs #btn-view { display: none; }
+.chat { position: absolute; inset: 0; z-index: 4; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; touch-action: pan-y; background: var(--term); padding: 14px 16px calc(var(--card-h, 130px) + 18px); font: 17px/1.55 -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif; color: var(--text); user-select: text; -webkit-user-select: text; }
+#chat-list { display: flex; flex-direction: column; gap: 14px; }
+.chat-empty { color: var(--muted); text-align: center; margin-top: 30%; }
+.cm-user { align-self: flex-end; max-width: 85%; padding: 10px 15px; border-radius: 20px 20px 6px 20px; background: var(--tile); border: 1px solid var(--border-strong); white-space: normal; overflow-wrap: anywhere; }
+.cm-user.pending { opacity: .6; }
+.cm-text { overflow-wrap: anywhere; }
+.cm-text p, .cm-text ul, .cm-text ol { margin: 0 0 10px; }
+.cm-text p:last-child { margin-bottom: 0; }
+.cm-text ul, .cm-text ol { padding-left: 22px; }
+.cm-text li { margin: 3px 0; }
+.cm-text h4 { margin: 14px 0 6px; font-size: 17px; }
+.cm-text code { font: 14px var(--mono); padding: 1px 5px; border-radius: 5px; background: var(--tile); }
+.cm-text pre { margin: 6px 0 10px; padding: 10px 12px; border-radius: 10px; background: var(--tile); overflow-x: auto; font: 13px/1.45 var(--mono); }
+.cm-text pre code { padding: 0; background: none; font-size: inherit; }
+.cm-text a { color: var(--accent); }
+.cm-tools { color: var(--muted); font-size: 15px; }
+.cm-tools summary { list-style: none; display: flex; align-items: center; gap: 10px; cursor: pointer; padding: 2px 0; }
+.cm-tools summary::-webkit-details-marker { display: none; }
+.ct-ic { font-size: 18px; width: 16px; text-align: center; }
+.ct-chev { transition: transform .15s; }
+.cm-tools[open] .ct-chev { transform: rotate(90deg); }
+.ct { margin: 8px 0 0 26px; padding: 8px 10px; border-radius: 10px; background: var(--tile); color: var(--soft); font-size: 13px; }
+.ct-head { font-family: var(--mono); overflow-wrap: anywhere; }
+.ct-detail { color: var(--muted); }
+.ct-out, .ct-diff { margin: 6px 0 0; max-height: 220px; overflow: auto; font: 12px/1.45 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; }
+.ct-out.err { color: var(--red); }
+.ct-diff .del { background: rgba(242, 139, 130, .14); color: var(--red); }
+.ct-diff .add { background: rgba(124, 217, 146, .12); color: var(--green); }
+.cm-ask { display: flex; flex-direction: column; gap: 8px; padding: 14px; border-radius: 18px; border: 1px solid color-mix(in srgb, var(--accent) 55%, var(--border-strong)); background: var(--tile); }
+.cm-q { font-weight: 600; margin-bottom: 2px; }
+.cm-opt { min-height: 46px; padding: 10px 14px; border-radius: 12px; border: 1px solid var(--border-strong); background: var(--term); color: var(--text); font: 16px -apple-system, system-ui, sans-serif; text-align: left; }
+.cm-opt:active, .cm-opt.chosen { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 18%, var(--term)); }
+.cm-status { color: var(--accent); font-size: 15px; }
+.cm-status .spin { display: inline-block; animation: cm-spin 1.6s linear infinite; }
+@keyframes cm-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .cm-status .spin { animation: none; } }
+@media (max-width: 760px) {
+  .compose-tools { gap: 4px; }
+  .compose-tools .tab-btn { width: 36px; height: 36px; font-size: 16px; }
 }
