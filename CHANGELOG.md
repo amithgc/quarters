@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Phone-sized interface on phones: 16px text, a bigger title bar (19px
+  project name), taller tabs with 44pt buttons, roomier project rows in the
+  drawer, and the working/waiting counts as just ● and ◐ with a number.
+
 - On phones and tablets, Claude Code's menus (trust this folder, allow a
   tool…) are answered by tapping: tap an option to highlight it, tap it
   again to choose it. No arrow keys needed.

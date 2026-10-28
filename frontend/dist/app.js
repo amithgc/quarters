@@ -1608,8 +1608,8 @@ function renderTitle() {
   const r = $("#tb-running"), w = $("#tb-waiting");
   r.classList.toggle("hidden", !busy);
   w.classList.toggle("hidden", !waiting);
-  r.lastElementChild.textContent = busy;
-  w.lastElementChild.textContent = waiting;
+  r.children[1].textContent = busy;
+  w.children[1].textContent = waiting;
   const now = new Date();
   $("#tb-clock").textContent = `${now.toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" })} · ${now.toLocaleTimeString([], { hour: "numeric", minute: "2-digit", hour12: true })}`;
 }

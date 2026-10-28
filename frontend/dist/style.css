@@ -685,3 +685,31 @@ body.access-view .ended .btn, body.access-type .ended .btn { display: none !impo
 .settings-box .pal-head { align-items: center; }
 @media (max-width: 760px) { #set-path { display: none; } }
 .rm-addr { color: var(--accent); text-underline-offset: 3px; }
+
+/* phones: text and touch targets sized like a phone app, not a desktop one */
+@media (max-width: 760px) {
+  html, body { font-size: 16px; line-height: 24px; }
+  #titlebar, body.remote #titlebar { min-height: calc(58px + env(safe-area-inset-top)); padding-left: 6px; padding-right: 6px; }
+  .tb-left { min-width: 0; gap: 10px; }
+  .tb-btn { width: 46px; height: 46px; font-size: 24px; border-radius: 12px; }
+  .tb-icon .picon { width: 28px; height: 28px; font-size: 15px; border-radius: 8px; }
+  .tb-name { font-size: 19px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tb-right { gap: 12px; flex-shrink: 0; }
+  .tb-count { font-size: 17px; }
+  .tb-count .word { display: none; } /* ● 2 ◐ 1: the dots say it */
+
+  #tabs { min-height: 56px; }
+  .tab { font-size: 17px; padding: 0 6px 0 16px; gap: 10px; }
+  .tab .close { width: 36px; height: 36px; font-size: 18px; border-radius: 10px; }
+  #tab-list { flex: 1 1 auto; } /* the tabs come first; the buttons keep their size */
+  .tab-btn { min-width: 44px; padding: 0 8px; font-size: 20px; }
+  .tab-btn.accent { font-size: 26px; }
+  .tab-btn.auto-btn { font-size: 0; }
+  .auto-btn::before { font-size: 18px; }
+
+  .proj { min-height: 64px; padding: 10px 18px; }
+  .proj .l2 { font-size: 14px; padding-left: 40px; }
+  .proj .picon { width: 24px; height: 24px; font-size: 13px; border-radius: 6px; }
+  .panel-head { font-size: 14px; }
+  #pane-bar button { font-size: 15px; padding: 7px 14px; border-radius: 18px; }
+}
