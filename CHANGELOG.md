@@ -4,6 +4,12 @@
 
 - The public URL in Remote Access is optional: without one, the server runs
   at `http://localhost:8421`, for this Mac or an SSH tunnel.
+- Opening `http://127.0.0.1:<port>` without a public URL goes to
+  `http://localhost:<port>`, where passkeys work (it used to fail with
+  "cross-origin request blocked").
+- The title bar shows the date and a 12-hour clock; the remote pill is always
+  there (greyed out while the server is stopped) and its dot pulses while
+  it runs.
 - Dialogs open in the middle of the window (Settings used to sit at the
   bottom).
 

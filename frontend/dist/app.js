@@ -1460,7 +1460,8 @@ function renderTitle() {
   w.classList.toggle("hidden", !waiting);
   r.lastElementChild.textContent = busy;
   w.lastElementChild.textContent = waiting;
-  $("#tb-clock").textContent = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
+  const now = new Date();
+  $("#tb-clock").textContent = `${now.toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" })} · ${now.toLocaleTimeString([], { hour: "numeric", minute: "2-digit", hour12: true })}`;
 }
 
 // Projects in list order: each group gathered together, groups in the order they first appear in config.json.
@@ -2328,7 +2329,7 @@ function renderRemote(v) {
   $("#rm-state").innerHTML = v.running ? '<span class="green">● running</span>' : v.enabled ? '<span class="red">● failed to start</span>' : '<span class="muted">○ stopped</span>';
   const online = (v.devices || []).reduce((n, d) => n + (d.online || 0), 0);
   $("#rm-power-text").innerHTML = v.running
-    ? `<b class="green">Server running</b> <span class="muted">at ${esc(v.address || v.url)}${online ? ` · ${online} connected` : ""}</span>`
+    ? `<b class="green">Server running</b> <span class="muted">at <a href="#" class="rm-addr" title="Open in your browser">${esc(v.address || v.url)}</a>${online ? ` · ${online} connected` : ""}</span>`
     : `<b>Server stopped</b> <span class="muted">— nothing can reach this Mac from outside</span>`;
   $("#rm-toggle").textContent = v.running ? "Stop server" : "Start server";
   $("#rm-toggle").classList.toggle("primary", !v.running);
@@ -2370,10 +2371,11 @@ function renderRemote(v) {
 function renderRemotePill(v) {
   const pill = $("#btn-remote");
   const online = (v.devices || []).reduce((n, d) => n + (d.online || 0), 0);
-  pill.classList.toggle("hidden", !v.enabled && !v.url);
+  pill.classList.remove("hidden");
   pill.classList.toggle("bad", v.enabled && !v.running);
-  pill.innerHTML = v.running ? `<span class="green">●</span> remote${online ? ` · ${online}` : ""}` : v.enabled ? '<span class="red">●</span> remote' : '<span class="muted">○</span> remote off';
-  pill.title = v.running ? `Remote server running (${v.url})${online ? ` · ${online} connected` : ""} — click to manage` : v.error || "Remote server stopped — click to start it";
+  pill.classList.toggle("off", !v.enabled);
+  pill.innerHTML = v.running ? `<span class="green live">●</span> remote${online ? ` · ${online}` : ""}` : v.enabled ? '<span class="red">●</span> remote' : "○ remote";
+  pill.title = v.running ? `Remote server running (${v.address || v.url})${online ? ` · ${online} connected` : ""} — click to manage` : v.error || "Remote server stopped — click to start it";
 }
 
 function wireRemoteDialog() {
@@ -2395,6 +2397,11 @@ function wireRemoteDialog() {
     }
   };
   $("#rm-save").addEventListener("click", async () => (await setRemote(!!(rmd.status && rmd.status.enabled))) && flash("addresses saved"));
+  $("#rm-power-text").addEventListener("click", (e) => {
+    if (!e.target.closest(".rm-addr")) return;
+    e.preventDefault();
+    openLink(rmd.status.address || rmd.status.url);
+  });
   $("#rm-toggle").addEventListener("click", async () => {
     const on = !(rmd.status && rmd.status.running);
     if (await setRemote(on)) flash(on ? "remote server started" : "remote server stopped");

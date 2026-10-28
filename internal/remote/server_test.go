@@ -144,6 +144,18 @@ func TestSignedOutSeesOnlySignIn(t *testing.T) {
 	}
 }
 
+func TestLoopbackAddressGoesToURL(t *testing.T) {
+	s, ts, _ := newTestServer(t) // URL localhost, requests to 127.0.0.1
+	nav := func(r *http.Request) { r.Header.Set("Sec-Fetch-Mode", "navigate") }
+	res := get(t, ts, "/login?x=1", nav)
+	if want := s.origin + "/login?x=1"; res.StatusCode != http.StatusFound || res.Header.Get("Location") != want {
+		t.Errorf("page at 127.0.0.1: %d %q, want redirect to %s", res.StatusCode, res.Header.Get("Location"), want)
+	}
+	if res := get(t, ts, "/login", func(r *http.Request) { nav(r); r.Host = s.site }); res.StatusCode != http.StatusOK {
+		t.Errorf("page at the URL: %d, want 200", res.StatusCode)
+	}
+}
+
 func TestSignedInGetsApp(t *testing.T) {
 	s, ts, _ := newTestServer(t)
 	c := signedIn(t, s)

@@ -419,6 +419,11 @@ body.remote.offline .offline-badge { display: inline; color: var(--yellow); }
 .tb-remote { --wails-draggable: no-drag; padding: 2px 10px; border: 1px solid var(--border); border-radius: 11px; color: var(--soft); font-size: 12px; line-height: 18px; }
 .tb-remote:hover { border-color: var(--accent); color: var(--text); }
 .tb-remote.bad { border-color: rgba(242, 139, 130, .5); }
+.tb-remote.off { opacity: .5; }
+.tb-remote.off:hover { opacity: 1; }
+.tb-remote .live { animation: live 1.6s ease-in-out infinite; }
+@keyframes live { 50% { opacity: .25; } }
+@media (prefers-reduced-motion: reduce) { .tb-remote .live { animation: none; } }
 .tb-btn { --wails-draggable: no-drag; width: 36px; height: 36px; border-radius: 8px; color: var(--soft); font-size: 18px; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
 .tb-btn:active { background: var(--hover-strong); }
 
@@ -667,3 +672,4 @@ body.access-view .ended .btn, body.access-type .ended .btn { display: none !impo
 .pd-error:empty { display: none; }
 .settings-box .pal-head { align-items: center; }
 @media (max-width: 760px) { #set-path { display: none; } }
+.rm-addr { color: var(--accent); text-underline-offset: 3px; }

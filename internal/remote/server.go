@@ -53,6 +53,8 @@ type Server struct {
 	origin  string          // scheme://host[:port] of URL
 	hosts   map[string]bool // Host headers accepted
 	secure  bool            // URL is https
+	local   bool            // URL is this Mac (no tunnel)
+	site    string          // host[:port] of URL
 	auth    *auth
 	hub     *hub
 	log     *auditLog
@@ -104,7 +106,7 @@ func New(opts Options, b Backend) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
-	s := &Server{opts: opts, backend: b, origin: u.Scheme + "://" + u.Host, secure: u.Scheme == "https", log: log,
+	s := &Server{opts: opts, backend: b, origin: u.Scheme + "://" + u.Host, secure: u.Scheme == "https", local: isLoopbackName(host), site: strings.ToLower(u.Host), log: log,
 		hosts: map[string]bool{strings.ToLower(u.Host): true}}
 	// The tunnel may pass the local address as Host. Only exact loopback
 	// names are accepted, which still stops DNS-rebinding attacks.
@@ -373,6 +375,12 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if !s.hosts[strings.ToLower(r.Host)] {
 		http.Error(w, "unknown host", http.StatusMisdirectedRequest)
+		return
+	}
+	// Without a tunnel, 127.0.0.1 and localhost are different sites to a
+	// browser and passkeys only work on the URL's: send page loads there.
+	if s.local && r.Header.Get("Sec-Fetch-Mode") == "navigate" && strings.ToLower(r.Host) != s.site {
+		http.Redirect(w, r, s.origin+r.URL.RequestURI(), http.StatusFound)
 		return
 	}
 	p := path.Clean("/" + r.URL.Path)
