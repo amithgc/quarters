@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Tablets type straight into the terminal (Claude's own input box), like
+  the Mac: no second text field; the key bar comes up while typing. Shell
+  tabs have no text field on any touch screen.
+
 - On phones, shell and automation tabs are plain terminals: no message
   box, you type straight in, the tab bar (with the tools) is always shown,
   and the key bar comes up while typing.

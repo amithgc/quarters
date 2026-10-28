@@ -862,10 +862,19 @@ body.short-web .compose { padding-bottom: 8px; }
 .hint-btn { color: inherit; font: inherit; padding: 0; }
 .hint-btn:hover { color: var(--text); }
 @media (max-width: 760px) { .keys-box .fields { grid-template-columns: 1fr; } }
-/* phones: a shell or automation tab is a plain terminal: no message card,
-   the tab bar (with the tools) always shown, and the key bar while typing */
-@media (max-width: 760px) {
+/* touch screens: a shell or automation tab is a plain terminal: no message
+   card, and the key bar while typing (shells need tab, arrows and ^C) */
+@media (hover: none) and (pointer: coarse) {
   body.term-tab #compose { display: none !important; }
-  body.term-tab.one-tab #tabs { display: flex; }
   body.term-tab.has-tab.typing:not(.access-view) #keybar { display: flex; }
+}
+/* phones: the tab bar (with the tools) stays shown in a shell */
+@media (max-width: 760px) {
+  body.term-tab.one-tab #tabs { display: flex; }
+}
+/* tablets show the terminal, Claude's own input box included: type into it
+   like on the Mac, no second text field; the key bar comes up while typing */
+@media (hover: none) and (pointer: coarse) and (min-width: 761px) {
+  #compose { display: none !important; }
+  body.has-tab.typing:not(.access-view) #keybar { display: flex; }
 }
