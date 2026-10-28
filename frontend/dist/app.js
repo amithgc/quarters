@@ -503,17 +503,13 @@ function layComposer() {
     }
     const t = tab.term, buf = t.buffer.active, rows = t.rows;
     const atBottom = buf.viewportY === buf.baseY;
-    const text = (y) => buf.getLine(buf.viewportY + y)?.translateToString(true) ?? "";
-    const rule = (y) => /^\s*─{8,}/.test(text(y));
-    // Claude's box: a rule, the ❯ line(s), a rule, then its status line(s)
-    let top = -1;
-    for (let y = rows - 1; y >= Math.max(1, rows - 10); y--) {
-      if (rule(y) && /^\s*[❯>]/.test(text(y + 1))) {
-        top = y;
-        break;
-      }
-    }
+    const top = claudeBoxTop(t);
     body.classList.toggle("menu-open", atBottom && top < 0 && !!menuKeysAt(t));
+    if (chatOn(tab)) {
+      // the terminal is hidden under the chat: never resize it for the card
+      if ($("#terms").style.paddingBottom) $("#terms").style.paddingBottom = "";
+      return;
+    }
     const screen = t.element?.querySelector(".xterm-screen");
     if (!screen || top < 0) return;
     const cell = screen.getBoundingClientRect().height / rows;
@@ -570,6 +566,25 @@ function wireMenuTaps(tab) {
     tab.lastInput = Date.now();
     Go().Write(tab.id, keys);
   }, { passive: false });
+}
+
+// claudeBoxTop is the row of the rule above Claude Code's input box at the
+// bottom of the screen (a rule, the ❯ line, a rule, its status lines), or
+// -1 when it isn't there (Claude is showing a menu instead).
+function claudeBoxTop(term) {
+  const buf = term.buffer.active, end = lastLine(term);
+  const text = (y) => buf.getLine(buf.baseY + y)?.translateToString(true) ?? "";
+  for (let y = end; y >= Math.max(0, end - 8); y--)
+    if (/^\s*─{8,}/.test(text(y)) && /^\s*[❯>]/.test(text(y + 1))) return y;
+  return -1;
+}
+
+// lastLine is the last row of the screen with something on it: Claude
+// draws its input box or a menu last, so that is where they end.
+function lastLine(term) {
+  const buf = term.buffer.active;
+  for (let y = term.rows - 1; y > 0; y--) if ((buf.getLine(buf.baseY + y)?.translateToString(true) ?? "").trim()) return y;
+  return 0;
 }
 
 // menuKeysAt reports whether a Claude menu is on screen (a ❯ option).
@@ -793,6 +808,7 @@ function showActive() {
   } else placeSplitHandles();
   reportViewing();
   document.body.classList.toggle("has-tab", !!cur);
+  document.body.classList.toggle("one-tab", tabsOf(state.current).length <= 1); // phones: the title says which
   $("#compose-text").placeholder = cur && (cur.kind === "shell" || cur.autoKey) ? "Type a command…" : "Message Claude…";
   layComposer();
   renderChat();
@@ -1766,6 +1782,7 @@ function renderProjects() {
 }
 
 function renderTabs() {
+  document.body.classList.toggle("one-tab", tabsOf(state.current).length <= 1);
   if ($("#tab-list .tab-rename")) return; // don't wipe a rename in progress
   const cur = activeTab();
   const label = (t) => (t.wt ? `⎇ ${t.wt} · ` : "") + (t.customTitle || t.fixedTitle || (t.kind === "shell" ? t.title || "shell" : t.title || (t.kind === "continue" || t.kind === "resume" ? "claude ↻" : "claude")));
@@ -2450,13 +2467,20 @@ function wireKeybar() {
 function wireViewport() {
   const vv = window.visualViewport;
   if (!vv) return;
+  let last = "";
   const fit = () => {
-    document.documentElement.style.setProperty("--vvh", vv.height + "px");
+    // the whole window, unless the keyboard covers part of it
+    const h = vv.height < window.innerHeight - 40 ? vv.height + "px" : "100%";
+    if (h !== last) {
+      last = h;
+      document.documentElement.style.setProperty("--vvh", h);
+      fitActive();
+    }
     if (isNarrow() || isTouch()) window.scrollTo(0, 0);
-    fitActive();
   };
   vv.addEventListener("resize", fit);
   vv.addEventListener("scroll", fit);
+  window.addEventListener("resize", fit); // a browser's toolbar sliding away
   fit();
 }
 
@@ -3678,7 +3702,8 @@ function toolRow(t) {
 // chatMenu is Claude's menu on screen (a ❯ option outside its input box):
 // the question above it and each option's distance from the chosen one.
 function chatMenu(term) {
-  const buf = term.buffer.active, top = buf.viewportY;
+  if (claudeBoxTop(term) >= 0) return null; // Claude shows its input box or a menu, never both
+  const buf = term.buffer.active, top = buf.baseY;
   const text = (y) => buf.getLine(top + y)?.translateToString(true) ?? "";
   const rule = (y) => /^\s*[─━]{3,}/.test(text(y));
   let sel = -1, col = 0;
@@ -3689,11 +3714,11 @@ function chatMenu(term) {
       col = m[0].length;
     }
   }
-  if (sel < 0) return null;
   const isOpt = (y) => text(y).search(/\S/) === col || y === sel;
   let first = sel, last = sel;
   for (let y = sel - 1; y >= 0 && (isOpt(y) || text(y).trim() === "") && sel - y < 12; y--) if (isOpt(y)) first = y;
   for (let y = sel + 1; y < term.rows && (isOpt(y) || text(y).trim() === "") && y - sel < 12; y++) if (isOpt(y)) last = y;
+  if (lastLine(term) - last > 4) return null; // a menu is the last thing on screen (a hint line may follow)
   const options = [];
   let idx = 0, selIdx = 0;
   for (let y = first; y <= last; y++) {
@@ -3704,6 +3729,7 @@ function chatMenu(term) {
   const q = [];
   for (let y = first - 1; y >= 0 && q.length < 6 && !rule(y); y--) {
     const t = text(y).trim();
+    if (/[▐▛█▜▌▝▘▀▄]/.test(t)) break; // Claude's logo: not part of the question
     if (t) q.unshift(t);
     else if (q.length) break;
   }

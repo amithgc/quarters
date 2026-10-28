@@ -817,3 +817,10 @@ body.typing .compose { padding-bottom: 8px; }
   .compose-tools { gap: 4px; }
   .compose-tools .tab-btn { width: 36px; height: 36px; font-size: 16px; }
 }
+/* phones: a single tab needs no tab row (the title names it); several get small pills */
+@media (max-width: 760px) {
+  body.one-tab #tabs { display: none; }
+  #tabs { padding: 0 12px 6px; }
+  .tab { padding: 3px 2px 3px 12px; font-size: 14px; }
+  .tab .close { width: 24px; height: 24px; font-size: 13px; }
+}
