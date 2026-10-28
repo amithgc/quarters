@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- On phones and tablets, Claude Code's menus (trust this folder, allow a
+  tool…) are answered by tapping: tap an option to highlight it, tap it
+  again to choose it. No arrow keys needed.
+
 - Phones show the terminal at 15px (was 11px), closer to a chat app, and
   pinching a terminal with two fingers changes the text size.
 

@@ -390,6 +390,7 @@ async function newTab(path, kind = "claude", opts = {}) {
   });
   term.onFocus?.(() => setFocus("terminal"));
   el.addEventListener("pointerdown", () => claimTab(tab));
+  if (isTouch() && kind !== "shell") wireMenuTaps(tab);
   el.addEventListener("mousedown", () => {
     setFocus("terminal");
     // Clicking a pane of a split automation makes it the one you type into.
@@ -503,6 +504,67 @@ function claimTab(tab) {
   setPaused(tab, false);
   tab.sent = `${tab.term.cols}x${tab.term.rows}`;
   Go().Claim(tab.id, tab.term.cols, tab.term.rows);
+}
+
+// On a touch screen, Claude Code's menus (trust this folder? allow this
+// tool?) are answered by tapping: a tap on an option moves the ❯ to it,
+// a tap on the chosen one presses Enter. Phones have no arrow keys.
+function wireMenuTaps(tab) {
+  let down = null;
+  tab.el.addEventListener("touchstart", (e) => {
+    const t = e.touches[0];
+    down = e.touches.length === 1 ? { x: t.clientX, y: t.clientY, t: Date.now() } : null;
+  }, { passive: true });
+  tab.el.addEventListener("touchend", (e) => {
+    const t = e.changedTouches[0];
+    if (!down || !t || Date.now() - down.t > 500 || Math.hypot(t.clientX - down.x, t.clientY - down.y) > 10) return;
+    down = null;
+    const keys = menuKeys(tab.term, t.clientY);
+    if (!keys || !canType() || tab.exited) return;
+    e.preventDefault(); // no click: the keyboard stays down
+    claimTab(tab);
+    tab.lastInput = Date.now();
+    Go().Write(tab.id, keys);
+  }, { passive: false });
+}
+
+// menuKeys is what to type for a tap at clientY: arrows to move the menu's
+// ❯ to the tapped option, or Enter on the chosen one; null if the tap
+// isn't on a menu option.
+function menuKeys(term, clientY) {
+  const screen = term.element?.querySelector(".xterm-screen");
+  if (!screen) return null;
+  const r = screen.getBoundingClientRect();
+  const row = Math.floor((clientY - r.top) / (r.height / term.rows));
+  if (row < 0 || row >= term.rows) return null;
+  const buf = term.buffer.active, top = buf.viewportY;
+  const text = (y) => buf.getLine(top + y)?.translateToString(true) ?? "";
+  // the chosen option: "❯ Yes, …" (the input box's bare "❯" has no text after it)
+  let sel = -1, col = -1;
+  for (let y = 0; y < term.rows; y++) {
+    const m = /^(\s*)❯\s+(?=\S)/.exec(text(y));
+    if (m && !/^\s*[─━]/.test(text(y - 1)) && !/^\s*[─━]/.test(text(y + 1))) {
+      sel = y;
+      col = m[0].length;
+    }
+  }
+  if (sel < 0) return null;
+  if (row === sel) return "\r";
+  // the options are the lines whose text starts where the chosen one's does
+  const isOption = (y) => {
+    const t = text(y);
+    return t.trim() !== "" && t.search(/\S/) === col && !buf.getLine(top + y)?.isWrapped;
+  };
+  if (!isOption(row)) return null;
+  const step = row > sel ? 1 : -1;
+  let n = 0;
+  for (let y = sel + step; y !== row + step; y += step) {
+    const t = text(y);
+    if (t.trim() === "") continue;
+    if (!isOption(y) && t.search(/\S/) < col) return null; // left the menu
+    if (isOption(y)) n++;
+  }
+  return n > 0 && n < 20 ? (step > 0 ? "\x1b[B" : "\x1b[A").repeat(n) : null;
 }
 
 // fitTab sizes a tab's terminal: to this window, or for a shell another
