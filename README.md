@@ -200,11 +200,23 @@ Mac, answer it from your phone, finish on the laptop.
 **Requirements:** macOS 11 or later (or Linux, or Windows through WSL, for the server, below), and at least one coding agent
 installed and signed in, on your `PATH`: [Claude Code](https://docs.anthropic.com/en/docs/claude-code)
 (`claude`, the default) or one of the [others](#coding-agents). Quarters is developed and
-tested on current macOS on Apple silicon; Intel builds should work but are
-untested.
+tested on current macOS on Apple silicon; the app is universal (Apple
+silicon and Intel).
 
-There are no signed downloads yet, so build it from source. You need Go
-1.26+, Node.js 20+ and the [Wails](https://wails.io) CLI:
+With [Homebrew](https://brew.sh):
+
+```sh
+brew install --cask amithgc/tap/quarters
+```
+
+The app is signed with a Developer ID and notarized by Apple, so it opens
+like any other. `brew upgrade --cask quarters` updates it. You can also
+download the zip from the
+[releases](https://github.com/amithgc/quarters/releases).
+
+### Building from source
+
+You need Go 1.26+, Node.js 20+ and the [Wails](https://wails.io) CLI:
 
 ```sh
 go install github.com/wailsapp/wails/v2/cmd/wails@v2.17.0
@@ -214,9 +226,13 @@ make install        # builds Quarters.app and copies it to /Applications
 ```
 
 `make build` builds it into `build/bin/Quarters.app` without installing. For
-an Intel Mac use `wails build -platform darwin/amd64`. The app is signed ad
-hoc, so the first time macOS may ask you to confirm opening it
+an Intel Mac use `wails build -platform darwin/amd64`. A build of your own is
+signed ad hoc, so the first time macOS may ask you to confirm opening it
 (right-click → Open).
+
+**Releasing** (maintainers): `scripts/release.sh 1.2.3` publishes a version
+from a Mac: it signs and notarizes the app, publishes the GitHub release and
+updates the Homebrew tap. Its header lists the one-time setup.
 
 ### Linux: the server, used from a browser
 
@@ -227,8 +243,11 @@ works: projects, Claude and shell tabs, automations, the chat view on
 phones, plan usage, past conversations and worktrees. The Mac-only extras
 (the window, the Dock badge, the global hotkey) are left out.
 
-It is a single file with no dependencies besides Claude Code and git. Build
-it (on any machine, for `amd64` and `arm64`) and copy it over:
+It is a single file with no dependencies besides your coding agent and git.
+Install it with Homebrew on Linux (`brew install amithgc/tap/quarters-server`),
+download it from the [releases](https://github.com/amithgc/quarters/releases)
+(`quarters-linux-amd64.tar.gz` or `-arm64`), or build it (on any machine)
+and copy it over:
 
 ```sh
 git clone https://github.com/amithgc/quarters && cd quarters

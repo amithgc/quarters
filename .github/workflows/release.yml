@@ -4,6 +4,9 @@ name: Release
 # Developer ID and notarized by Apple), the Linux servers, and the Homebrew
 # tap (amithgc/homebrew-tap) updated to it.
 #
+# scripts/release.sh does the same from a Mac; a version it already
+# released (or a repository without the signing secrets) is skipped here.
+#
 # Secrets:
 #   MACOS_CERT_P12        the Developer ID Application certificate and key, exported as .p12, base64
 #   MACOS_CERT_PASSWORD   the .p12's password
@@ -20,7 +23,29 @@ permissions:
   contents: write
 
 jobs:
+  check:
+    runs-on: ubuntu-latest
+    outputs:
+      build: ${{ steps.check.outputs.build }}
+    steps:
+      - id: check
+        env:
+          P12: ${{ secrets.MACOS_CERT_P12 }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "::notice::$GITHUB_REF_NAME is already released (scripts/release.sh): nothing to do"
+            echo build=false >> "$GITHUB_OUTPUT"
+          elif [ -z "$P12" ]; then
+            echo "::notice::No signing secrets: release $GITHUB_REF_NAME from a Mac with scripts/release.sh"
+            echo build=false >> "$GITHUB_OUTPUT"
+          else
+            echo build=true >> "$GITHUB_OUTPUT"
+          fi
+
   mac:
+    needs: check
+    if: needs.check.outputs.build == 'true'
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
@@ -71,6 +96,8 @@ jobs:
           path: build/release/Quarters-*.zip*
 
   linux:
+    needs: check
+    if: needs.check.outputs.build == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -89,7 +116,11 @@ jobs:
         run: |
           make server
           cd build/bin
-          for f in quarters-linux-*; do tar -czf "$f.tar.gz" --transform "s|$f|quarters|" "$f"; done
+          # each archive holds one program called quarters (as scripts/release.sh makes them)
+          for arch in amd64 arm64; do
+            d="$(mktemp -d)"; cp "quarters-linux-$arch" "$d/quarters"
+            tar -czf "quarters-linux-$arch.tar.gz" -C "$d" quarters
+          done
           shasum -a 256 *.tar.gz > linux.sha256
 
       - uses: actions/upload-artifact@v4
@@ -115,6 +146,11 @@ jobs:
           gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --title "Quarters ${GITHUB_REF_NAME#v}" --generate-notes \
             dist/Quarters-*.zip dist/*.tar.gz
 
+      - uses: actions/checkout@v4
+        with:
+          path: src
+          sparse-checkout: scripts
+
       - name: Update the Homebrew tap
         env:
           TAP_TOKEN: ${{ secrets.TAP_TOKEN }}
@@ -125,65 +161,9 @@ jobs:
           AMD_SHA="$(grep linux-amd64 dist/linux.sha256 | cut -d' ' -f1)"
           ARM_SHA="$(grep linux-arm64 dist/linux.sha256 | cut -d' ' -f1)"
           git clone "https://x-access-token:$TAP_TOKEN@github.com/amithgc/homebrew-tap.git" tap
+          src/scripts/tap-files.sh "$V" "$MAC_SHA" "$AMD_SHA" "$ARM_SHA" tap
           cd tap
-          mkdir -p Casks Formula
-          cat > Casks/quarters.rb <<EOF
-          cask "quarters" do
-            version "$V"
-            sha256 "$MAC_SHA"
-
-            url "https://github.com/amithgc/quarters/releases/download/v#{version}/Quarters-#{version}.zip"
-            name "Quarters"
-            desc "Minimalist home for terminal coding agents across many projects"
-            homepage "https://quarters.amithgc.com/"
-
-            livecheck do
-              url :url
-              strategy :github_latest
-            end
-
-            depends_on macos: ">= :big_sur"
-
-            app "Quarters.app"
-
-            zap trash: [
-              "~/.config/quarters",
-              "~/Library/Caches/io.github.amithgc.quarters",
-              "~/Library/WebKit/io.github.amithgc.quarters",
-            ]
-          end
-          EOF
-          cat > Formula/quarters-server.rb <<EOF
-          class QuartersServer < Formula
-            desc "Quarters as a server: coding agents across your projects, from a browser"
-            homepage "https://quarters.amithgc.com/"
-            version "$V"
-            license "MIT"
-
-            on_linux do
-              on_intel do
-                url "https://github.com/amithgc/quarters/releases/download/v#{version}/quarters-linux-amd64.tar.gz"
-                sha256 "$AMD_SHA"
-              end
-              on_arm do
-                url "https://github.com/amithgc/quarters/releases/download/v#{version}/quarters-linux-arm64.tar.gz"
-                sha256 "$ARM_SHA"
-              end
-            end
-
-            depends_on :linux
-
-            def install
-              bin.install "quarters"
-            end
-
-            test do
-              assert_match "set-password", shell_output("#{bin}/quarters --help")
-            end
-          end
-          EOF
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
-          git commit -m "Quarters $V"
-          git push
+          git diff --cached --quiet || { git commit -m "Quarters $V"; git push; }
