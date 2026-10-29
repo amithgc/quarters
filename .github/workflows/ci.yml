@@ -34,6 +34,9 @@ jobs:
       - name: Test
         run: go test -race ./...
 
+      - name: Frontend tests
+        run: node --test frontend/*.test.mjs
+
       - name: Build the app
         run: |
           go install github.com/wailsapp/wails/v2/cmd/wails@v2.17.0  # same as go.mod

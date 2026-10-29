@@ -3,8 +3,10 @@ package stats
 import (
 	"bufio"
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 	"sort"
@@ -111,4 +113,40 @@ func imageInLine(line []byte, n int) string {
 		k++
 	}
 	return ""
+}
+
+// maxFileImage is the largest image file shown in the chat (bigger ones
+// would be slow to send to a phone).
+const maxFileImage = 15 << 20
+
+// fileImageTypes are the image files the chat shows. SVG is left out: it
+// is a document that can carry scripts and links, not just a picture.
+var fileImageTypes = map[string]string{".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".gif": "image/gif", ".webp": "image/webp"}
+
+// FileImage reads the image file at path as a data: URL. It must be a
+// regular file named and shaped like a PNG, JPEG, GIF or WebP (its first
+// bytes are checked, not just its name), at most maxFileImage bytes.
+func FileImage(path string) (string, error) {
+	want, ok := fileImageTypes[strings.ToLower(filepath.Ext(path))]
+	if !ok {
+		return "", fmt.Errorf("not an image file")
+	}
+	st, err := os.Stat(path)
+	if err != nil {
+		return "", fmt.Errorf("the image is gone (it may have been in a temporary folder)")
+	}
+	if !st.Mode().IsRegular() {
+		return "", fmt.Errorf("not an image file")
+	}
+	if st.Size() > maxFileImage {
+		return "", fmt.Errorf("the image is too big to show here (%d MB)", st.Size()>>20)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+	if got := http.DetectContentType(data); got != want {
+		return "", fmt.Errorf("not an image file")
+	}
+	return "data:" + want + ";base64," + base64.StdEncoding.EncodeToString(data), nil
 }

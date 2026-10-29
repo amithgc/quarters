@@ -159,3 +159,30 @@ func TestClaimRedraws(t *testing.T) {
 		t.Fatalf("no redraw signal at the same size; got %q", out.String())
 	}
 }
+
+// Printed finds text in what a program wrote, past colours and line wraps.
+func TestPrinted(t *testing.T) {
+	m := NewManager(func(string, any) {}, nil)
+	defer m.CloseAll()
+	// a coloured path, wrapped across two lines with an indent, as agents do
+	script := `printf '\033[1mFile:\033[0m \033[36m/tmp/q-test/scratch\r\n    pad/sample.png\033[0m (650 KB)\r\n'; sleep 5`
+	id, err := m.Start(t.TempDir(), []string{"/bin/sh", "-c", script}, 80, 24, "", nil, "test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for !m.Printed(id, "/tmp/q-test/scratchpad/sample.png") && time.Now().Before(deadline) {
+		time.Sleep(50 * time.Millisecond)
+	}
+	if !m.Printed(id, "/tmp/q-test/scratchpad/sample.png") {
+		t.Fatal("the wrapped, coloured path was not found")
+	}
+	for _, not := range []string{"/etc/hosts.png", "/tmp/q-test/other.png", "", "File: /tmp"} {
+		if m.Printed(id, not) {
+			t.Errorf("Printed(%q) = true", not)
+		}
+	}
+	if m.Printed(999, "/tmp/q-test/scratchpad/sample.png") {
+		t.Error("an unknown session printed it")
+	}
+}

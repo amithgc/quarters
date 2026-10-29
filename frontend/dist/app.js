@@ -3,6 +3,7 @@ import { FitAddon } from "./vendor/addon-fit.js";
 import { WebglAddon } from "./vendor/addon-webgl.js";
 import { WebLinksAddon } from "./vendor/addon-web-links.js";
 import { Unicode11Addon } from "./vendor/addon-unicode11.js";
+import { layoutFor, screenClass } from "./layout.js";
 
 // In a browser (remote access) the Mac app's bridge comes over a WebSocket.
 const REMOTE = !window.go && location.protocol.startsWith("http");
@@ -218,28 +219,92 @@ let imagePopFor = "";
 
 function showImagePop(tab, n, e) {
   const key = `${tab.started}|${tab.path}|${n}`;
+  imageCache[key] ??= Go().PastedImage(tab.path, n, tab.started);
+  imageCache[key].catch(() => delete imageCache[key]);
+  popImage(key, `Image #${n}`, imageCache[key], e);
+}
+
+// popImage shows a picture (a promise of its data: URL) in a pop-up by the pointer.
+function popImage(key, label, url, e) {
   imagePopFor = key;
   const pop = $("#img-pop");
-  pop.innerHTML = `<div class="ip-cap muted">Image #${n} · loading…</div>`;
+  pop.innerHTML = `<div class="ip-cap muted">${esc(label)} · loading…</div>`;
   pop.classList.remove("hidden");
   placeImagePop(e.clientX, e.clientY);
-  imageCache[key] ??= Go().PastedImage(tab.path, n, tab.started);
-  imageCache[key].then(
-    (url) => {
+  url.then(
+    (src) => {
       if (imagePopFor !== key) return;
       const img = document.createElement("img");
       img.alt = "";
       img.onload = () => placeImagePop(e.clientX, e.clientY);
-      img.src = url;
+      img.src = src;
       const cap = document.createElement("div");
       cap.className = "ip-cap muted";
-      cap.textContent = `Image #${n}`;
+      cap.textContent = label;
       pop.replaceChildren(img, cap);
     },
     (err) => {
-      delete imageCache[key];
-      if (imagePopFor === key) pop.innerHTML = `<div class="ip-cap muted">Image #${n} · ${esc(String(err).replace(/^Error: /, ""))}</div>`;
+      if (imagePopFor === key) pop.innerHTML = `<div class="ip-cap muted">${esc(label)} · ${esc(String(err).replace(/^Error: /, ""))}</div>`;
     },
+  );
+}
+
+// pathImageLinks makes the image files a terminal shows (an agent's
+// "…/scratchpad/sample.png", or a shell's) into links: hovering shows the
+// picture, a click (or a tap) opens it full screen. A path the program
+// wrapped onto the next row is still one link.
+function pathImageLinks(term, tabOf) {
+  return {
+    provideLinks(y, done) {
+      const buf = term.buffer.active;
+      let top = y - 1, bottom = y - 1;
+      while (top > 0 && buf.getLine(top)?.isWrapped) top--;
+      while (buf.getLine(bottom + 1)?.isWrapped) bottom++;
+      // the whole line, and the cell each character of it is in
+      let text = "";
+      const at = [];
+      for (let r = top; r <= bottom; r++) {
+        const line = buf.getLine(r);
+        for (let x = 0; line && x < line.length; x++) {
+          const cell = line.getCell(x);
+          if (!cell || cell.getWidth() === 0) continue; // the right half of a wide character
+          const ch = cell.getChars() || " ";
+          for (let k = 0; k < ch.length; k++) at.push({ x: x + 1, y: r + 1 });
+          text += ch;
+        }
+      }
+      const links = [];
+      for (const m of text.matchAll(IMG_PATH)) {
+        const start = at[m.index], end = at[m.index + m[0].length - 1];
+        if (!start || !end || y < start.y || y > end.y) continue;
+        const path = m[0];
+        links.push({
+          text: path,
+          range: { start, end },
+          decorations: { pointerCursor: true, underline: true },
+          activate: () => openTabImage(tabOf(), path),
+          hover: (e) => isTouch() || popImage(`${tabOf().id}|${path}`, baseName(path), tabImage(tabOf(), path), e),
+          leave: hideImagePop,
+        });
+      }
+      done(links);
+    },
+  };
+}
+
+// tabImage is an image file a tab showed, as a data: URL (kept once loaded).
+const tabImageCache = {}; // "tab id|path" -> Promise of a data: URL
+function tabImage(tab, path) {
+  const key = `${tab.id}|${path}`;
+  return (tabImageCache[key] ??= Go().TabImage(tab.id, path));
+}
+
+// openTabImage shows an image file a tab showed full screen.
+function openTabImage(tab, path) {
+  hideImagePop();
+  tabImage(tab, path).then(
+    (url) => showImageView(url, baseName(path)),
+    (err) => flash(`${baseName(path)}: ${String(err).replace(/^Error: /, "")}`),
   );
 }
 
@@ -344,6 +409,7 @@ async function newTab(path, kind = "claude", opts = {}) {
   term.loadAddon(fit);
   term.loadAddon(new WebLinksAddon((_e, uri) => rt().BrowserOpenURL(uri)));
   if (kind !== "shell") term.registerLinkProvider(imageLinks(term, () => tab));
+  term.registerLinkProvider(pathImageLinks(term, () => tab));
   const unicode = new Unicode11Addon();
   term.loadAddon(unicode);
   term.unicode.activeVersion = "11";
@@ -479,54 +545,66 @@ function writeChunk(tab, { data, off }) {
   tab.off = (off ?? tab.off) + bytes.length;
   if (isPaused(tab)) return setPaused(tab, true); // drawn for another window's size
   tab.term.write(bytes);
-  if (tab === activeTab()) layComposer();
 }
 
-// On a phone the message card lies over Claude Code's own input box at the
-// bottom of the terminal, so there is one place to type. When Claude shows
-// a menu instead (trust this folder? allow this tool?) the card steps aside
-// to leave the options to tap. The terminal is padded by only as much as
-// the card is taller than Claude's box, so nothing else is covered.
-let composerQueued = false;
-function layComposer() {
-  if (composerQueued) return;
-  composerQueued = true;
-  requestAnimationFrame(() => {
-    composerQueued = false;
-    const tab = activeTab(), body = document.body;
-    const over = !!tab && !tab.exited && isClaude(tab) && matchMedia("(max-width: 760px)").matches;
-    body.classList.toggle("compose-over", over);
-    document.documentElement.style.setProperty("--card-h", $("#compose").offsetHeight + "px"); // the chat ends above the card
-    if (!over) {
-      body.classList.remove("menu-open");
-      $("#terms").style.paddingBottom = "";
-      return;
-    }
-    const t = tab.term, buf = t.buffer.active, rows = t.rows;
-    const atBottom = buf.viewportY === buf.baseY;
-    const top = claudeBoxTop(t);
-    body.classList.toggle("menu-open", atBottom && top < 0 && !!menuKeysAt(t));
-    if (chatOn(tab)) {
-      // the terminal is hidden under the chat: never resize it for the card
-      if ($("#terms").style.paddingBottom) $("#terms").style.paddingBottom = "";
-      return;
-    }
-    const screen = t.element?.querySelector(".xterm-screen");
-    if (!screen || top < 0) return;
-    const cell = screen.getBoundingClientRect().height / rows;
-    const boxH = (rows - top) * cell, cardH = $("#compose").offsetHeight;
-    const pad = Math.max(0, Math.round(cardH - boxH));
-    const now = parseInt($("#terms").style.paddingBottom || "0", 10);
-    if (Math.abs(pad - now) > cell * 0.75) $("#terms").style.paddingBottom = pad + "px"; // a whole row or more: refit
-  });
+// ---------- how the tab in view is shown (layout.js decides) ----------
+
+// harnessOf is a tab's coding agent as Settings describes it (its adapter:
+// interrupt key, menu marker, conversation reader); null for a shell or an
+// automation.
+const harnessOf = (tab) => (tab && !mirrors(tab) && (state.settings?.harnesses || []).find((h) => h.id === tab.harness)) || null;
+
+// The transcript chosen on this device (▤ / 💬), per agent: "chat",
+// "terminal" or "" (the default). Claude Code's keeps its old key.
+const VIEW_KEY = "quarters.phoneView";
+const viewKey = (agent) => (agent === "claude" ? VIEW_KEY : `${VIEW_KEY}.${agent}`);
+function viewFor(tab) {
+  try {
+    return (tab && localStorage.getItem(viewKey(tab.harness))) || "";
+  } catch {
+    return "";
+  }
+}
+
+function currentLayout(tab = activeTab()) {
+  const t = tab && { agent: !mirrors(tab), reader: !!harnessOf(tab)?.reader };
+  return layoutFor(t, screenClass({ narrow: isNarrow(), touch: isTouch() }), viewFor(tab));
+}
+
+// applySessionView shows the tab in view as layoutFor says: the message card
+// (with the tab tools) or a plain terminal, and the chat or the terminal.
+// The terminal refits by itself when the card comes or goes (#terms is
+// observed).
+function applySessionView() {
+  const tab = activeTab(), l = currentLayout(tab);
+  document.body.classList.toggle("card-on", l.card);
+  // an agent whose menus can't be tapped needs the key bar's arrows and ↵,
+  // whatever the key bar setting says (like a shell)
+  document.body.classList.toggle("needs-keys", l.card && !harnessOf(tab)?.menuMarker);
+  placeTools(l.toolsIn);
+  $("#compose-text").placeholder = tab && !mirrors(tab) ? `Message ${shortAgent(tab.harness)}…` : "Type a command…";
+  $("#btn-view").classList.toggle("hidden", !(l.card && harnessOf(tab)?.reader));
+  updateSend(tab);
+  renderChat();
+}
+
+// updateSend makes the card's button ■ (stop) while the agent works and
+// nothing is typed, ↑ (send) otherwise.
+function updateSend(tab = activeTab()) {
+  const stop = !!tab && !tab.exited && !mirrors(tab) && tabStatus(tab) === "busy" && !$("#compose-text").value;
+  const b = $("#compose-send");
+  if (b.dataset.stop === String(stop)) return;
+  b.dataset.stop = String(stop);
+  b.textContent = stop ? "■" : "↑";
+  b.setAttribute("aria-label", stop ? `Stop ${tab ? shortAgent(tab.harness) : ""}` : "Send");
 }
 
 // Shells and automations mirror live in every window. A Claude tab is
 // drawn by the window in use only; others pause, and catch up when used
 // (Claude reprints the whole conversation for the new size).
 const mirrors = (tab) => tab.kind === "shell" || !!tab.autoKey;
-// Claude Code tabs get the extras (the phone's chat view and message card,
-// Remote Control); other agents (Codex, Gemini CLI, …) are plain terminals.
+// Claude Code tabs get Claude's extras in the side panel (its plan,
+// Remote Control, session stats); on a phone every agent looks the same.
 const isClaude = (tab) => !!tab && !mirrors(tab) && tab.harness === "claude";
 // agentName is what a project's agent (or a tab's) is called.
 function agentName(id) {
@@ -556,9 +634,11 @@ function claimTab(tab) {
   Go().Claim(tab.id, tab.term.cols, tab.term.rows);
 }
 
-// On a touch screen, Claude Code's menus (trust this folder? allow this
-// tool?) are answered by tapping: a tap on an option moves the ❯ to it,
-// a tap on the chosen one presses Enter. Phones have no arrow keys.
+// On a touch screen, an agent's menus (trust this folder? allow this
+// tool?) are answered by tapping, where Quarters knows the mark the agent
+// puts on the chosen option (Claude Code's ❯): a tap on an option moves
+// the mark to it, a tap on the chosen one presses Enter. Other agents'
+// menus work with the key bar's arrows and ↵.
 function wireMenuTaps(tab) {
   let down = null;
   tab.el.addEventListener("touchstart", (e) => {
@@ -569,7 +649,8 @@ function wireMenuTaps(tab) {
     const t = e.changedTouches[0];
     if (!down || !t || Date.now() - down.t > 500 || Math.hypot(t.clientX - down.x, t.clientY - down.y) > 10) return;
     down = null;
-    const keys = menuKeys(tab.term, t.clientY);
+    const marker = harnessOf(tab)?.menuMarker;
+    const keys = marker ? menuKeys(tab.term, t.clientY, marker) : null;
     if (!keys || !canType() || tab.exited) return;
     e.preventDefault(); // no click: the keyboard stays down
     claimTab(tab);
@@ -580,7 +661,8 @@ function wireMenuTaps(tab) {
 
 // claudeBoxTop is the row of the rule above Claude Code's input box at the
 // bottom of the screen (a rule, the ❯ line, a rule, its status lines), or
-// -1 when it isn't there (Claude is showing a menu instead).
+// -1 when it isn't there (Claude is showing a menu instead). The chat view
+// uses it to tell a menu from the input box.
 function claudeBoxTop(term) {
   const buf = term.buffer.active, end = lastLine(term);
   const text = (y) => buf.getLine(buf.baseY + y)?.translateToString(true) ?? "";
@@ -597,19 +679,10 @@ function lastLine(term) {
   return 0;
 }
 
-// menuKeysAt reports whether a Claude menu is on screen (a ❯ option).
-function menuKeysAt(term) {
-  const buf = term.buffer.active, top = buf.viewportY;
-  const text = (y) => buf.getLine(top + y)?.translateToString(true) ?? "";
-  for (let y = 0; y < term.rows; y++)
-    if (/^\s*❯\s+\S/.test(text(y)) && !/^\s*─/.test(text(y - 1)) && !/^\s*─/.test(text(y + 1))) return true;
-  return false;
-}
-
 // menuKeys is what to type for a tap at clientY: arrows to move the menu's
-// ❯ to the tapped option, or Enter on the chosen one; null if the tap
-// isn't on a menu option.
-function menuKeys(term, clientY) {
+// marker (❯) to the tapped option, or Enter on the chosen one; null if the
+// tap isn't on a menu option.
+function menuKeys(term, clientY, marker) {
   const screen = term.element?.querySelector(".xterm-screen");
   if (!screen) return null;
   const r = screen.getBoundingClientRect();
@@ -618,9 +691,10 @@ function menuKeys(term, clientY) {
   const buf = term.buffer.active, top = buf.viewportY;
   const text = (y) => buf.getLine(top + y)?.translateToString(true) ?? "";
   // the chosen option: "❯ Yes, …" (the input box's bare "❯" has no text after it)
+  const chosen = new RegExp(`^(\\s*)${marker.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s+(?=\\S)`, "u");
   let sel = -1, col = -1;
   for (let y = 0; y < term.rows; y++) {
-    const m = /^(\s*)❯\s+(?=\S)/.exec(text(y));
+    const m = chosen.exec(text(y));
     if (m && !/^\s*[─━]/.test(text(y - 1)) && !/^\s*[─━]/.test(text(y + 1))) {
       sel = y;
       col = m[0].length;
@@ -819,11 +893,7 @@ function showActive() {
   reportViewing();
   document.body.classList.toggle("has-tab", !!cur);
   document.body.classList.toggle("one-tab", tabsOf(state.current).length <= 1); // phones: the title says which
-  document.body.classList.toggle("term-tab", !!cur && !isClaude(cur)); // a shell or another agent: a plain terminal, typed into directly
-  placeTools();
-  $("#compose-text").placeholder = cur && (cur.kind === "shell" || cur.autoKey) ? "Type a command…" : "Message Claude…";
-  layComposer();
-  renderChat();
+  applySessionView();
   pollChat();
   renderTabs();
 }
@@ -1700,7 +1770,7 @@ function renderTitle() {
   // phones: what the tab you're looking at is doing, under the title
   const cur = activeTab();
   const st = cur && tabStatus(cur);
-  const what = cur ? cur.fixedTitle || cur.title || (cur.kind === "shell" ? "shell" : cur.harness) : "";
+  const what = cur ? cur.fixedTitle || cur.title || (cur.kind === "shell" ? "shell" : shortAgent(cur.harness)) : "";
   const doing = { busy: "working", waiting: cur && (cur.kind === "shell" || cur.autoKey) ? "ready" : "your turn", ended: "ended" }[st] || "";
   $("#tb-sub").textContent = cur ? `${what} · ${doing}` : p ? `press C to start ${shortAgent(p.agent)}` : "";
   let busy = 0, waiting = 0;
@@ -2586,7 +2656,6 @@ function wireViewport() {
       root.setProperty("--vvh", Math.round(vv.height) + "px");
       root.setProperty("--vvtop", Math.round(vv.offsetTop) + "px");
       fitActive();
-      layComposer();
     }
   };
   vv.addEventListener("resize", fit);
@@ -2804,12 +2873,11 @@ function wireActiveList() {
 // dictation, selection, a backspace that repeats) and send it with ↑ or
 // return; the terminal's own hidden input is never used for typing.
 // placeTools puts the tab tools (new tab, shell, automations, prompts,
-// past conversations, worktrees) in the message card on a phone's Claude
-// tab, and in the tab bar otherwise (a wide screen, or a phone's shell tab,
-// which is a plain terminal with no message card).
-function placeTools() {
+// past conversations, worktrees, ▤/💬) in the message card ("card") or the
+// tab bar ("tabs"), as the layout says.
+function placeTools(where) {
   const tools = ["#btn-new-tab", "#btn-new-shell", "#btn-auto", "#btn-prompts", "#btn-history", "#btn-wt", "#btn-view"].map((s) => $(s));
-  const inCard = matchMedia("(max-width: 760px)").matches && !document.body.classList.contains("term-tab");
+  const inCard = where === "card";
   const home = inCard ? $("#compose-tools") : $("#tabs");
   if (tools[0].parentElement === home) return;
   if (inCard) home.append(...tools);
@@ -2818,11 +2886,8 @@ function placeTools() {
 
 function wireCompose() {
   const form = $("#compose"), box = $("#compose-text");
-  // On a phone the tab bar's tools (new tab, shell, automations, prompts,
-  // past conversations, worktrees) sit in the message card, as in the
-  // Claude app; on a wider screen they go back to the tab bar.
-  matchMedia("(max-width: 760px)").addEventListener("change", placeTools);
-  placeTools();
+  // a phone turned into a wider screen (or back) changes the layout
+  matchMedia("(max-width: 760px)").addEventListener("change", applySessionView);
   const grow = () => {
     box.style.height = "auto";
     box.style.height = Math.min(box.scrollHeight, 132) + "px";
@@ -2834,7 +2899,7 @@ function wireCompose() {
     const text = box.value;
     claimTab(tab);
     tab.lastInput = Date.now();
-    if (!text && !mirrors(tab) && tabStatus(tab) === "busy") return Go().Write(tab.id, "\x1b"); // ■: stop Claude
+    if (!text && !mirrors(tab) && tabStatus(tab) === "busy") return Go().Write(tab.id, harnessOf(tab)?.interrupt || "\x1b"); // ■: stop the agent
     if (text.trim() && chatOn(tab)) {
       tab.pending = { text: text.trim(), at: Date.now() };
       setTimeout(renderChat, 0);
@@ -2844,18 +2909,35 @@ function wireCompose() {
     setTimeout(() => Go().Write(tab.id, "\r"), text ? 60 : 0);
     box.value = "";
     grow();
+    updateSend(tab);
   };
   form.addEventListener("submit", (e) => {
     e.preventDefault();
     send();
   });
-  box.addEventListener("input", grow);
+  box.addEventListener("input", () => {
+    grow();
+    updateSend();
+  });
+  // the key bar's ctrl, then a letter: Ctrl+letter to the agent, not a
+  // letter in the card (^R, ^L, …)
+  box.addEventListener("beforeinput", (e) => {
+    if (!ctrlArmed || !e.data || e.data.length !== 1) return;
+    const tab = activeTab();
+    e.preventDefault();
+    const d = stickyCtrl(e.data);
+    if (tab && !tab.exited && canType()) {
+      claimTab(tab);
+      tab.lastInput = Date.now();
+      Go().Write(tab.id, d);
+    }
+  });
   box.addEventListener("keydown", (e) => {
     if (e.key === "Enter" && !e.shiftKey && !e.isComposing) {
       e.preventDefault();
       send();
     } else if (e.key === "Backspace" && box.value === "") {
-      // nothing left here: delete in Claude's own input instead
+      // nothing left here: delete in the agent's own input instead
       const tab = activeTab();
       if (tab && !tab.exited && canType()) Go().Write(tab.id, "\x7f");
     }
@@ -3923,23 +4005,16 @@ async function main() {
 
 main();
 
-// ---------- phones: Claude tabs as a chat ----------
+// ---------- phones: an agent's conversation as a chat ----------
 //
-// On a phone a Claude tab reads like the Claude app: the conversation comes
-// from Claude Code's own log (Chat), Claude's menus and questions are read
-// from the terminal, which keeps running underneath, and become buttons.
-// ▤ switches to the terminal itself.
+// Where Quarters can read an agent's conversation (Claude Code's log
+// today; the agent's "reader"), its tab on a phone can read like a chat
+// app: the conversation comes from the log (Chat), the agent's menus and
+// questions are read from the terminal, which keeps running underneath,
+// and become buttons. ▤ switches to the terminal itself. The message card
+// below is the same either way, and the same for every agent.
 
-const VIEW_KEY = "quarters.phoneView";
-let phoneView = (() => {
-  try {
-    return localStorage.getItem(VIEW_KEY) || "chat";
-  } catch {
-    return "chat";
-  }
-})();
-
-const chatOn = (tab) => isClaude(tab) && phoneView === "chat" && matchMedia("(max-width: 760px)").matches;
+const chatOn = (tab) => !!tab && currentLayout(tab).transcript === "chat";
 
 async function pollChat() {
   const tab = activeTab();
@@ -4062,21 +4137,17 @@ function renderChat() {
   const tab = activeTab(), el = $("#chat"), on = chatOn(tab);
   document.body.classList.toggle("chat-on", on);
   el.classList.toggle("hidden", !on);
-  $("#btn-view").textContent = phoneView === "chat" ? "▤" : "💬";
-  $("#btn-view").title = phoneView === "chat" ? "Show the terminal" : "Show the chat";
-  $("#btn-view").classList.toggle("hidden", !isClaude(tab));
+  $("#btn-view").textContent = on ? "▤" : "💬";
+  $("#btn-view").title = on ? "Show the terminal" : "Show the chat";
   if (!on) return;
   const busy = tabStatus(tab) === "busy";
-  const box = $("#compose-text");
-  $("#compose-send").textContent = busy && !box.value ? "■" : "↑";
-  $("#compose-send").setAttribute("aria-label", busy && !box.value ? "Stop Claude" : "Send");
   const items = tab.chat || [];
   if (tab.pending && items.some((it) => it.kind === "user" && it.time >= tab.pending.at - 5000 && it.text.startsWith(tab.pending.text.slice(0, 30)))) tab.pending = null;
   let h = "";
-  if (!items.length && !tab.pending) h += `<div class="chat-empty">${tab.chat ? "Say hello to Claude below." : "Loading the conversation…"}</div>`;
+  if (!items.length && !tab.pending) h += `<div class="chat-empty">${tab.chat ? `Say hello to ${esc(shortAgent(tab.harness))} below.` : "Loading the conversation…"}</div>`;
   items.forEach((it, i) => {
     if (it.kind === "user") h += `<div class="cm-user">${esc(it.text).replace(/\n/g, "<br>")}</div>`;
-    else if (it.kind === "text") h += `<div class="cm-text">${md(it.text)}</div>`;
+    else if (it.kind === "text") h += `<div class="cm-text">${md(it.text)}${chatImagesHTML(it.text)}</div>`;
     else h += `<details class="cm-tools" data-k="${i}-${it.tools.length}"><summary><span class="ct-ic">⋮</span>${esc(toolsSummary(it.tools))}<span class="ct-chev">›</span></summary>${it.tools.map(toolRow).join("")}</details>`;
   });
   if (tab.pending) h += `<div class="cm-user pending">${esc(tab.pending.text).replace(/\n/g, "<br>")}</div>`;
@@ -4094,10 +4165,82 @@ function renderChat() {
   list.innerHTML = h;
   for (const d of list.querySelectorAll("details")) if (open.has(d.dataset.k)) d.open = true;
   if (stick) el.scrollTop = el.scrollHeight;
+  fillChatImages(tab);
+}
+
+// ---- images the agent sends: shown in the chat ----
+
+// An image file the agent names in a reply ("…/scratchpad/sample.png"): a
+// full path (or ~/…), not part of a web address.
+const IMG_PATH = /(?<![\w:/.~-])(?:~\/|\/)[^\s`'"<>()[\]*|,;]+?\.(?:png|jpe?g|gif|webp)(?![\w/-]|\.\w)/gi;
+const imagePaths = (text) => [...new Set(text.match(IMG_PATH) || [])].slice(0, 6);
+
+// chatImagesHTML is a place for each image a reply names; fillChatImages
+// loads them (the Mac reads only paths the agent itself wrote).
+function chatImagesHTML(text) {
+  const paths = imagePaths(text);
+  if (!paths.length) return "";
+  return `<div class="cm-imgs">${paths
+    .map((p) => `<button type="button" class="cm-img" data-img="${esc(p)}" aria-label="${esc(baseName(p))}"><span class="cm-img-note">Loading ${esc(baseName(p))}…</span></button>`)
+    .join("")}</div>`;
+}
+
+function fillChatImages(tab) {
+  const chat = $("#chat");
+  for (const b of $("#chat-list").querySelectorAll(".cm-img:not([data-done])")) {
+    const path = b.dataset.img;
+    b.dataset.done = "1";
+    tabImage(tab, path).then(
+      (url) => {
+        // a picture makes the chat taller: stay at the bottom if we were there
+        const stick = chat.scrollTop + chat.clientHeight >= chat.scrollHeight - 80;
+        const img = new Image();
+        img.alt = baseName(path);
+        img.decoding = "async";
+        img.onload = () => stick && (chat.scrollTop = chat.scrollHeight);
+        img.src = url;
+        b.replaceChildren(img);
+        b.classList.add("ready");
+        b.title = path;
+      },
+      (err) => {
+        b.classList.add("failed");
+        b.disabled = true;
+        b.innerHTML = `<span class="cm-img-note">🖼 ${esc(baseName(path))} · ${esc(String(err).replace(/^Error: /, ""))}</span>`;
+      },
+    );
+  }
+}
+
+// showImageView opens a picture from the chat full screen; a tap closes it.
+function showImageView(src, name) {
+  let v = $("#img-view");
+  if (!v) {
+    v = document.createElement("div");
+    v.id = "img-view";
+    v.setAttribute("role", "dialog");
+    v.setAttribute("aria-label", "Image");
+    v.innerHTML = `<img alt=""><button type="button" class="iv-close" aria-label="Close">✕</button><div class="iv-name"></div>`;
+    v.addEventListener("click", () => v.classList.add("hidden"));
+    // Esc closes it, before the terminal underneath can take the key
+    window.addEventListener("keydown", (e) => {
+      if (e.key !== "Escape" || v.classList.contains("hidden")) return;
+      e.preventDefault();
+      e.stopPropagation();
+      v.classList.add("hidden");
+    }, true);
+    document.body.appendChild(v);
+  }
+  v.querySelector("img").src = src;
+  v.querySelector("img").alt = name;
+  v.querySelector(".iv-name").textContent = name;
+  v.classList.remove("hidden");
 }
 
 function wireChat() {
   $("#chat-list").addEventListener("click", (e) => {
+    const pic = e.target.closest(".cm-img.ready img");
+    if (pic) return showImageView(pic.src, pic.alt);
     const b = e.target.closest(".cm-opt");
     const tab = activeTab();
     if (!b || !tab) return;
@@ -4109,16 +4252,19 @@ function wireChat() {
     b.classList.add("chosen");
   });
   $("#btn-view").addEventListener("click", () => {
-    phoneView = phoneView === "chat" ? "terminal" : "chat";
+    const tab = activeTab();
+    if (!tab || mirrors(tab)) return;
     try {
-      localStorage.setItem(VIEW_KEY, phoneView);
+      localStorage.setItem(viewKey(tab.harness), chatOn(tab) ? "terminal" : "chat");
     } catch {}
     $("#chat").dataset.html = "";
-    renderChat();
-    layComposer();
+    applySessionView();
     pollChat();
   });
-  setInterval(pollChat, 1000);
+  setInterval(() => {
+    updateSend();
+    pollChat();
+  }, 1000);
 }
 
 

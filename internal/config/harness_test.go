@@ -54,3 +54,23 @@ func TestAgentCommand(t *testing.T) {
 		}
 	}
 }
+
+func TestHarnessAdapters(t *testing.T) {
+	for _, h := range Harnesses {
+		if h.Interrupt == "" {
+			t.Errorf("%s has no interrupt key", h.ID)
+		}
+		if h.Reader != "" && h.Reader != Claude {
+			t.Errorf("%s names an unknown reader %q", h.ID, h.Reader)
+		}
+	}
+	if c := HarnessByID(Claude); c.Interrupt != "\x1b" || c.MenuMarker != "❯" || c.Reader != Claude {
+		t.Errorf("claude adapter = %+v", c)
+	}
+	if a := HarnessByID("aider"); a.Interrupt != "\x03" {
+		t.Errorf("aider interrupt = %q", a.Interrupt)
+	}
+	if o := HarnessByID("opencode"); o.Interrupt != "\x1b" || o.MenuMarker != "" || o.Reader != "" {
+		t.Errorf("opencode should have the defaults: %+v", o)
+	}
+}

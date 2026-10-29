@@ -66,6 +66,9 @@ services. Your projects, your logins and your machine stay yours.
   **⇧C** to continue the last conversation, **S** for a shell.
 - **Several tabs per project** (agents and shells), all running in the
   background while you switch.
+- **Images in the terminal:** a path to an image an agent made (or any
+  PNG, JPEG, GIF or WebP a tab prints) is a link: hover to preview it,
+  click to see it full screen.
 - **"Your turn" alerts:** when an agent finishes in a tab you aren't looking
   at, you get a notification and a Dock badge, and the tab is marked.
 - Groups, project icons (favicons found automatically), drag to reorder,
@@ -96,8 +99,8 @@ installed are marked, and starting one tells you where to get it.
 
 Claude Code gets the deepest integration, because Quarters reads its session
 logs: session stats, plan usage, past conversations, the phone's chat view
-and Remote Control. Other agents run as they are, in a plain terminal, with
-everything else Quarters does — tabs, alerts, automations, worktrees, git,
+and Remote Control. Other agents run as they are, in their terminal (on a
+phone with the same message card as Claude), with everything else Quarters does — tabs, alerts, automations, worktrees, git,
 remote access — working the same.
 
 ¹ Read from the Antigravity IDE while it's open on the same machine, through
@@ -173,9 +176,12 @@ mini in a cupboard) and use it from any browser: your laptop on the road,
 an iPad, your phone. You see the **same live sessions**: start Claude on the
 Mac, answer it from your phone, finish on the laptop.
 
-- On a phone, Claude tabs read like the Claude app: a chat with your
-  messages, Claude's replies, folded tool rows and buttons for Claude's
-  questions (▤ shows the terminal).
+- On a phone, every coding agent gets the same session view: its
+  transcript above, and a message card below (the one place to type, with
+  ↑ send, ■ stop and the tab tools), the same for Claude Code, Codex and
+  the rest. Claude Code's transcript reads like the Claude app: a chat with
+  your messages, its replies, folded tool rows, the images it sends and
+  buttons for its questions (▤ shows the terminal). Other agents show their terminal.
 - Installs as an app on your phone's home screen, with a key bar for the
   keys a phone lacks (esc, tab, ⇧tab, ctrl, arrows) and saved prompts.
 - **Phone alerts** when Claude is waiting, even with the app closed.

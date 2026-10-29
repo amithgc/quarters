@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"sync"
@@ -567,4 +568,23 @@ func lookPath(name string, env []string) (string, error) {
 func (m *Manager) Installed(name string) bool {
 	_, err := lookPath(name, m.loginEnv())
 	return err == nil
+}
+
+// escapes are the terminal control sequences in a program's output: CSI
+// (colours, cursor moves), OSC (titles, links) and the short ones.
+var escapes = regexp.MustCompile(`\x1b\[[0-?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b[@-Z\\-_]`)
+
+// Printed reports whether session id's recent output shows text (no
+// spaces in it): colours, cursor moves and line breaks are ignored, so text
+// a program wrapped across lines still counts.
+func (m *Manager) Printed(id int, text string) bool {
+	s := m.get(id)
+	if s == nil || text == "" || strings.ContainsAny(text, " \t\r\n") {
+		return false
+	}
+	s.mu.Lock()
+	out := escapes.ReplaceAll(s.recent, nil)
+	s.mu.Unlock()
+	out = bytes.Join(bytes.Fields(out), nil)
+	return bytes.Contains(out, []byte(text))
 }

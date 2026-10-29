@@ -573,10 +573,12 @@ body.access-view .ended .btn, body.access-type .ended .btn { display: none !impo
   .touch-only { display: inline; }
   .keys-only { display: none !important; }
   #hints { display: none; }
-  /* only while typing into a terminal: the keyboard is up then */
+  /* the key bar, only while typing (the keyboard is up then): optional
+     where an agent's menus can be tapped, always otherwise (shells and
+     other agents need tab, arrows, ↵ and ^C) */
   body.has-tab.typing:not(.no-keybar) #keybar { display: flex; }
-  /* a real text field to type into, like a chat app */
-  body.has-tab:not(.access-view) #compose { display: flex; }
+  body.has-tab.typing:not(.card-on):not(.access-view) #keybar,
+  body.has-tab.typing.needs-keys:not(.access-view) #keybar { display: flex; }
   #keybar { order: 1; }
   /* no hover: a tap opens the project; its start screen and tab bar have the actions */
   .proj .actions, .proj:hover .actions { display: none; }
@@ -765,13 +767,9 @@ body.typing .compose { padding-bottom: 8px; }
 .compose-tools .tab-btn { font-family: var(--mono); }
 .active-sec { padding-bottom: 6px; margin-bottom: 4px; border-bottom: 1px solid var(--line); }
 .active-head { color: var(--accent); }
-/* phones, Claude tabs: the message card lies over Claude's own input box */
-@media (max-width: 760px) {
-  #center { position: relative; }
-  body.compose-over #compose { position: absolute; left: 0; right: 0; bottom: 0; z-index: 6; padding-top: 10px; background: linear-gradient(to bottom, transparent, var(--term) 10px); }
-  body.compose-over.menu-open #compose { display: none !important; }
-  body.compose-over.typing:not(.no-keybar) #compose { position: static; }
-}
+/* the message card: on a phone, every coding agent's tab (layout.js);
+   it sits below the terminal, which is fitted to the space above it */
+body.card-on.has-tab:not(.access-view) #compose { display: flex; }
 /* swipes on a terminal are ours (scrolling, pinching), not the browser's */
 @media (hover: none) and (pointer: coarse) {
   #terms .xterm, #terms .xterm-screen, #terms .xterm-viewport { touch-action: none; }
@@ -779,7 +777,7 @@ body.typing .compose { padding-bottom: 8px; }
 
 /* phones: Claude tabs as a chat */
 #tabs #btn-view { display: none; }
-.chat { position: absolute; inset: 0; z-index: 4; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; touch-action: pan-y; background: var(--term); padding: 14px 16px calc(var(--card-h, 130px) + 18px); font: 17px/1.55 -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif; color: var(--text); user-select: text; -webkit-user-select: text; }
+.chat { position: absolute; inset: 0; z-index: 4; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; touch-action: pan-y; background: var(--term); padding: 14px 16px 18px; font: 17px/1.55 -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif; color: var(--text); user-select: text; -webkit-user-select: text; }
 #chat-list { display: flex; flex-direction: column; gap: 14px; }
 .chat-empty { color: var(--muted); text-align: center; margin-top: 30%; }
 .cm-user { align-self: flex-end; max-width: 85%; padding: 10px 15px; border-radius: 20px 20px 6px 20px; background: var(--tile); border: 1px solid var(--border-strong); white-space: normal; overflow-wrap: anywhere; }
@@ -811,6 +809,16 @@ body.typing .compose { padding-bottom: 8px; }
 .cm-q { font-weight: 600; margin-bottom: 2px; }
 .cm-opt { min-height: 46px; padding: 10px 14px; border-radius: 12px; border: 1px solid var(--border-strong); background: var(--term); color: var(--text); font: 16px -apple-system, system-ui, sans-serif; text-align: left; }
 .cm-opt:active, .cm-opt.chosen { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 18%, var(--term)); }
+/* images the agent sends, under its reply; a tap opens one full screen */
+.cm-imgs { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; margin-top: 10px; }
+.cm-img { display: block; max-width: 100%; padding: 0; border: 1px solid var(--border-strong); border-radius: 14px; overflow: hidden; background: var(--tile); text-align: left; }
+.cm-img img { display: block; max-width: 100%; max-height: 60vh; width: auto; height: auto; }
+.cm-img-note { display: block; padding: 11px 14px; color: var(--muted); font-size: 14px; overflow-wrap: anywhere; }
+#img-view { position: fixed; inset: 0; z-index: 200; display: flex; align-items: center; justify-content: center; padding: calc(env(safe-area-inset-top) + 60px) 0 calc(env(safe-area-inset-bottom) + 44px); background: rgba(0, 0, 0, .94); }
+#img-view.hidden { display: none; }
+#img-view img { max-width: 100%; max-height: 100%; object-fit: contain; }
+#img-view .iv-close { position: absolute; top: calc(env(safe-area-inset-top) + 10px); right: 12px; width: 44px; height: 44px; border-radius: 50%; background: rgba(255, 255, 255, .14); color: #fff; font-size: 18px; }
+#img-view .iv-name { position: absolute; left: 16px; right: 16px; bottom: calc(env(safe-area-inset-bottom) + 14px); color: rgba(255, 255, 255, .7); font-size: 13px; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cm-status { color: var(--accent); font-size: 15px; }
 .cm-status .spin { display: inline-block; animation: cm-spin 1.6s linear infinite; }
 @keyframes cm-spin { to { transform: rotate(360deg); } }
@@ -902,19 +910,8 @@ body.short-web .compose { padding-bottom: 8px; }
 .hint-btn { color: inherit; font: inherit; padding: 0; }
 .hint-btn:hover { color: var(--text); }
 @media (max-width: 760px) { .keys-box .fields { grid-template-columns: 1fr; } }
-/* touch screens: a shell or automation tab is a plain terminal: no message
-   card, and the key bar while typing (shells need tab, arrows and ^C) */
-@media (hover: none) and (pointer: coarse) {
-  body.term-tab #compose { display: none !important; }
-  body.term-tab.has-tab.typing:not(.access-view) #keybar { display: flex; }
-}
-/* phones: the tab bar (with the tools) stays shown in a shell */
+/* phones: without the card (a shell, an automation) the tab bar keeps the
+   tools, so it stays shown even for one tab */
 @media (max-width: 760px) {
-  body.term-tab.one-tab #tabs { display: flex; }
-}
-/* tablets show the terminal, Claude's own input box included: type into it
-   like on the Mac, no second text field; the key bar comes up while typing */
-@media (hover: none) and (pointer: coarse) and (min-width: 761px) {
-  #compose { display: none !important; }
-  body.has-tab.typing:not(.access-view) #keybar { display: flex; }
+  body.has-tab:not(.card-on).one-tab #tabs { display: flex; }
 }

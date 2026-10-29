@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+- Images the agent sends. On a phone, a chat reply that names an image
+  file (PNG, JPEG, GIF, WebP) shows the picture under it; a tap opens it
+  full screen, and a missing file says so. In any terminal (the Mac, a
+  tablet, a phone's terminal view, every agent and shells), an image path
+  is a link: hover to preview it, click to open it full screen (Esc
+  closes). The Mac reads only a path the tab itself showed (in the agent's
+  conversation or printed in the terminal), checks the file really is an
+  image (not just named like one) and caps it at 15 MB.
+
+- Phones: one session view for every coding agent. Claude Code, Codex,
+  OpenCode and the rest all get the message card below their transcript
+  (↑ send, ■ stop with the agent's own interrupt key, the tab tools) and
+  the key bar while typing. The card no longer lies over Claude's input
+  box: it sits below the terminal, which fits the space above it. Claude
+  Code keeps its chat view (▤/💬, remembered per agent); agents whose menus
+  can't be tapped always get the key bar's arrows. Shells stay plain
+  terminals; tablets are unchanged.
+
 - Devin (Cognition's `devin` CLI) is one of the coding agents: continue is
   `--continue`, skipping permission prompts is `--permission-mode bypass`.
 

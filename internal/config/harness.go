@@ -19,6 +19,21 @@ type Harness struct {
 	Continue []string `json:"continue"`
 	// Site is where to get it.
 	Site string `json:"site"`
+
+	// How the phone's message card talks to it (see frontend/dist/app.js,
+	// layoutFor). Unknown agents get the defaults, which are safe for any
+	// terminal program: the key bar's arrows and ↵ always work.
+
+	// Interrupt is what ■ sends to stop the agent while it works. Default
+	// Esc: it interrupts the agents that use it and does nothing harmful
+	// in the others (^C quits several agents when pressed twice).
+	Interrupt string `json:"interrupt,omitempty"`
+	// MenuMarker is the mark the agent puts on a menu's chosen option
+	// ("❯"), so a tap on an option chooses it. "" = no tapping, arrows.
+	MenuMarker string `json:"menuMarker,omitempty"`
+	// Reader names the conversation reader that turns the agent's own log
+	// into the phone's chat view ("" = the terminal only).
+	Reader string `json:"reader,omitempty"`
 }
 
 // Claude is the default harness.
@@ -26,14 +41,27 @@ const Claude = "claude"
 
 // Harnesses are the agents Quarters knows how to start.
 var Harnesses = []Harness{
-	{ID: Claude, Name: "Claude Code", Bin: "claude", Yolo: []string{"--dangerously-skip-permissions"}, Continue: []string{"--continue"}, Site: "https://claude.com/claude-code"},
+	{ID: Claude, Name: "Claude Code", Bin: "claude", Yolo: []string{"--dangerously-skip-permissions"}, Continue: []string{"--continue"}, Site: "https://claude.com/claude-code",
+		Interrupt: "\x1b", MenuMarker: "❯", Reader: Claude},
 	{ID: "codex", Name: "Codex", Bin: "codex", Yolo: []string{"--dangerously-bypass-approvals-and-sandbox"}, Continue: []string{"resume", "--last"}, Site: "https://github.com/openai/codex"},
 	{ID: "gemini", Name: "Gemini CLI", Bin: "gemini", Yolo: []string{"--yolo"}, Continue: []string{"--resume", "latest"}, Site: "https://github.com/google-gemini/gemini-cli"},
 	{ID: "antigravity", Name: "Antigravity", Bin: "agy", Yolo: []string{"--dangerously-skip-permissions"}, Continue: []string{"--continue"}, Site: "https://antigravity.google"},
 	{ID: "opencode", Name: "OpenCode", Bin: "opencode", Continue: []string{"--continue"}, Site: "https://opencode.ai"},
 	{ID: "copilot", Name: "GitHub Copilot CLI", Bin: "copilot", Yolo: []string{"--allow-all-tools"}, Continue: []string{"--continue"}, Site: "https://github.com/github/copilot-cli"},
 	{ID: "devin", Name: "Devin", Bin: "devin", Yolo: []string{"--permission-mode", "bypass"}, Continue: []string{"--continue"}, Site: "https://docs.devin.ai/cli"},
-	{ID: "aider", Name: "Aider", Bin: "aider", Yolo: []string{"--yes-always"}, Continue: []string{"--restore-chat-history"}, Site: "https://aider.chat"},
+	{ID: "aider", Name: "Aider", Bin: "aider", Yolo: []string{"--yes-always"}, Continue: []string{"--restore-chat-history"}, Site: "https://aider.chat",
+		Interrupt: "\x03"}, // Aider stops a reply with ^C, and ignores Esc
+}
+
+// defaultInterrupt is Esc (see Harness.Interrupt).
+const defaultInterrupt = "\x1b"
+
+func init() {
+	for i := range Harnesses {
+		if Harnesses[i].Interrupt == "" {
+			Harnesses[i].Interrupt = defaultInterrupt
+		}
+	}
 }
 
 // HarnessByID finds a harness; an unknown id is Claude Code.

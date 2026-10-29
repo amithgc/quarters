@@ -123,7 +123,7 @@ var Features = []Feature{
 	{"web_push", "Phone alerts when the app is closed", "A notification on your phone when Claude is waiting, even when Quarters isn't open there (turn it on in the phone's 🔔).", true, false},
 	{"keep_awake", "Keep the Mac awake", "Stops the Mac from sleeping while Claude is working or a phone is connected.", true, false},
 	{"prompts", "Saved prompts", "One-tap prompts (⚡ in the tab bar, or on the phone's key bar).", true, false},
-	{"keybar", "Phone key bar", "Esc, tab, ⇧tab, ctrl and arrow keys above a phone's keyboard while you type in a terminal (phone keyboards have none of them).", true, false},
+	{"keybar", "Phone key bar", "Esc, tab, ⇧tab, ctrl and arrow keys above a phone's keyboard while you type (phone keyboards have none of them). Shells, and agents whose menus can't be tapped, always have it.", true, false},
 	{"restore", "Resume sessions after a restart", "When Quarters starts, offers to reopen the Claude conversations and automations that were open.", true, false},
 	{"remote_ask", "Remote sessions ask permission", "Claude started from a browser always asks before running tools, even in yolo projects.", false, true},
 	{"usage_alerts", "Usage-limit warnings", "A notification when a plan limit passes the warning level.", true, false},

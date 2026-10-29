@@ -14,6 +14,7 @@ import (
 
 	"github.com/amithgc/quarters/internal/config"
 	"github.com/amithgc/quarters/internal/session"
+	"github.com/amithgc/quarters/internal/stats"
 )
 
 // testApp is an App with a config listing one project (a git repository).
@@ -346,5 +347,21 @@ func TestHarnessSettings(t *testing.T) {
 	}
 	if err := a.SetHarness("claude"); err != nil || a.config().Harness != "" {
 		t.Errorf("claude should clear the setting: %q %v", a.config().Harness, err)
+	}
+}
+
+func TestChatImageOnlyWhatTheAgentWrote(t *testing.T) {
+	items := []stats.ChatItem{
+		{Kind: "user", Text: "show me /Users/me/.ssh/id.png"},
+		{Kind: "text", Text: "Here it is: `/tmp/out/sample.png` (about 650 KB)."},
+	}
+	if !mentioned(items, "/tmp/out/sample.png") {
+		t.Error("a path in the agent's reply should be allowed")
+	}
+	if mentioned(items, "/Users/me/.ssh/id.png") {
+		t.Error("a path only in your own message must not be")
+	}
+	if mentioned(items, "/tmp/out/other.png") || mentioned(items, "") {
+		t.Error("a path nobody wrote must not be")
 	}
 }

@@ -30,14 +30,15 @@ run: build ## build and open the app
 dev: vendor ## run with live reload
 	$(WAILS) dev
 
-test: vendor ## run the tests (with the race detector)
+test: vendor ## run the tests (Go with the race detector, and the frontend's)
 	go test -race ./...
+	node --test frontend/*.test.mjs
 
 lint: ## gofmt, go vet and staticcheck
 	@test -z "$$(gofmt -l .)" || (gofmt -l . && echo "run: make fmt" && exit 1)
 	go vet ./...
 	go run honnef.co/go/tools/cmd/staticcheck@latest ./...
-	node --check frontend/dist/app.js && node --check frontend/dist/remote.js && node --check frontend/dist/sw.js
+	node --check frontend/dist/app.js && node --check frontend/dist/layout.js && node --check frontend/dist/remote.js && node --check frontend/dist/sw.js
 
 fmt: ## format the Go code
 	gofmt -w .
