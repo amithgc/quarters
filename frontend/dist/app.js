@@ -3456,6 +3456,19 @@ async function syncPush() {
   else await remoteMod.disablePush().catch(() => {});
 }
 
+// ---------- the version (bottom right) ----------
+
+// Which Quarters this is; a click opens what changed in it.
+async function showVersion() {
+  const v = await Promise.resolve(Go().Version()).catch(() => "");
+  const el = $("#version");
+  if (!v) return;
+  el.textContent = v === "dev" ? "dev build" : `v${v}`;
+  el.title = v === "dev" ? "Built from source" : `Quarters ${v} · what's new`;
+  el.hidden = false;
+  if (v !== "dev") el.onclick = () => rt().BrowserOpenURL(`https://github.com/amithgc/quarters/releases/tag/v${v}`);
+}
+
 // ---------- timers ----------
 
 // Everything that runs on a timer goes through every(). Nothing runs while
@@ -3601,6 +3614,7 @@ async function main() {
   setFocus("projects");
 
   state.me = REMOTE ? remoteMod.remote.client : await Go().ClientID();
+  showVersion();
   await loadSettings();
   await loadProjects();
   render();

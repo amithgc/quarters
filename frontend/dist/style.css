@@ -325,6 +325,9 @@ body.remote .legend { display: none; }
 #hints { display: flex; gap: 18px; overflow: hidden; }
 #hints b { color: var(--text); font-weight: 500; }
 #flash { color: var(--yellow); overflow: hidden; text-overflow: ellipsis; }
+.sb-right { display: flex; align-items: center; gap: 14px; min-width: 0; }
+#version { color: var(--muted); font-size: var(--fs-xs); flex-shrink: 0; }
+#version:hover { color: var(--text); }
 
 /* palette */
 .overlay { position: fixed; inset: 0; background: var(--overlay); display: flex; justify-content: center; align-items: center; padding: 12px 16px; z-index: 50; }
@@ -1061,3 +1064,4 @@ body.focus-mode #statusbar { display: none; }
 }
 @keyframes q-fade { from { opacity: 0; } }
 @keyframes q-rise { from { opacity: 0; transform: translateY(6px) scale(.985); } }
+@media (max-width: 760px) { #version { display: none; } } /* the phone's status bar is only for messages */

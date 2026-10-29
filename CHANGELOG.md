@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- The version shows at the bottom right of the window (in a browser too);
+  click it for what changed in that release.
+
 ## 0.5.0 — who's waiting, prompt queue, usage, a lighter app
 
 Run many agents without losing track: who's waiting for you comes first

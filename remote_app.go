@@ -19,7 +19,7 @@ import (
 // the session ones handled in remoteBackend.Call. Everything about remote
 // access itself (pairing, devices, turning it on) is Mac-only on purpose.
 var remoteMethods = map[string]bool{
-	"Projects": true, "ConfigError": true, "Layout": true, "Stats": true, "Account": true, "AgentAccount": true,
+	"Projects": true, "ConfigError": true, "Version": true, "Layout": true, "Stats": true, "Account": true, "AgentAccount": true,
 	"IconData": true, "FindIcons": true, "SetCollapsed": true, "SaveProject": true, "MoveProject": true,
 	"SaveAutomationSizes": true, "RemoveProject": true, "ConfigPath": true, "PastedImage": true,
 	"CloseSession": true, "Sessions": true, "Snapshot": true,
@@ -34,7 +34,7 @@ var remoteMethods = map[string]bool{
 // "type": also type into running sessions).
 var (
 	viewMethods = map[string]bool{
-		"ClientID": true, "Access": true, "Projects": true, "ConfigError": true, "Layout": true, "Stats": true,
+		"ClientID": true, "Access": true, "Projects": true, "ConfigError": true, "Version": true, "Layout": true, "Stats": true,
 		"Account": true, "AgentAccount": true, "IconData": true, "ConfigPath": true, "PastedImage": true, "Sessions": true,
 		"Snapshot": true, "Settings": true, "Conversations": true, "Diff": true, "DevLinks": true,
 		"ProjectTools": true, "Worktrees": true, "RestoreInfo": true, "SetViewing": true, "Chat": true, "TabImage": true, "RemoteControlled": true,
