@@ -32,7 +32,7 @@ cask "quarters" do
     strategy :github_latest
   end
 
-  depends_on macos: ">= :big_sur"
+  depends_on :macos
 
   app "Quarters.app"
 
@@ -52,6 +52,8 @@ class QuartersServer < Formula
   version "$V"
   license "MIT"
 
+  depends_on :linux
+
   on_linux do
     on_intel do
       url "https://github.com/amithgc/quarters/releases/download/v#{version}/quarters-linux-amd64.tar.gz"
@@ -62,8 +64,6 @@ class QuartersServer < Formula
       sha256 "$ARM_SHA"
     end
   end
-
-  depends_on :linux
 
   def install
     bin.install "quarters"
