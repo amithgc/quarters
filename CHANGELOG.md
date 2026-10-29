@@ -1,6 +1,11 @@
 # Changelog
 
-## Unreleased
+## 0.4.0 — coding agents, Homebrew
+
+The first release published as a signed, notarized app, installable with
+`brew install --cask amithgc/tap/quarters` (and `brew install
+amithgc/tap/quarters-server` on Linux). Quarters now runs eight coding
+agents, not only Claude Code; everything since 0.3.0 is below.
 
 - Images the agent sends. On a phone, a chat reply that names an image
   file (PNG, JPEG, GIF, WebP) shows the picture under it; a tap opens it
