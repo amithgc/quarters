@@ -1,5 +1,7 @@
 # build output
 /build/bin/
+/build/release/
+/build/wails.json.orig
 /quarters
 *.test
 *.out
