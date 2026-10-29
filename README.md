@@ -3,7 +3,7 @@
 <h1 align="center">Quarters</h1>
 
 <p align="center"><b>A minimalist home for terminal coding agents, for developers who work on many projects at once.</b><br>
-Claude Code, Codex, Gemini CLI, Antigravity, OpenCode, Copilot CLI or Aider: switch projects in a click,<br>
+Claude Code, Codex, Gemini CLI, Antigravity, OpenCode, Copilot CLI, Devin or Aider: switch projects in a click,<br>
 run your agents in several of them side by side, see what they're doing,<br>
 start your dev servers with one action — and do it all from your phone, too.</p>
 
@@ -74,7 +74,7 @@ services. Your projects, your logins and your machine stay yours.
 - **Saved prompts** (⚡): type a common instruction with one click.
 - **The project's automations in the side panel:** run, restart or stop
   each one, edit it, delete it, or add a new one, right where you work.
-- **Any of seven coding agents,** chosen for all projects or per project
+- **Any of eight coding agents,** chosen for all projects or per project
   (see [Coding agents](#coding-agents)).
 
 ### Coding agents
@@ -91,6 +91,7 @@ installed are marked, and starting one tells you where to get it.
 | Antigravity | `agy` | `--continue` | `--dangerously-skip-permissions` | plan and model quotas¹, git, automations |
 | OpenCode | `opencode` | `--continue` | — (set in its own config) | git, automations |
 | GitHub Copilot CLI | `copilot` | `--continue` | `--allow-all-tools` | git, automations |
+| Devin | `devin` | `--continue` | `--permission-mode bypass` | git, automations |
 | Aider | `aider` | `--restore-chat-history` | `--yes-always` | git, automations |
 
 Claude Code gets the deepest integration, because Quarters reads its session
@@ -407,7 +408,7 @@ overwriting it.
 | `projects[].command` | how the project's agent starts in this project |
 | `projects[].yolo` | `true`/`false`: skip the agent's permission prompts here, overriding `yolo` |
 | `projects[].automations` | terminals to start together (see below) |
-| `harness` | the coding agent new tabs start: `claude` (default), `codex`, `gemini`, `antigravity`, `opencode`, `copilot` or `aider` |
+| `harness` | the coding agent new tabs start: `claude` (default), `codex`, `gemini`, `antigravity`, `opencode`, `copilot`, `devin` or `aider` |
 | `command` | how Claude Code starts (default `["claude"]`) |
 | `yolo` | skip the agent's permission prompts (default `true`; see below) |
 | `shell` | shell for shell tabs (default `$SHELL`) |
@@ -434,10 +435,10 @@ running.
 > Other agents get their own switch: Codex
 > `--dangerously-bypass-approvals-and-sandbox`, Gemini CLI `--yolo`,
 > Antigravity `--dangerously-skip-permissions`, Copilot CLI
-> `--allow-all-tools`, Aider `--yes-always` (OpenCode has none; set it in its
-> own config). "Continue" runs `codex resume --last`, `gemini --resume
-> latest`, `agy --continue`, `opencode --continue`, `copilot --continue` or
-> `aider --restore-chat-history`.
+> `--allow-all-tools`, Devin `--permission-mode bypass`, Aider `--yes-always`
+> (OpenCode has none; set it in its own config). "Continue" runs `codex resume
+> --last`, `gemini --resume latest`, `agy --continue`, `opencode --continue`,
+> `copilot --continue`, `devin --continue` or `aider --restore-chat-history`.
 
 ## How it works
 

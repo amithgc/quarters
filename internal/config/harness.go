@@ -11,8 +11,9 @@ type Harness struct {
 	Name string `json:"name"`
 	// Bin is the program, looked up on the PATH.
 	Bin string `json:"bin"`
-	// Yolo skips the agent's permission prompts ("" when it has no switch).
-	Yolo string `json:"yolo"`
+	// Yolo skips the agent's permission prompts (none when it has no
+	// switch); it can be more than one word ("--permission-mode bypass").
+	Yolo []string `json:"yolo"`
 	// Continue picks up the last conversation in the folder; it goes right
 	// after the program, so it can be a subcommand ("resume --last").
 	Continue []string `json:"continue"`
@@ -25,13 +26,14 @@ const Claude = "claude"
 
 // Harnesses are the agents Quarters knows how to start.
 var Harnesses = []Harness{
-	{ID: Claude, Name: "Claude Code", Bin: "claude", Yolo: "--dangerously-skip-permissions", Continue: []string{"--continue"}, Site: "https://claude.com/claude-code"},
-	{ID: "codex", Name: "Codex", Bin: "codex", Yolo: "--dangerously-bypass-approvals-and-sandbox", Continue: []string{"resume", "--last"}, Site: "https://github.com/openai/codex"},
-	{ID: "gemini", Name: "Gemini CLI", Bin: "gemini", Yolo: "--yolo", Continue: []string{"--resume", "latest"}, Site: "https://github.com/google-gemini/gemini-cli"},
-	{ID: "antigravity", Name: "Antigravity", Bin: "agy", Yolo: "--dangerously-skip-permissions", Continue: []string{"--continue"}, Site: "https://antigravity.google"},
+	{ID: Claude, Name: "Claude Code", Bin: "claude", Yolo: []string{"--dangerously-skip-permissions"}, Continue: []string{"--continue"}, Site: "https://claude.com/claude-code"},
+	{ID: "codex", Name: "Codex", Bin: "codex", Yolo: []string{"--dangerously-bypass-approvals-and-sandbox"}, Continue: []string{"resume", "--last"}, Site: "https://github.com/openai/codex"},
+	{ID: "gemini", Name: "Gemini CLI", Bin: "gemini", Yolo: []string{"--yolo"}, Continue: []string{"--resume", "latest"}, Site: "https://github.com/google-gemini/gemini-cli"},
+	{ID: "antigravity", Name: "Antigravity", Bin: "agy", Yolo: []string{"--dangerously-skip-permissions"}, Continue: []string{"--continue"}, Site: "https://antigravity.google"},
 	{ID: "opencode", Name: "OpenCode", Bin: "opencode", Continue: []string{"--continue"}, Site: "https://opencode.ai"},
-	{ID: "copilot", Name: "GitHub Copilot CLI", Bin: "copilot", Yolo: "--allow-all-tools", Continue: []string{"--continue"}, Site: "https://github.com/github/copilot-cli"},
-	{ID: "aider", Name: "Aider", Bin: "aider", Yolo: "--yes-always", Continue: []string{"--restore-chat-history"}, Site: "https://aider.chat"},
+	{ID: "copilot", Name: "GitHub Copilot CLI", Bin: "copilot", Yolo: []string{"--allow-all-tools"}, Continue: []string{"--continue"}, Site: "https://github.com/github/copilot-cli"},
+	{ID: "devin", Name: "Devin", Bin: "devin", Yolo: []string{"--permission-mode", "bypass"}, Continue: []string{"--continue"}, Site: "https://docs.devin.ai/cli"},
+	{ID: "aider", Name: "Aider", Bin: "aider", Yolo: []string{"--yes-always"}, Continue: []string{"--restore-chat-history"}, Site: "https://aider.chat"},
 }
 
 // HarnessByID finds a harness; an unknown id is Claude Code.
@@ -67,13 +69,15 @@ func (c *Config) AgentCommand(p Project, h Harness, yolo bool) []string {
 		base = c.Command
 	}
 	out := []string{}
-	for _, a := range base {
-		if h.Yolo == "" || a != h.Yolo {
-			out = append(out, a)
+	for i := 0; i < len(base); i++ {
+		if n := len(h.Yolo); n > 0 && i+n <= len(base) && slices.Equal(base[i:i+n], h.Yolo) {
+			i += n - 1 // the switch is added back below when wanted
+			continue
 		}
+		out = append(out, base[i])
 	}
-	if yolo && h.Yolo != "" {
-		out = append(out, h.Yolo)
+	if yolo {
+		out = append(out, h.Yolo...)
 	}
 	return out
 }

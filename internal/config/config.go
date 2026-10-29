@@ -185,8 +185,8 @@ type Config struct {
 	// Projects, in the order they are listed.
 	Projects []Project `json:"projects"`
 	// Harness is the coding agent new tabs start: "claude" (Claude Code,
-	// the default), "codex", "gemini", "antigravity", "opencode", "copilot"
-	// or "aider". Each project can choose its own.
+	// the default), "codex", "gemini", "antigravity", "opencode", "copilot",
+	// "devin" or "aider". Each project can choose its own.
 	Harness string `json:"harness,omitempty"`
 	// Command used to start Claude Code. Default: ["claude",
 	// "--dangerously-skip-permissions"] (no permission prompts).

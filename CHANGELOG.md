@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Devin (Cognition's `devin` CLI) is one of the coding agents: continue is
+  `--continue`, skipping permission prompts is `--permission-mode bypass`.
+
 - The side panel lists the open project's automations: run or restart,
   stop, edit, delete, and ＋ new. It also has the project's coding agent
   (Agent): pick one from the menu and Apply, on the Mac. In a project that
@@ -12,7 +15,7 @@
   unofficial interface; nothing leaves the Mac).
 
 - Other coding agents besides Claude Code: Codex, Gemini CLI, Antigravity,
-  OpenCode, GitHub Copilot CLI and Aider. Choose the default in Settings →
+  OpenCode, GitHub Copilot CLI, Devin and Aider. Choose the default in Settings →
   Coding agent, and per project in the side panel or ✎ (`"harness"` in
   config.json). New
   tabs, continue and yolo use each agent's own command and switches; ones

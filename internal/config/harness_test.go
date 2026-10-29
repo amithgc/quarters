@@ -44,6 +44,9 @@ func TestAgentCommand(t *testing.T) {
 		{Project{Harness: "codex", Command: []string{"codex", "-m", "o4"}}, HarnessByID(Claude), false, "claude --model opus"},
 		// no permission switch: yolo adds nothing
 		{Project{}, HarnessByID("opencode"), true, "opencode"},
+		// a switch of two words, added once and taken out of a project's command
+		{Project{}, HarnessByID("devin"), true, "devin --permission-mode bypass"},
+		{Project{Harness: "devin", Command: []string{"devin", "--permission-mode", "bypass", "--model", "x"}}, HarnessByID("devin"), false, "devin --model x"},
 	}
 	for _, tc := range cases {
 		if got := strings.Join(c.AgentCommand(tc.p, tc.h, tc.yolo), " "); got != tc.want {
