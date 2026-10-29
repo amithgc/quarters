@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.5.1
 
 - The version shows at the bottom right of the window (in a browser too);
   click it for what changed in that release.
