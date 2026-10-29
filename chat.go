@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"path/filepath"
 
+	"github.com/amithgc/quarters/internal/config"
 	"github.com/amithgc/quarters/internal/stats"
 )
 
@@ -41,7 +42,7 @@ func (a *App) chatLog(id int) (string, error) {
 			continue
 		}
 		m := metaOf(info)
-		if m.Kind == "shell" || m.AutoKey != "" {
+		if m.Kind == "shell" || m.AutoKey != "" || (m.Harness != "" && m.Harness != config.Claude) {
 			return "", fmt.Errorf("not a Claude tab")
 		}
 		conv := a.conversationOf(id, m, nil)

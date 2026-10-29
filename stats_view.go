@@ -137,6 +137,23 @@ func (a *App) Confirm(title, message, yes string) bool {
 }
 
 // Account returns the Claude plan usage, fetched at most once a minute.
+// AgentAccount is another coding agent's plan and quotas, for the agents
+// Quarters can read them for (only Antigravity, from its running IDE).
+func (a *App) AgentAccount(id string) stats.Account {
+	if id != "antigravity" {
+		return stats.Account{Limits: []stats.Limit{}}
+	}
+	c := &a.agentAcct
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	// a closed IDE is checked for again soon, so opening it shows up quickly
+	if time.Since(c.at) > time.Minute || c.val.Error != "" && time.Since(c.at) > 10*time.Second {
+		c.val = stats.FetchAntigravity(a.bg())
+		c.at = time.Now()
+	}
+	return c.val
+}
+
 func (a *App) Account() stats.Account {
 	a.account.mu.Lock()
 	defer a.account.mu.Unlock()

@@ -2,39 +2,45 @@
 
 <h1 align="center">Quarters</h1>
 
-<p align="center"><b>A minimalist home for Claude Code, for developers who work on many projects at once.</b><br>
-Switch projects in a click, run Claude in several of them side by side, see what it's doing,<br>
+<p align="center"><b>A minimalist home for terminal coding agents, for developers who work on many projects at once.</b><br>
+Claude Code, Codex, Gemini CLI, Antigravity, OpenCode, Copilot CLI or Aider: switch projects in a click,<br>
+run your agents in several of them side by side, see what they're doing,<br>
 start your dev servers with one action — and do it all from your phone, too.</p>
 
 <p align="center">
   <a href="#install">Install</a> ·
   <a href="#features">Features</a> ·
+  <a href="#coding-agents">Coding agents</a> ·
   <a href="#remote-access-work-from-anywhere">Remote access</a> ·
   <a href="#configuration">Configuration</a> ·
   <a href="CONTRIBUTING.md">Contributing</a>
 </p>
 
-<p align="center"><img src="docs/screenshot-mac.png" alt="Quarters: projects on the left, Claude Code in the middle, stats on the right" width="900"></p>
+<p align="center"><img src="docs/screenshot-mac.png" alt="Quarters: projects on the left, a coding agent in the middle, stats on the right" width="900"></p>
 
 ## Why Quarters
 
-If you use [Claude Code](https://docs.anthropic.com/en/docs/claude-code) on
-more than one project, you know the routine: a terminal window per project,
-`cd` into each one, start `claude`, start the backend, start the frontend,
-then remember which window was waiting for you.
+If you use a terminal coding agent — [Claude Code](https://docs.anthropic.com/en/docs/claude-code),
+Codex, Gemini CLI, Antigravity, OpenCode — on more than one project, you know
+the routine: a terminal window per project, `cd` into each one, start the
+agent, start the backend, start the frontend, then remember which window was
+waiting for you.
 
-**Quarters is a simple, focused wrapper around Claude Code that takes that
-routine away.** Its goals are deliberately narrow:
+**Quarters is a simple, focused home for your coding agents that takes that
+routine away.** Pick the agent you like (Claude Code is the default, and each
+project can use a different one). Its goals are deliberately narrow:
 
 1. **Switch between projects instantly.** Every project is one click (or
-   ⌘P) away; its Claude sessions keep running in the background while you're
+   ⌘P) away; its agent sessions keep running in the background while you're
    elsewhere.
-2. **Work on several projects at the same time.** Claude runs in as many
+2. **Work on several projects at the same time.** Agents run in as many
    projects as you like, and Quarters tells you which one finished and is
    waiting for you.
-3. **See what's going on at a glance.** A side panel shows the session's
-   model, context and tokens, your Claude plan's usage, git changes, what
-   Claude edited, and the project's MCP servers and skills.
+3. **See what's going on at a glance.** A side panel shows git changes, the
+   project's automations and servers, and what the agent tells Quarters: for
+   Claude Code the session's model, context and tokens, your plan's usage,
+   what it edited, and the project's MCP servers and skills; for Antigravity
+   its plan and model quotas.
 4. **Start the rest of your stack in one go.** *Automations* open the
    terminals a project needs — backend, frontend, a script, a watcher — each
    in its own folder, side by side, when you open the project, on a
@@ -43,28 +49,58 @@ routine away.** Its goals are deliberately narrow:
    home and use it from a laptop, tablet or phone through the browser: the
    same projects, the same live sessions, secured with passkeys.
 
-It is built **for developers, for Claude Code, and nothing else**: no
+It is built **for developers and their coding agents, and nothing else**: no
 general-purpose terminal features, no AI of its own, no accounts or cloud
-services. Your projects, your Claude login and your machine stay yours.
+services. Your projects, your logins and your machine stay yours.
 
 > Quarters is an independent open-source project. It is not made by,
-> affiliated with or endorsed by Anthropic. Claude and Claude Code are
-> trademarks of Anthropic.
+> affiliated with or endorsed by Anthropic, OpenAI, Google, GitHub or the
+> makers of the other agents it runs. Claude and Claude Code are trademarks
+> of Anthropic; the other names are trademarks of their owners.
 
 ## Features
 
 ### Projects, tabs and sessions
 
-- **One click** opens a project; press **C** to start Claude Code, **⇧C** to
-  continue the last conversation, **S** for a shell.
-- **Several tabs per project** (Claude and shells), all running in the
+- **One click** opens a project; press **C** to start its coding agent,
+  **⇧C** to continue the last conversation, **S** for a shell.
+- **Several tabs per project** (agents and shells), all running in the
   background while you switch.
-- **"Your turn" alerts:** when Claude finishes in a tab you aren't looking
+- **"Your turn" alerts:** when an agent finishes in a tab you aren't looking
   at, you get a notification and a Dock badge, and the tab is marked.
 - Groups, project icons (favicons found automatically), drag to reorder,
   **⌘P / ⇧⇧** to jump anywhere, git status (●changes ↑ahead ↓behind) in the
   list.
 - **Saved prompts** (⚡): type a common instruction with one click.
+- **The project's automations in the side panel:** run, restart or stop
+  each one, edit it, delete it, or add a new one, right where you work.
+- **Any of seven coding agents,** chosen for all projects or per project
+  (see [Coding agents](#coding-agents)).
+
+### Coding agents
+
+Choose the default in **Settings → Coding agent**, and per project from the
+side panel's **Agent** menu (or ✎ on the project). Agents that aren't
+installed are marked, and starting one tells you where to get it.
+
+| Agent | Starts | Continue (⇧C) | Skip permission prompts (yolo) | Side panel |
+| --- | --- | --- | --- | --- |
+| Claude Code (default) | `claude` | `--continue` | `--dangerously-skip-permissions` | everything below |
+| Codex | `codex` | `resume --last` | `--dangerously-bypass-approvals-and-sandbox` | git, automations |
+| Gemini CLI | `gemini` | `--resume latest` | `--yolo` | git, automations |
+| Antigravity | `agy` | `--continue` | `--dangerously-skip-permissions` | plan and model quotas¹, git, automations |
+| OpenCode | `opencode` | `--continue` | — (set in its own config) | git, automations |
+| GitHub Copilot CLI | `copilot` | `--continue` | `--allow-all-tools` | git, automations |
+| Aider | `aider` | `--restore-chat-history` | `--yes-always` | git, automations |
+
+Claude Code gets the deepest integration, because Quarters reads its session
+logs: session stats, plan usage, past conversations, the phone's chat view
+and Remote Control. Other agents run as they are, in a plain terminal, with
+everything else Quarters does — tabs, alerts, automations, worktrees, git,
+remote access — working the same.
+
+¹ Read from the Antigravity IDE while it's open on the same machine, through
+its local (unofficial) interface; nothing leaves the machine.
 
 ### Automations: your dev stack in one action
 
@@ -76,15 +112,18 @@ by hand (▶), when the project opens, or on a schedule (every weekday at
 09:00, say). Servers your terminals start show up in the side panel with
 whether they're answering.
 
-### The side panel: what Claude is doing
+### The side panel: what your agent is doing
 
 <table>
 <tr>
 <td width="34%"><img src="docs/stats.png" alt="The side panel: files Claude changed, dev servers, tools, MCP servers and skills"></td>
 <td>
 
-- **Claude plan:** your usage limits and when they reset, as `/usage` shows
-  them, with a warning before you run out.
+- **Plan:** Claude's usage limits and when they reset, as `/usage` shows
+  them, with a warning before you run out (Antigravity: its plan and model
+  quotas).
+- **Agent** and **Automations:** the project's coding agent, and its
+  automations with run, stop, edit, delete and ＋ new.
 - **Session:** title, model, permission mode, prompts, context window use,
   tokens (this session or today) and activity.
 - **Git:** branch, ahead/behind, changed files.
@@ -151,8 +190,9 @@ Mac, answer it from your phone, finish on the laptop.
 
 ## Install
 
-**Requirements:** macOS 11 or later (or Linux, or Windows through WSL, for the server, below), and [Claude Code](https://docs.anthropic.com/en/docs/claude-code)
-installed and signed in (`claude` on your `PATH`). Quarters is developed and
+**Requirements:** macOS 11 or later (or Linux, or Windows through WSL, for the server, below), and at least one coding agent
+installed and signed in, on your `PATH`: [Claude Code](https://docs.anthropic.com/en/docs/claude-code)
+(`claude`, the default) or one of the [others](#coding-agents). Quarters is developed and
 tested on current macOS on Apple silicon; Intel builds should work but are
 untested.
 
@@ -248,10 +288,11 @@ step.
 ## Getting started
 
 1. Open Quarters. The first time, it lists the folders you used Claude Code
-   in most recently. Add others with **＋ add** (⌘O). If your projects are in
+   in most recently (if you use it). Add others with **＋ add** (⌘O). If your projects are in
    Documents, Desktop or on an external drive, macOS asks whether Quarters
    may access them: allow it, or the project list stays empty.
-2. Click a project and press **C**. Claude Code starts in that folder.
+2. Click a project and press **C**. Its coding agent (Claude Code unless
+   you chose another in Settings) starts in that folder.
 3. Add an automation for your dev servers: right-click the project →
    **Automations** → **＋ Add automation**.
 4. **⌘,** opens Settings. **Projects → Remote Access…** sets up remote use.
@@ -348,7 +389,8 @@ overwriting it.
             { "name": "shell" }
           ] }
       ] },
-    { "path": "~/code/api-gateway", "group": "Work", "command": ["claude", "--model", "sonnet"], "yolo": false }
+    { "path": "~/code/api-gateway", "group": "Work", "command": ["claude", "--model", "sonnet"], "yolo": false },
+    { "path": "~/code/ml", "harness": "codex" }
   ],
   "yolo": true,
   "shell": "/bin/zsh"
@@ -361,11 +403,13 @@ overwriting it.
 | `projects[].name` | label in the list (default: the folder name) |
 | `projects[].group` | heading to group projects under |
 | `projects[].icon` | image next to the project (png, jpg, svg, ico, webp; relative = inside the project) |
-| `projects[].command` | how Claude Code starts in this project |
-| `projects[].yolo` | `true`/`false`: skip Claude's permission prompts here, overriding `yolo` |
+| `projects[].harness` | the coding agent for this project, overriding `harness` |
+| `projects[].command` | how the project's agent starts in this project |
+| `projects[].yolo` | `true`/`false`: skip the agent's permission prompts here, overriding `yolo` |
 | `projects[].automations` | terminals to start together (see below) |
+| `harness` | the coding agent new tabs start: `claude` (default), `codex`, `gemini`, `antigravity`, `opencode`, `copilot` or `aider` |
 | `command` | how Claude Code starts (default `["claude"]`) |
-| `yolo` | add `--dangerously-skip-permissions` so Claude doesn't ask before running tools (default `true`) |
+| `yolo` | skip the agent's permission prompts (default `true`; see below) |
 | `shell` | shell for shell tabs (default `$SHELL`) |
 | `prompts` | saved prompts for ⚡ (edited in Settings) |
 | `features` | optional features switched on or off (Settings) |
@@ -386,6 +430,14 @@ running.
 > `--dangerously-skip-permissions`, so it edits files and runs commands
 > without asking. That's convenient in your own projects and risky anywhere
 > else. Turn it off in Settings, or per project.
+>
+> Other agents get their own switch: Codex
+> `--dangerously-bypass-approvals-and-sandbox`, Gemini CLI `--yolo`,
+> Antigravity `--dangerously-skip-permissions`, Copilot CLI
+> `--allow-all-tools`, Aider `--yes-always` (OpenCode has none; set it in its
+> own config). "Continue" runs `codex resume --last`, `gemini --resume
+> latest`, `agy --continue`, `opencode --continue`, `copilot --continue` or
+> `aider --restore-chat-history`.
 
 ## How it works
 
@@ -396,6 +448,8 @@ JavaScript frontend in the system WebView.
   and [xterm.js](https://xtermjs.org) draws it. Every window, the Mac's and
   any browser's, shows the same sessions; whichever one you're typing in
   sets the terminal's size.
+- Each coding agent is a program started in a pseudo-terminal with its own
+  switches (`internal/config/harness.go`).
 - The side panel reads Claude Code's own session logs in `~/.claude/projects`
   (`internal/stats`). Plan usage comes from the endpoint `/usage` uses, with
   the login Claude Code keeps in the Keychain, which is only ever sent to
@@ -409,7 +463,7 @@ main.go, app.go, …     the app: window, menus, the functions the frontend call
 internal/config        config.json
 internal/projects      the project list and icons
 internal/session       pseudo-terminals
-internal/stats         Claude Code logs, git, plan usage, conversations, skills
+internal/stats         Claude Code logs, git, plan usage (Claude, Antigravity), conversations, skills
 internal/remote        remote access: passkeys, sessions, WebSocket, push
 frontend/dist          the frontend (plain ES modules, no bundler)
 tools/mascot           draws the mascot

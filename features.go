@@ -88,6 +88,7 @@ type tabMeta struct {
 	Started int64  `json:"started"`
 	Path    string `json:"path"`
 	Kind    string `json:"kind"`
+	Harness string `json:"harness"` // the coding agent ("" before harnesses: Claude Code)
 	Title   string `json:"title"`
 	Dir     string `json:"dir"`
 	Command string `json:"command"`

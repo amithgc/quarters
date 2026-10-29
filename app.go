@@ -36,9 +36,10 @@ type App struct {
 	remote    *remote.Server
 	remoteErr string
 
-	history *stats.History
-	today   todayCache   // today's token use, across projects
-	account accountCache // the Claude plan's limits
+	history   *stats.History
+	today     todayCache   // today's token use, across projects
+	account   accountCache // the Claude plan's limits
+	agentAcct accountCache // Antigravity's plan and quotas
 
 	fmu   sync.Mutex // the optional features' state below
 	f     featureState
@@ -254,8 +255,10 @@ type ProjectView struct {
 	Branch     string `json:"branch"`
 	LastActive int64  `json:"lastActive"` // unix ms, 0 = never
 	Missing    bool   `json:"missing"`
-	Yolo       string `json:"yolo"` // "", "on" or "off"
-	Git        bool   `json:"git"`  // git status below is known
+	Yolo       string `json:"yolo"`    // "", "on" or "off"
+	Harness    string `json:"harness"` // its own coding agent, "" for the default
+	Agent      string `json:"agent"`   // the coding agent its tabs start
+	Git        bool   `json:"git"`     // git status below is known
 	Dirty      int    `json:"dirty"`
 	Ahead      int    `json:"ahead"`
 	Behind     int    `json:"behind"`
@@ -293,7 +296,8 @@ func (a *App) Projects() []ProjectView {
 	gitOn := cfg.On("git_status")
 	for _, p := range list {
 		v := ProjectView{Name: p.Name, Path: p.Path, ShortPath: projects.ShortPath(p.Path),
-			Group: p.Group, Icon: p.Icon, Branch: p.Branch, Missing: p.Missing}
+			Group: p.Group, Icon: p.Icon, Branch: p.Branch, Missing: p.Missing,
+			Harness: p.Harness, Agent: cfg.HarnessFor(config.Project{Harness: p.Harness}).ID}
 		if p.Yolo != nil {
 			v.Yolo = map[bool]string{true: "on", false: "off"}[*p.Yolo]
 		}
@@ -390,8 +394,12 @@ func (a *App) SetCollapsed(groups []string) error {
 
 // SaveProject adds a project (oldPath "") or edits the one at oldPath, and
 // returns its full path. icon is an image path ("" for none).
-// yolo is "" (the global setting), "on" or "off".
-func (a *App) SaveProject(oldPath, name, path, group, icon string, autos []config.Automation, yolo string) (string, error) {
+// yolo is "" (the global setting), "on" or "off"; harness is the
+// project's coding agent ("" for the default).
+func (a *App) SaveProject(oldPath, name, path, group, icon string, autos []config.Automation, yolo, harness string) (string, error) {
+	if !config.KnownHarness(harness) {
+		return "", fmt.Errorf("unknown harness %q", harness)
+	}
 	path = strings.TrimSpace(path)
 	if path == "" {
 		return "", fmt.Errorf("choose the project folder")
@@ -429,7 +437,7 @@ func (a *App) SaveProject(oldPath, name, path, group, icon string, autos []confi
 	}
 	return full, a.editConfig(func(c *config.Config) error {
 		return c.SaveProject(oldPath, config.Project{Name: name, Path: projects.ShortPath(full),
-			Group: strings.TrimSpace(group), Icon: icon, Automations: autos, Yolo: yp})
+			Group: strings.TrimSpace(group), Icon: icon, Automations: autos, Yolo: yp, Harness: harness})
 	})
 }
 

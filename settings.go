@@ -21,6 +21,8 @@ type FeatureView struct {
 type SettingsView struct {
 	Features     []FeatureView   `json:"features"`
 	Yolo         bool            `json:"yolo"`
+	Harness      string          `json:"harness"` // the default coding agent
+	Harnesses    []HarnessView   `json:"harnesses"`
 	ClaudeRemote bool            `json:"claudeRemote"` // Claude Code's own Remote Control
 	Prompts      []config.Prompt `json:"prompts"`
 	UsageAlertAt int             `json:"usageAlertAt"`
@@ -44,6 +46,7 @@ func (a *App) Settings() SettingsView {
 	for _, f := range config.Features {
 		v.Features = append(v.Features, FeatureView{f, cfg.On(f.Key)})
 	}
+	v.Harness, v.Harnesses = config.HarnessByID(cfg.Harness).ID, a.harnessViews()
 	a.fmu.Lock()
 	v.HotkeyError, v.Awake = a.f.hotkeyErr, a.f.awake != nil
 	a.fmu.Unlock()
@@ -88,6 +91,52 @@ func (a *App) SetYolo(on bool) error {
 	return a.editSettings(func(c *config.Config) error {
 		c.Yolo = &on
 		return nil
+	})
+}
+
+// HarnessView is a coding agent and whether this machine has it.
+type HarnessView struct {
+	config.Harness
+	Installed bool `json:"installed"`
+}
+
+func (a *App) harnessViews() []HarnessView {
+	out := make([]HarnessView, 0, len(config.Harnesses))
+	for _, h := range config.Harnesses {
+		out = append(out, HarnessView{h, a.sessions.Installed(h.Bin)})
+	}
+	return out
+}
+
+// SetHarness sets the coding agent new tabs start (each project can choose
+// its own).
+func (a *App) SetHarness(id string) error {
+	if id == "" || !config.KnownHarness(id) {
+		return fmt.Errorf("unknown harness %q", id)
+	}
+	return a.editSettings(func(c *config.Config) error {
+		c.Harness = id
+		if id == config.Claude {
+			c.Harness = "" // the default; keep config.json short
+		}
+		return nil
+	})
+}
+
+// SetProjectHarness sets the coding agent of the project at path ("" for
+// the default).
+func (a *App) SetProjectHarness(path, id string) error {
+	if !config.KnownHarness(id) {
+		return fmt.Errorf("unknown harness %q", id)
+	}
+	return a.editConfig(func(c *config.Config) error {
+		for i, p := range c.Projects {
+			if config.ExpandPath(p.Path) == path {
+				c.Projects[i].Harness = id
+				return nil
+			}
+		}
+		return fmt.Errorf("%s is no longer in the list", path)
 	})
 }
 

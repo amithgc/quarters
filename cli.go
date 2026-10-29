@@ -21,7 +21,7 @@ import (
 //go:embed all:frontend/dist
 var assets embed.FS
 
-const usage = `Quarters: a home for Claude Code.
+const usage = `Quarters: a home for your coding agents (Claude Code, Codex, Gemini CLI, …).
 
   quarters                       %s
   quarters --serve               the remote-access server only, no window

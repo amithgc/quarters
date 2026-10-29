@@ -23,13 +23,16 @@ type Project struct {
 	// Icon is an image file shown next to the project (png, jpg, svg, ico,
 	// webp). "~" allowed; relative paths are inside the project folder.
 	Icon string `json:"icon,omitempty"`
-	// Command starts Claude Code for this project instead of the global
-	// command, e.g. ["claude", "--model", "sonnet"].
+	// Harness is the coding agent for this project, e.g. "codex" (see
+	// Harnesses). Unset: the global "harness".
+	Harness string `json:"harness,omitempty"`
+	// Command starts the project's agent instead of the usual command,
+	// e.g. ["claude", "--model", "sonnet"].
 	Command []string `json:"command,omitempty"`
 	// Automations are run by hand from the app: each opens a set of terminal
 	// tabs, each running a command in a folder.
 	Automations []Automation `json:"automations,omitempty"`
-	// Yolo skips Claude Code's permission prompts in this project (true),
+	// Yolo skips the agent's permission prompts in this project (true),
 	// or asks for them (false). Unset: the global "yolo" setting.
 	Yolo *bool `json:"yolo,omitempty"`
 }
@@ -181,6 +184,10 @@ const DefaultListen = "127.0.0.1:8421"
 type Config struct {
 	// Projects, in the order they are listed.
 	Projects []Project `json:"projects"`
+	// Harness is the coding agent new tabs start: "claude" (Claude Code,
+	// the default), "codex", "gemini", "antigravity", "opencode", "copilot"
+	// or "aider". Each project can choose its own.
+	Harness string `json:"harness,omitempty"`
 	// Command used to start Claude Code. Default: ["claude",
 	// "--dangerously-skip-permissions"] (no permission prompts).
 	Command []string `json:"command,omitempty"`
@@ -198,7 +205,7 @@ type Config struct {
 	// Features switches optional features on or off (see Features below
 	// for the names and what is on by default).
 	Features map[string]bool `json:"features,omitempty"`
-	// Yolo skips Claude Code's permission prompts (default true).
+	// Yolo skips the agent's permission prompts (default true).
 	Yolo *bool `json:"yolo,omitempty"`
 	// ClaudeRemoteControl starts Claude Code with its own Remote Control,
 	// so new sessions can also be continued from claude.ai/code and the
@@ -361,27 +368,6 @@ func (c *Config) Clone() *Config {
 
 // File returns the settings file path.
 func (c *Config) File() string { return c.path }
-
-// ClaudeCommand is the command that starts Claude Code for p. yolo adds
-// --dangerously-skip-permissions (and leaving it out removes it).
-func (c *Config) ClaudeCommand(p Project, yolo bool) []string {
-	base := []string{"claude"}
-	if len(p.Command) > 0 {
-		base = p.Command
-	} else if len(c.Command) > 0 {
-		base = c.Command
-	}
-	out := []string{}
-	for _, a := range base {
-		if a != "--dangerously-skip-permissions" {
-			out = append(out, a)
-		}
-	}
-	if yolo {
-		out = append(out, "--dangerously-skip-permissions")
-	}
-	return out
-}
 
 // ShellPath is the shell for shell tabs.
 func (c *Config) ShellPath() string {

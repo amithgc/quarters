@@ -271,10 +271,11 @@ cloudflared tunnel run --url http://127.0.0.1:8421 quarters</pre>
         <div id="set-features" class="set-list"></div>
       </div>
       <div class="field">
-        <span class="field-label">Claude</span>
+        <span class="field-label">Coding agent</span>
         <div class="set-list">
-          <label class="set-row"><span class="set-text"><b>Skip permission prompts (yolo)</b><span class="muted">Claude runs tools without asking. Each project can override this (✎ edit project).</span></span><input type="checkbox" class="switch" id="set-yolo"></label>
-          <div class="set-row"><span class="set-text"><b>Usage warning level</b><span class="muted">Warn when a plan limit passes this.</span></span><span class="set-num"><input type="number" id="set-alert" min="10" max="100" step="5"> %</span></div>
+          <div class="set-row"><span class="set-text"><b>Harness</b><span class="muted" id="set-harness-note">What new tabs start. Each project can choose its own (✎ edit project).</span></span><select id="set-harness" class="pd-select set-select"></select></div>
+          <label class="set-row"><span class="set-text"><b>Skip permission prompts (yolo)</b><span class="muted">The agent runs tools without asking. Each project can override this (✎ edit project).</span></span><input type="checkbox" class="switch" id="set-yolo"></label>
+          <div class="set-row"><span class="set-text"><b>Usage warning level</b><span class="muted">Warn when a Claude plan limit passes this.</span></span><span class="set-num"><input type="number" id="set-alert" min="10" max="100" step="5"> %</span></div>
           <div class="set-row mac-only"><span class="set-text"><b>Hotkey</b><span class="muted" id="set-hotkey-note">e.g. ctrl+alt+space, cmd+shift+h</span></span><input type="text" id="set-hotkey" class="set-input" spellcheck="false" autocomplete="off"></div>
         </div>
       </div>
@@ -366,7 +367,11 @@ cloudflared tunnel run --url http://127.0.0.1:8421 quarters</pre>
         <div id="pd-groups" class="chips"></div>
       </div>
       <div class="field">
-        <label for="pd-yolo">Claude permissions</label>
+        <label for="pd-harness">Coding agent</label>
+        <select id="pd-harness" class="pd-select"></select>
+      </div>
+      <div class="field">
+        <label for="pd-yolo">Permissions</label>
         <select id="pd-yolo" class="pd-select">
           <option value="">as in Settings</option>
           <option value="on">skip permission prompts (yolo)</option>

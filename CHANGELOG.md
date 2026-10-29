@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+- The side panel lists the open project's automations: run or restart,
+  stop, edit, delete, and ＋ new. It also has the project's coding agent
+  (Agent): pick one from the menu and Apply, on the Mac. In a project that
+  runs another agent, the panel leaves out Claude Code's plan, Remote
+  Control, session stats, tools, skills and MCP servers. Antigravity
+  projects show Antigravity's plan and each model's quota instead, read
+  from the Antigravity IDE on the same Mac while it's open (a local,
+  unofficial interface; nothing leaves the Mac).
+
+- Other coding agents besides Claude Code: Codex, Gemini CLI, Antigravity,
+  OpenCode, GitHub Copilot CLI and Aider. Choose the default in Settings →
+  Coding agent, and per project in the side panel or ✎ (`"harness"` in
+  config.json). New
+  tabs, continue and yolo use each agent's own command and switches; ones
+  not installed are marked, and starting one says where to get it. Stats,
+  past conversations, the phone's chat view and Remote Control stay
+  Claude Code's; other agents are plain terminals there.
+
 - Tablets type straight into the terminal (Claude's own input box), like
   the Mac: no second text field; the key bar comes up while typing. Shell
   tabs have no text field on any touch screen.

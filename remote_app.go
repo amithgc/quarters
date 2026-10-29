@@ -19,7 +19,7 @@ import (
 // the session ones handled in remoteBackend.Call. Everything about remote
 // access itself (pairing, devices, turning it on) is Mac-only on purpose.
 var remoteMethods = map[string]bool{
-	"Projects": true, "ConfigError": true, "Layout": true, "Stats": true, "Account": true,
+	"Projects": true, "ConfigError": true, "Layout": true, "Stats": true, "Account": true, "AgentAccount": true,
 	"IconData": true, "FindIcons": true, "SetCollapsed": true, "SaveProject": true, "MoveProject": true,
 	"SaveAutomationSizes": true, "RemoveProject": true, "ConfigPath": true, "PastedImage": true,
 	"CloseSession": true, "Sessions": true, "Snapshot": true,
@@ -33,7 +33,7 @@ var remoteMethods = map[string]bool{
 var (
 	viewMethods = map[string]bool{
 		"ClientID": true, "Access": true, "Projects": true, "ConfigError": true, "Layout": true, "Stats": true,
-		"Account": true, "IconData": true, "ConfigPath": true, "PastedImage": true, "Sessions": true,
+		"Account": true, "AgentAccount": true, "IconData": true, "ConfigPath": true, "PastedImage": true, "Sessions": true,
 		"Snapshot": true, "Settings": true, "Conversations": true, "Diff": true, "DevLinks": true,
 		"ProjectTools": true, "Worktrees": true, "RestoreInfo": true, "SetViewing": true, "Chat": true, "RemoteControlled": true,
 		"PushKey": true, "PushSubscribe": true, "PushUnsubscribe": true,
@@ -302,17 +302,21 @@ func (b remoteBackend) Call(client, method string, args []json.RawMessage) (any,
 		}
 		return a.IconData(path)
 	case "SaveProject":
-		// whether Claude asks for permission is only changed on the Mac
-		var oldPath, name, path, group, icon, yolo string
+		// whether the agent asks for permission, and which agent it is,
+		// are only changed on the Mac
+		var oldPath, name, path, group, icon string
 		var autos []config.Automation
-		if err := decodeArgs(args, &oldPath, &name, &path, &group, &icon, &autos, &yolo); err != nil {
+		if err := decodeArgs(args[:min(len(args), 6)], &oldPath, &name, &path, &group, &icon, &autos); err != nil {
 			return nil, err
 		}
-		yolo = ""
-		if p, ok := a.project(oldPath); ok && p.Yolo != nil {
-			yolo = map[bool]string{true: "on", false: "off"}[*p.Yolo]
+		yolo, harness := "", ""
+		if p, ok := a.project(oldPath); ok {
+			if p.Yolo != nil {
+				yolo = map[bool]string{true: "on", false: "off"}[*p.Yolo]
+			}
+			harness = p.Harness
 		}
-		return a.SaveProject(oldPath, name, path, group, icon, autos, yolo)
+		return a.SaveProject(oldPath, name, path, group, icon, autos, yolo, harness)
 	case "Write":
 		var id int
 		var data string

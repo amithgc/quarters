@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/amithgc/quarters/internal/config"
 	"github.com/amithgc/quarters/internal/remote"
 )
 
@@ -64,7 +65,7 @@ func (a *App) attention() {
 		}
 		body := m.Title
 		if body == "" {
-			body = "Claude Code is waiting for you"
+			body = config.HarnessByID(m.Harness).Name + " is waiting for you"
 		}
 		srv.Push(remote.PushMessage{Title: name + " · your turn", Body: body, Key: m.Key})
 	}

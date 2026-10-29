@@ -562,3 +562,9 @@ func lookPath(name string, env []string) (string, error) {
 	}
 	return exec.LookPath(name)
 }
+
+// Installed reports whether a program is on the login shell's PATH.
+func (m *Manager) Installed(name string) bool {
+	_, err := lookPath(name, m.loginEnv())
+	return err == nil
+}

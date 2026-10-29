@@ -5,21 +5,29 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
+	"strings"
 
+	"github.com/amithgc/quarters/internal/config"
 	"github.com/amithgc/quarters/internal/session"
 )
 
 // ---- sessions ----
 
-// StartSession starts Claude Code ("claude"), Claude Code continuing the
-// last conversation ("continue") or a shell ("shell") in a project. meta is
-// what other windows need to show the tab (title, automation, …).
+// StartSession starts the project's coding agent ("claude"; Claude Code
+// unless the project chose another harness), the agent continuing the last
+// conversation ("continue"), a past Claude Code conversation ("resume") or
+// a shell ("shell") in a project. meta is what other windows need to show
+// the tab (title, automation, …).
 func (a *App) StartSession(path, kind string, cols, rows int, meta map[string]any) (int, error) {
 	return a.startSession(macClient, path, kind, cols, rows, meta)
 }
 
 func (a *App) startSession(client, path, kind string, cols, rows int, meta map[string]any) (int, error) {
 	cfg := a.config()
+	if meta == nil {
+		meta = map[string]any{}
+	}
 	cp, ok := a.project(path)
 	if !ok {
 		return 0, fmt.Errorf("%s is not one of your projects", path)
@@ -42,7 +50,21 @@ func (a *App) startSession(client, path, kind string, cols, rows int, meta map[s
 		argv = []string{cfg.ShellPath(), "-l"}
 	default:
 		yolo := cfg.YoloFor(cp) && !(client != macClient && cfg.On("remote_ask"))
-		argv = append([]string{}, cfg.ClaudeCommand(cp, yolo)...)
+		h := cfg.HarnessFor(cp)
+		if kind == "resume" {
+			h = config.HarnessByID(config.Claude) // past conversations are Claude Code's
+		}
+		meta["harness"] = h.ID
+		argv = append([]string{}, cfg.AgentCommand(cp, h, yolo)...)
+		if bin := argv[0]; !strings.Contains(bin, "/") && !a.sessions.Installed(bin) {
+			return 0, fmt.Errorf("%s isn't installed here (%s is not on your PATH) · get it at %s", h.Name, bin, h.Site)
+		}
+		if h.ID != config.Claude {
+			if kind == "continue" {
+				argv = slices.Insert(argv, 1, h.Continue...)
+			}
+			break
+		}
 		if cfg.ClaudeRemoteControl {
 			name := cp.Name
 			if name == "" {

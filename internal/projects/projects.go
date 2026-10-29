@@ -24,6 +24,7 @@ type Project struct {
 	Command     []string
 	Automations []config.Automation
 	Yolo        *bool
+	Harness     string // the project's own choice, "" for the default
 	Branch      string
 	LastActive  time.Time
 	Missing     bool // the folder does not exist
@@ -52,7 +53,7 @@ func Load(cfg *config.Config) []Project {
 			continue
 		}
 		path := config.ExpandPath(cp.Path)
-		p := Project{Name: cp.Name, Path: path, Group: cp.Group, Command: cp.Command, Automations: cp.Automations, Yolo: cp.Yolo}
+		p := Project{Name: cp.Name, Path: path, Group: cp.Group, Command: cp.Command, Automations: cp.Automations, Yolo: cp.Yolo, Harness: cp.Harness}
 		if p.Name == "" {
 			p.Name = filepath.Base(path)
 		}

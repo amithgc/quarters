@@ -318,3 +318,33 @@ func TestConversationOfFindsTheRealLog(t *testing.T) {
 		t.Errorf("a tab whose log exists: %s", got)
 	}
 }
+
+func TestHarnessSettings(t *testing.T) {
+	a, dir := testApp(t)
+	if err := a.SetHarness("codex"); err != nil || a.config().Harness != "codex" {
+		t.Fatalf("SetHarness: %v", err)
+	}
+	if err := a.SetHarness("nonsense"); err == nil {
+		t.Error("unknown harness accepted")
+	}
+	if err := a.SetProjectHarness(dir, "gemini"); err != nil {
+		t.Fatal(err)
+	}
+	p, _ := a.project(dir)
+	if got := a.config().HarnessFor(p).ID; got != "gemini" {
+		t.Errorf("project harness = %s, want gemini", got)
+	}
+	if err := a.SetProjectHarness(dir, ""); err != nil {
+		t.Fatal(err)
+	}
+	p, _ = a.project(dir)
+	if got := a.config().HarnessFor(p).ID; got != "codex" {
+		t.Errorf("back to the default: %s, want codex", got)
+	}
+	if err := a.SetProjectHarness("/no/such", "codex"); err == nil {
+		t.Error("unknown project accepted")
+	}
+	if err := a.SetHarness("claude"); err != nil || a.config().Harness != "" {
+		t.Errorf("claude should clear the setting: %q %v", a.config().Harness, err)
+	}
+}

@@ -1,7 +1,7 @@
 {
   "name": "Quarters",
   "short_name": "Quarters",
-  "description": "Your Claude Code sessions, from anywhere.",
+  "description": "Your coding agents, from anywhere.",
   "id": "/",
   "start_url": "/",
   "scope": "/",

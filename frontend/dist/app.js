@@ -351,7 +351,8 @@ async function newTab(path, kind = "claude", opts = {}) {
   const meta = adopt ? adopt.meta : null;
   const autoOpts = opts.autoKey ? { title: opts.title, dir: opts.dir, command: opts.command, autoKey: opts.autoKey, group: opts.group } : null;
   const startOpts = { resume: opts.resume || "", cwd: opts.cwd || "", title: opts.title || "" };
-  const tab = { key: meta ? meta.key : newKey(), started: meta ? meta.started : Date.now(), group: opts.group || null, head, autoOpts, startOpts, id: 0, kind, path, term, fit, el, title: "", fixedTitle: opts.title || "", wt: opts.cwd && opts.cwd !== path ? opts.cwd.split("/").pop() : "", autoKey: opts.autoKey || "", lastData: 0, exited: false, code: 0, owner: adopt ? adopt.owner : state.me, pty: adopt && adopt.cols ? { cols: adopt.cols, rows: adopt.rows } : null, off: 0, synced: false, early: [] };
+  const harness = kind === "shell" || opts.autoKey ? "" : meta ? meta.harness || "claude" : kind === "resume" ? "claude" : (p && p.agent) || "claude";
+  const tab = { key: meta ? meta.key : newKey(), started: meta ? meta.started : Date.now(), group: opts.group || null, head, autoOpts, startOpts, id: 0, kind, path, harness, term, fit, el, title: "", fixedTitle: opts.title || "", wt: opts.cwd && opts.cwd !== path ? opts.cwd.split("/").pop() : "", autoKey: opts.autoKey || "", lastData: 0, exited: false, code: 0, owner: adopt ? adopt.owner : state.me, pty: adopt && adopt.cols ? { cols: adopt.cols, rows: adopt.rows } : null, off: 0, synced: false, early: [] };
   state.byKey[tab.key] = tab;
   const list = (state.tabs[path] = tabsOf(path).concat(tab));
   if (!adopt) state.active[path] = list.length - 1;
@@ -493,7 +494,7 @@ function layComposer() {
   requestAnimationFrame(() => {
     composerQueued = false;
     const tab = activeTab(), body = document.body;
-    const over = !!tab && !tab.exited && !mirrors(tab) && matchMedia("(max-width: 760px)").matches;
+    const over = !!tab && !tab.exited && isClaude(tab) && matchMedia("(max-width: 760px)").matches;
     body.classList.toggle("compose-over", over);
     document.documentElement.style.setProperty("--card-h", $("#compose").offsetHeight + "px"); // the chat ends above the card
     if (!over) {
@@ -524,6 +525,15 @@ function layComposer() {
 // drawn by the window in use only; others pause, and catch up when used
 // (Claude reprints the whole conversation for the new size).
 const mirrors = (tab) => tab.kind === "shell" || !!tab.autoKey;
+// Claude Code tabs get the extras (the phone's chat view and message card,
+// Remote Control); other agents (Codex, Gemini CLI, …) are plain terminals.
+const isClaude = (tab) => !!tab && !mirrors(tab) && tab.harness === "claude";
+// agentName is what a project's agent (or a tab's) is called.
+function agentName(id) {
+  const h = (state.settings?.harnesses || []).find((x) => x.id === id);
+  return h ? h.name : id === "claude" || !id ? "Claude Code" : id;
+}
+const shortAgent = (id) => (id === "claude" || !id ? "Claude" : agentName(id));
 const isPaused = (tab) => !mirrors(tab) && !!tab.owner && tab.owner !== state.me;
 
 function setPaused(tab, on) {
@@ -731,7 +741,7 @@ async function requestCloseEntry(k) {
 
 async function requestCloseTab(tab) {
   if (!tab) return;
-  const name = tab.kind === "shell" ? "shell" : "Claude Code";
+  const name = tab.kind === "shell" || tab.autoKey ? "shell" : agentName(tab.harness);
   if (tab.exited || (await Go().Confirm("Close tab?", `This ends the ${name} session running in this tab.`, "Close"))) closeTab(tab);
 }
 
@@ -809,7 +819,7 @@ function showActive() {
   reportViewing();
   document.body.classList.toggle("has-tab", !!cur);
   document.body.classList.toggle("one-tab", tabsOf(state.current).length <= 1); // phones: the title says which
-  document.body.classList.toggle("term-tab", !!cur && mirrors(cur)); // a shell: a plain terminal, typed into directly
+  document.body.classList.toggle("term-tab", !!cur && !isClaude(cur)); // a shell or another agent: a plain terminal, typed into directly
   placeTools();
   $("#compose-text").placeholder = cur && (cur.kind === "shell" || cur.autoKey) ? "Type a command…" : "Message Claude…";
   layComposer();
@@ -956,7 +966,7 @@ async function autoStart(path) {
   autoStarted.add(path);
   const autos = (p.automations || []).filter((a) => a.auto && !autoRunning(path, a));
   for (const a of autos) await runAutomation(path, a);
-  if (autos.length) flash(`▶ started ${autos.map((a) => a.name).join(", ")} · ⌘T for Claude`);
+  if (autos.length) flash(`▶ started ${autos.map((a) => a.name).join(", ")} · ⌘T for ${shortAgent(p.agent)}`);
 }
 
 // renderStart fills the start screen for p (a project with no tabs), or hides it.
@@ -964,7 +974,7 @@ function renderStart(p) {
   const el = $("#start");
   el.classList.toggle("hidden", !p);
   if (!p) return;
-  const sig = `${p.path}|${on("history")}`;
+  const sig = `${p.path}|${on("history")}|${p.agent}`;
   if (el.dataset.path !== sig || el.dataset.icon !== (iconData[p.icon] ? p.icon : "")) {
     el.dataset.path = sig;
     el.dataset.icon = iconData[p.icon] ? p.icon : "";
@@ -974,7 +984,7 @@ function renderStart(p) {
       <div class="st-project">${iconHTML(p)}<span class="st-name">${esc(p.name)}</span></div>
       <div class="st-path muted">${esc(p.shortPath)}${p.branch ? ` · <span class="violet">⎇ ${esc(p.branch)}</span>` : ""}${p.missing ? ` · <span class="red">folder not found</span>` : ""}</div>
       <button class="st-press" type="button" data-start="claude">
-        <span class="keys-only">Press</span><b class="st-key">C</b><span class="keys-only">to start Claude</span><span class="touch-only">Start Claude</span>
+        <span class="keys-only">Press</span><b class="st-key">C</b><span class="keys-only">to start ${esc(shortAgent(p.agent))}</span><span class="touch-only">Start ${esc(shortAgent(p.agent))}</span>
       </button>
       <div class="st-more muted">
         <button type="button" data-start="continue"><b class="kbd keys-only">⇧C</b><span class="touch-only">↻</span> continue last conversation</button>
@@ -1044,7 +1054,7 @@ function checkAttention() {
         if (worked && !t.exited && !tabSeen(t)) {
           t.unseen = true;
           const p = project(t.path);
-          Go().Notify(`${p ? p.name : "Claude"} · your turn`, t.title || "Claude Code is waiting for you", tabKey(t));
+          Go().Notify(`${p ? p.name : shortAgent(t.harness)} · your turn`, t.title || `${agentName(t.harness)} is waiting for you`, tabKey(t));
         }
       }
       if (t.unseen && (tabSeen(t) || t.exited)) t.unseen = false;
@@ -1383,8 +1393,8 @@ function wireAutosEditor() {
 }
 
 // The automations to save; pane sizes are dropped when the grid changed.
-function autosToSave() {
-  return dlg.autos.map((a) => {
+function autosToSave(list = dlg.autos) {
+  return list.map((a) => {
     const tabs = a.tabs.filter((t) => t.name.trim() || t.dir.trim() || t.command.trim());
     const same = a.was === `${a.layout}/${tabs.length}`;
     return { name: a.name, layout: a.layout, auto: a.auto, tabs, cols: same ? a.cols : null, rows: same ? a.rows : null, schedule: a.at ? { at: a.at, days: a.days } : null };
@@ -1424,6 +1434,12 @@ function showFound(found) {
   renderIconField();
 }
 
+// harnessOptions lists the coding agents for a <select>, marking the ones
+// this machine doesn't have.
+function harnessOptions() {
+  return (state.settings?.harnesses || []).map((h) => `<option value="${esc(h.id)}">${esc(h.name)}${h.installed ? "" : " (not installed)"}</option>`).join("");
+}
+
 function openProjectDialog(p) {
   dlg.open = true;
   dlg.oldPath = p ? p.path : "";
@@ -1436,6 +1452,10 @@ function openProjectDialog(p) {
   $("#pd-group").value = p ? p.group : "";
   $("#pd-yolo").value = p ? p.yolo || "" : "";
   $("#pd-yolo").disabled = REMOTE; // only changed on the Mac
+  const def = agentName(state.settings?.harness);
+  $("#pd-harness").innerHTML = `<option value="">as in Settings (${esc(def)})</option>` + harnessOptions();
+  $("#pd-harness").value = p ? p.harness || "" : "";
+  $("#pd-harness").disabled = REMOTE;
   $("#pd-error").textContent = "";
   dlg.icon = p ? p.icon || "" : "";
   dlg.autos = autosForDialog(p);
@@ -1484,7 +1504,7 @@ async function browseFolder() {
 
 async function saveProjectDialog() {
   try {
-    const full = await Go().SaveProject(dlg.oldPath, $("#pd-name").value, $("#pd-path").value, $("#pd-group").value, dlg.icon, autosToSave(), $("#pd-yolo").value);
+    const full = await Go().SaveProject(dlg.oldPath, $("#pd-name").value, $("#pd-path").value, $("#pd-group").value, dlg.icon, autosToSave(), $("#pd-yolo").value, $("#pd-harness").value);
     const was = dlg.oldPath;
     closeProjectDialog();
     // An edited path moves its open tabs along with it.
@@ -1644,6 +1664,7 @@ function render() {
   renderProjects();
   renderTabs();
   renderActiveList();
+  renderStats(); // automations started or stopped (redrawn only when it changed)
 }
 
 // renderActiveList shows, on the welcome screen, the projects with open
@@ -1679,9 +1700,9 @@ function renderTitle() {
   // phones: what the tab you're looking at is doing, under the title
   const cur = activeTab();
   const st = cur && tabStatus(cur);
-  const what = cur ? cur.fixedTitle || cur.title || (cur.kind === "shell" ? "shell" : "claude") : "";
+  const what = cur ? cur.fixedTitle || cur.title || (cur.kind === "shell" ? "shell" : cur.harness) : "";
   const doing = { busy: "working", waiting: cur && (cur.kind === "shell" || cur.autoKey) ? "ready" : "your turn", ended: "ended" }[st] || "";
-  $("#tb-sub").textContent = cur ? `${what} · ${doing}` : p ? "press C to start Claude" : "";
+  $("#tb-sub").textContent = cur ? `${what} · ${doing}` : p ? `press C to start ${shortAgent(p.agent)}` : "";
   let busy = 0, waiting = 0;
   for (const list of Object.values(state.tabs))
     for (const t of list) {
@@ -1732,7 +1753,7 @@ function projectRow(p, pos, filtering, live) {
     <span class="l2"><span class="branch">${branch}</span><span>${fmtAgo(p.lastActive)}</span></span>
     <span class="actions">
       ${(p.automations || []).length ? `<button class="act act-auto" type="button" data-act="auto" title="Automations">▶</button>` : ""}
-      <button class="act" type="button" data-act="claude" title="New Claude tab">+</button>
+      <button class="act" type="button" data-act="claude" title="New ${esc(shortAgent(p.agent))} tab">+</button>
       <button class="act" type="button" data-act="continue" title="Continue last conversation">↻</button>
       <button class="act" type="button" data-act="shell" title="Shell tab">›_</button>
       <button class="act" type="button" data-act="reveal" title="Show in Finder">⌕</button>
@@ -1794,7 +1815,7 @@ function renderTabs() {
   document.body.classList.toggle("one-tab", tabsOf(state.current).length <= 1);
   if ($("#tab-list .tab-rename")) return; // don't wipe a rename in progress
   const cur = activeTab();
-  const label = (t) => (t.wt ? `⎇ ${t.wt} · ` : "") + (t.customTitle || t.fixedTitle || (t.kind === "shell" ? t.title || "shell" : t.title || (t.kind === "continue" || t.kind === "resume" ? "claude ↻" : "claude")));
+  const label = (t) => (t.wt ? `⎇ ${t.wt} · ` : "") + (t.customTitle || t.fixedTitle || (t.kind === "shell" ? t.title || "shell" : t.title || (t.kind === "continue" || t.kind === "resume" ? `${t.harness} ↻` : t.harness)));
   const html = entries(state.current)
     .map((e, k) => {
       const on = e.tabs.includes(cur);
@@ -1860,7 +1881,7 @@ async function pollRemoteControl() {
 function renderClaudeRemote() {
   if (!state.settings) return "";
   const tab = activeTab();
-  const claude = tab && !mirrors(tab) && !tab.exited && tab.path === state.statsPath;
+  const claude = isClaude(tab) && !tab.exited && tab.path === state.statsPath;
   const on = claude && rcOn(tab);
   const always = !!state.settings.claudeRemote;
   const head = claude
@@ -1871,23 +1892,36 @@ function renderClaudeRemote() {
   return `<div class="cr-box">${head}<label class="cr-always"><input type="checkbox" data-claude-remote${always ? " checked" : ""}${canChange() ? "" : " disabled"}> Start new Claude tabs with it</label></div>`;
 }
 
-function renderStats() {
+function renderStats(force) {
   const s = state.stats;
   const path = state.statsPath;
   const el = $("#stats");
-  const plan = renderPlan() + renderClaudeRemote();
+  if (agentPick.open && !force) return; // the agent menu is open: redrawing would close it
+  // Claude Code's plan, Remote Control, session stats, tools and skills
+  // belong to Claude projects only: another agent's numbers aren't known,
+  // and Claude's would mislead. The tab in view decides, else the project.
+  const cur = activeTab();
+  const p = path && project(path);
+  const other = cur && cur.path === path && !mirrors(cur) ? !isClaude(cur) : !!p && p.agent !== "claude";
+  const otherId = other ? (cur && cur.path === path && !mirrors(cur) ? cur.harness : p.agent) : "";
+  const otherName = other ? agentName(otherId) : "";
+  const plan = other ? renderAgentPlan(otherId) : renderPlan() + renderClaudeRemote();
   if (!path || !s) {
-    el.dataset.html = "";
-    el.innerHTML = plan + `<div class="sec-row"><span class="panel-title">SESSION</span></div><div class="muted">Select a project.</div>`;
+    const h = plan + `<div class="sec-row"><span class="panel-title">SESSION</span></div><div class="muted">Select a project.</div>`;
+    if (el.dataset.html !== h) {
+      el.dataset.html = h;
+      el.innerHTML = h;
+    }
     return;
   }
   const live = tabsOf(path).some((t) => !t.exited);
   const state_ = live ? '<span class="green">● live</span>' : s.has ? `<span class="muted">last ${fmtAgo(s.last)}</span>` : '<span class="muted">○ none yet</span>';
-  let h = plan + `<div class="sec-row"><span class="panel-title">SESSION</span>${state_}</div>`;
-  const cur = activeTab();
-  if (cur && cur.path === path) h += `<button class="end-btn" type="button" data-end-tab title="Ends the session in this tab">${cur.exited ? "Close tab" : cur.kind === "shell" || cur.autoKey ? "End this shell" : "End this Claude session"}</button>`;
+  let h = plan + renderPanelAgent(path) + renderPanelAutomations(path) + `<div class="sec-row"><span class="panel-title">SESSION</span>${state_}</div>`;
+  if (cur && cur.path === path) h += `<button class="end-btn" type="button" data-end-tab title="Ends the session in this tab">${cur.exited ? "Close tab" : cur.kind === "shell" || cur.autoKey ? "End this shell" : `End this ${esc(shortAgent(cur.harness))} session`}</button>`;
 
-  if (s.has) {
+  if (other) {
+    h += `<div class="muted">${esc(otherName)} runs as it is here: its model, context and token use show in its own window, not in this panel.</div>`;
+  } else if (s.has) {
     if (s.title) h += `<div class="title-line" title="${esc(s.title)}">${esc(s.title)}</div>`;
     const end = live ? Date.now() : s.last;
     const frac = s.window ? s.context / s.window : 0;
@@ -1904,31 +1938,33 @@ function renderStats() {
   }
 
   // tokens
-  const u = state.tokenView === "today" ? s.today : s.usage;
-  const prompt = (u.Input || 0) + (u.CacheRead || 0) + (u.CacheWrite || 0);
-  const hit = prompt ? Math.round((100 * (u.CacheRead || 0)) / prompt) : 0;
-  h += `<div class="divider"></div>
-    <div class="sec-row"><span class="sec">TOKENS</span>
-      <span class="seg"><button type="button" data-view="session" class="${state.tokenView === "session" ? "on" : ""}">session</button><button type="button" data-view="today" class="${state.tokenView === "today" ? "on" : ""}">today</button></span></div>
-    <div class="tiles">
-      <div class="tile"><div class="t-label">input</div><div class="t-value">${fmtTokens(u.Input)}</div></div>
-      <div class="tile"><div class="t-label">output</div><div class="t-value">${fmtTokens(u.Output)}</div></div>
-      <div class="tile"><div class="t-label">cache read</div><div class="t-value">${fmtTokens(u.CacheRead)}</div></div>
-      <div class="tile"><div class="t-label">cache hit</div><div class="t-value green">${hit}%</div></div>
-    </div>`;
-  if (state.tokenView === "today") h += `<div class="muted" style="margin-top:-6px;font-size:12px">${s.todaySessions} sessions today, all projects</div>`;
+  if (!other) {
+    const u = state.tokenView === "today" ? s.today : s.usage;
+    const prompt = (u.Input || 0) + (u.CacheRead || 0) + (u.CacheWrite || 0);
+    const hit = prompt ? Math.round((100 * (u.CacheRead || 0)) / prompt) : 0;
+    h += `<div class="divider"></div>
+      <div class="sec-row"><span class="sec">TOKENS</span>
+        <span class="seg"><button type="button" data-view="session" class="${state.tokenView === "session" ? "on" : ""}">session</button><button type="button" data-view="today" class="${state.tokenView === "today" ? "on" : ""}">today</button></span></div>
+      <div class="tiles">
+        <div class="tile"><div class="t-label">input</div><div class="t-value">${fmtTokens(u.Input)}</div></div>
+        <div class="tile"><div class="t-label">output</div><div class="t-value">${fmtTokens(u.Output)}</div></div>
+        <div class="tile"><div class="t-label">cache read</div><div class="t-value">${fmtTokens(u.CacheRead)}</div></div>
+        <div class="tile"><div class="t-label">cache hit</div><div class="t-value green">${hit}%</div></div>
+      </div>`;
+    if (state.tokenView === "today") h += `<div class="muted" style="margin-top:-6px;font-size:12px">${s.todaySessions} sessions today, all projects</div>`;
 
-  // activity
-  const act = s.activity || [];
-  const peak = Math.max(1, ...act);
-  h += `<div class="kv" style="gap:6px"><div class="row" style="font-size:12px"><span class="muted">tokens / 5 min</span><span class="muted">last 2h</span></div>
-    <div class="chart">${act
-      .map((v, i) => {
-        const cls = !v ? "zero" : i === act.length - 1 ? "now" : "";
-        const hgt = v ? Math.max(4, Math.round((44 * v) / peak)) : 2;
-        return `<div class="${cls}" style="height:${hgt}px" title="${fmtTokens(v)} tokens"></div>`;
-      })
-      .join("")}</div></div>`;
+    // activity
+    const act = s.activity || [];
+    const peak = Math.max(1, ...act);
+    h += `<div class="kv" style="gap:6px"><div class="row" style="font-size:12px"><span class="muted">tokens / 5 min</span><span class="muted">last 2h</span></div>
+      <div class="chart">${act
+        .map((v, i) => {
+          const cls = !v ? "zero" : i === act.length - 1 ? "now" : "";
+          const hgt = v ? Math.max(4, Math.round((44 * v) / peak)) : 2;
+          return `<div class="${cls}" style="height:${hgt}px" title="${fmtTokens(v)} tokens"></div>`;
+        })
+        .join("")}</div></div>`;
+  }
 
   // git
   const g = s.git;
@@ -1951,7 +1987,7 @@ function renderStats() {
 
   // files Claude edited this session
   const edited = (s.edited || []).filter((f) => f.startsWith(path + "/")).map((f) => f.slice(path.length + 1));
-  if (on("changes") && edited.length) {
+  if (!other && on("changes") && edited.length) {
     h += `<div class="divider"></div><div class="sec-row"><span class="sec">CLAUDE CHANGED</span><span class="muted" style="font-size:12px">${edited.length} file${edited.length === 1 ? "" : "s"} · tap for diff</span></div><div class="files">`;
     for (const f of edited.slice(-12).reverse()) {
       const g = ((s.git && s.git.Files) || []).find((x) => x.Path === f);
@@ -1973,7 +2009,7 @@ function renderStats() {
   }
 
   // tools
-  if (s.has && s.tools && s.tools.length) {
+  if (!other && s.has && s.tools && s.tools.length) {
     const top = s.tools[0].Count || 1;
     h += `<div class="divider"></div><div class="sec-row"><span class="sec">TOOLS</span><span class="muted" style="font-size:12px">calls this session</span></div><div class="kv">`;
     for (const t of s.tools)
@@ -1983,7 +2019,9 @@ function renderStats() {
 
   // skills and MCP servers (with what each is), when switched on
   const tools = on("skills") ? state.tools[path] : null;
-  if (tools) {
+  if (other) {
+    /* Claude Code's skills and MCP servers */
+  } else if (tools) {
     const calls = Object.fromEntries((s.mcp || []).map((m) => [m.name, m.calls]));
     h += `<div class="divider"></div><details class="tools-sec"${state.openSec.mcp ? " open" : ""} data-sec="mcp"><summary class="sec-row"><span class="sec">MCP SERVERS · ${tools.mcp.length}</span><span class="chev">▾</span></summary><div class="kv tools-list">`;
     if (!tools.mcp.length) h += `<div class="muted">None configured.</div>`;
@@ -2017,10 +2055,9 @@ function fmtResets(ms) {
 }
 
 // renderPlan draws the Claude account's plan limits (what /usage shows).
-function renderPlan() {
-  const a = state.account;
+function renderPlan(a = state.account, title = "CLAUDE PLAN") {
   if (!a) return "";
-  let h = `<div class="sec-row"><span class="panel-title">CLAUDE PLAN</span>${a.plan ? `<span class="badge">${esc(a.plan)}</span>` : ""}</div>`;
+  let h = `<div class="sec-row"><span class="panel-title">${title}</span>${a.plan ? `<span class="badge">${esc(a.plan)}</span>` : ""}</div>`;
   if (a.error && !(a.limits || []).length) return h + `<div class="muted">${esc(a.error)}</div><div class="divider"></div>`;
   h += `<div class="kv" style="gap:10px">`;
   for (const l of a.limits || []) {
@@ -2034,6 +2071,30 @@ function renderPlan() {
   h += `</div>`;
   if (a.error) h += `<div class="muted" style="font-size:11px">${esc(a.error)}</div>`;
   return h + `<div class="divider"></div>`;
+}
+
+// Another agent's plan and quotas, where Quarters can read them (Antigravity,
+// from its IDE while it's open); fetched when shown, at most twice a minute.
+const agentAcct = { id: "", at: 0, busy: false, val: null };
+
+function renderAgentPlan(id) {
+  if (id !== "antigravity") return "";
+  if (!agentAcct.busy && (agentAcct.id !== id || Date.now() - agentAcct.at > 30000)) refreshAgentAccount(id);
+  const a = agentAcct.id === id ? agentAcct.val : null;
+  return a ? renderPlan(a, `${esc(agentName(id).toUpperCase())} PLAN`) : "";
+}
+
+async function refreshAgentAccount(id) {
+  agentAcct.busy = true;
+  try {
+    agentAcct.val = await Go().AgentAccount(id);
+    agentAcct.id = id;
+  } catch {
+    /* an older server: nothing to show */
+  }
+  agentAcct.at = Date.now();
+  agentAcct.busy = false;
+  renderStats();
 }
 
 async function refreshAccount() {
@@ -2068,8 +2129,9 @@ function mascotState() {
   }
   const name = project(tab.path)?.name || "";
   if (tab.exited) return ["sad", "Session ended", tab.code ? `exit code ${tab.code} · restart below` : "restart or close the tab"];
-  if (working) return ["thinking", tab.kind === "shell" ? "Busy…" : "Claude is working…", name];
-  return ["happy", tab.kind === "shell" ? "Shell ready" : "Your turn", tab.kind === "shell" ? name : `Claude is waiting · ${name}`];
+  const shell = tab.kind === "shell" || !!tab.autoKey;
+  if (working) return ["thinking", shell ? "Busy…" : `${shortAgent(tab.harness)} is working…`, name];
+  return ["happy", shell ? "Shell ready" : "Your turn", shell ? name : `${shortAgent(tab.harness)} is waiting · ${name}`];
 }
 
 function renderMascot() {
@@ -2534,6 +2596,163 @@ function wireViewport() {
   document.addEventListener("focusout", () => setTimeout(fit, 50));
   setInterval(fit, 400); // toolbars and the keyboard don't always say when they move
   fit();
+}
+
+// ---------- the project's automations in the side panel ----------
+
+// renderPanelAutomations lists the open project's automations with run,
+// stop, edit and delete buttons ("" when it has none).
+function renderPanelAutomations(path) {
+  const p = project(path);
+  const autos = (p && p.automations) || [];
+  if (!autos.length) return "";
+  const rows = autos
+    .map((a, i) => {
+      const run = autoRunning(path, a);
+      const what = a.tabs.map((t) => `${t.name}: ${t.command || "shell"}`).join("\n");
+      const when = a.schedule ? ` · ${esc(a.schedule.at)}` : a.auto ? " · on open" : "";
+      return `<div class="pa-row${run ? " running" : ""}" data-pa="${i}">
+        <button class="pa-run" type="button" data-pa-run title="${run ? "Restart" : "Run"}: ${esc(a.name)}\n${esc(what)}">
+          <span class="${run ? "yellow" : "green"}">${run ? "↻" : "▶"}</span>
+          <span class="pa-name">${esc(a.name)}</span>
+          <span class="muted pa-meta">${a.tabs.length} tab${a.tabs.length === 1 ? "" : "s"}${when}</span>
+        </button>
+        ${run ? `<button class="pa-btn pa-stop" type="button" data-pa-stop title="Stop: close its tabs">■</button>` : ""}
+        <button class="pa-btn" type="button" data-pa-edit title="Edit">✎</button>
+        <button class="pa-btn pa-del" type="button" data-pa-del title="Delete">×</button>
+      </div>`;
+    })
+    .join("");
+  return `<div class="pa-box"><div class="sec-row"><span class="panel-title">AUTOMATIONS</span><button class="pa-add" type="button" data-pa-add title="New automation">＋ new</button></div>
+    <div class="pa-list">${rows}</div></div>`;
+}
+
+// The open project's coding agent, picked from a menu and saved with Apply.
+const agentPick = { path: "", value: null, open: false };
+
+function renderPanelAgent(path) {
+  const p = project(path);
+  if (!p || !state.settings) return "";
+  if (agentPick.path !== path) Object.assign(agentPick, { path, value: null, open: false });
+  const saved = p.harness || "";
+  const value = agentPick.value ?? saved;
+  const def = agentName(state.settings.harness);
+  const list = state.settings.harnesses || [];
+  const h = list.find((x) => x.id === value);
+  const missing = h && !h.installed;
+  const opt = (id, name, sub, warn) => `<button type="button" class="dd-opt${id === value ? " on" : ""}" role="option" aria-selected="${id === value}" data-dd-opt="${esc(id)}">
+      <span class="dd-check">${id === value ? "✓" : ""}</span><span class="dd-name">${esc(name)}</span><span class="dd-sub${warn ? " warn" : ""}">${esc(sub)}</span></button>`;
+  const menu = agentPick.open
+    ? `<div class="dd-menu" role="listbox" aria-label="Coding agent">${opt("", "Default", def)}<div class="dd-sep"></div>${list.map((x) => opt(x.id, x.name, x.installed ? x.bin : "not installed", !x.installed)).join("")}</div>`
+    : "";
+  const changed = value !== saved;
+  return `<div class="pa-agent"><div class="sec-row"><span class="panel-title">AGENT</span>${REMOTE ? '<span class="muted" style="font-size:12px">change it on the Mac</span>' : ""}</div>
+    <div class="dd${agentPick.open ? " open" : ""}">
+      <button type="button" class="dd-btn" data-dd-toggle aria-haspopup="listbox" aria-expanded="${agentPick.open}"${REMOTE ? " disabled" : ""}>
+        <span class="dd-label">${esc(h ? h.name : `Default · ${def}`)}</span>${missing ? '<span class="dd-sub warn">not installed</span>' : ""}<span class="dd-chev">▾</span>
+      </button>${menu}
+    </div>
+    ${missing ? `<div class="dd-note">${esc(h.bin)} isn't on this Mac · <a href="${esc(h.site)}" target="_blank" rel="noopener">get ${esc(h.name)}</a></div>` : ""}
+    ${changed ? `<div class="dd-apply"><span class="muted">New tabs start ${esc(h ? h.name : def)}</span><button class="btn" type="button" data-dd-cancel>Cancel</button><button class="btn primary" type="button" data-dd-apply>Apply</button></div>` : ""}
+  </div>`;
+}
+
+function setAgentMenu(open) {
+  agentPick.open = open;
+  renderStats(true);
+  if (open) ($("#stats .dd-opt.on") || $("#stats .dd-opt"))?.focus();
+  else $("#stats [data-dd-toggle]")?.focus();
+}
+
+function wirePanelAgent() {
+  const panel = $("#stats");
+  panel.addEventListener("click", async (e) => {
+    if (e.target.closest("[data-dd-toggle]")) return setAgentMenu(!agentPick.open);
+    const o = e.target.closest("[data-dd-opt]");
+    if (o) {
+      agentPick.value = o.dataset.ddOpt;
+      return setAgentMenu(false);
+    }
+    if (e.target.closest("[data-dd-cancel]")) {
+      agentPick.value = null;
+      return renderStats(true);
+    }
+    if (!e.target.closest("[data-dd-apply]")) return;
+    const p = project(agentPick.path);
+    if (!p) return;
+    try {
+      await Go().SetProjectHarness(p.path, agentPick.value);
+      flash(`${p.name}: new tabs start ${agentName(agentPick.value || state.settings.harness)}`);
+      agentPick.value = null;
+    } catch (err) {
+      flash(String(err).replace(/^Error: /, ""));
+    }
+    await loadProjects();
+    render();
+  });
+  panel.addEventListener("keydown", (e) => {
+    if (!agentPick.open) return;
+    const opts = [...panel.querySelectorAll(".dd-opt")];
+    const i = opts.indexOf(document.activeElement);
+    if (e.key === "Escape") setAgentMenu(false);
+    else if ((e.key === "Enter" || e.key === " ") && i >= 0) {
+      agentPick.value = opts[i].dataset.ddOpt;
+      setAgentMenu(false);
+    } else if (e.key === "ArrowDown" || e.key === "ArrowUp") opts[(i + (e.key === "ArrowDown" ? 1 : -1) + opts.length) % opts.length]?.focus();
+    else return;
+    e.preventDefault();
+    e.stopPropagation();
+  });
+  window.addEventListener("mousedown", (e) => {
+    if (agentPick.open && !e.target.closest("#stats .dd")) setAgentMenu(false);
+  }, true);
+}
+
+// editAutomation opens the project dialog at automation i (-1: a new one).
+function editAutomation(p, i) {
+  openProjectDialog(p);
+  if (i < 0) $("#pd-auto-add").click();
+  const cards = document.querySelectorAll("#pd-autos .auto-card");
+  const card = i < 0 ? cards[cards.length - 1] : cards[i];
+  if (!card) return;
+  card.scrollIntoView({ block: "center" });
+  card.querySelector("input")?.focus();
+}
+
+async function deleteAutomation(p, i) {
+  const a = p.automations[i];
+  const running = autoTabs(p.path, a).filter((t) => !t.exited).length;
+  const also = running ? ` Its ${running} running tab${running === 1 ? "" : "s"} close too.` : "";
+  if (!(await Go().Confirm(`Delete “${a.name}”?`, `This removes the automation from ${p.name}.${also}`, "Delete"))) return;
+  const keep = autosForDialog(p);
+  keep.splice(i, 1);
+  try {
+    await Go().SaveProject(p.path, p.name, p.path, p.group, p.icon, autosToSave(keep), p.yolo || "", p.harness || "");
+  } catch (err) {
+    return flash(String(err).replace(/^Error: /, ""));
+  }
+  if (running) await stopAutomation(p.path, a);
+  await loadProjects();
+  render();
+  flash(`deleted ${a.name}`);
+}
+
+function wirePanelAutomations() {
+  $("#stats").addEventListener("click", (e) => {
+    const add = e.target.closest("[data-pa-add]"), row = e.target.closest("[data-pa]");
+    if (!add && !row) return;
+    const p = project(state.statsPath);
+    if (!p) return;
+    if (!canChange()) return watchOnly();
+    if (add) return editAutomation(p, -1);
+    const i = Number(row.dataset.pa), a = p.automations[i];
+    if (!a) return;
+    closeDrawers();
+    if (e.target.closest("[data-pa-stop]")) stopAutomation(p.path, a);
+    else if (e.target.closest("[data-pa-edit]")) editAutomation(p, i);
+    else if (e.target.closest("[data-pa-del]")) deleteAutomation(p, i);
+    else if (e.target.closest("[data-pa-run]")) runAutomation(p.path, a);
+  });
 }
 
 function wireEndTab() {
@@ -3067,6 +3286,13 @@ function renderSettings(full) {
         <input type="checkbox" class="switch" data-feature="${f.key}"${f.on ? " checked" : ""}${locked ? " disabled" : ""}></label>`;
     })
     .join("");
+  $("#set-harness").innerHTML = harnessOptions();
+  $("#set-harness").value = v.harness;
+  $("#set-harness").disabled = REMOTE;
+  const h = (v.harnesses || []).find((x) => x.id === v.harness);
+  $("#set-harness-note").innerHTML = h && !h.installed
+    ? `<span class="red">${esc(h.bin)} isn't installed on this machine</span> · <a href="${esc(h.site)}" target="_blank" rel="noopener">get ${esc(h.name)}</a>`
+    : "What new tabs start. Each project can choose its own (✎ edit project).";
   $("#set-yolo").checked = v.yolo;
   $("#set-yolo").disabled = REMOTE;
   if (full) {
@@ -3123,6 +3349,15 @@ function wireSettings() {
         $("#set-error").textContent = String(err).replace(/^Error: /, "");
       }
       loadSettings();
+    } else if (e.target.id === "set-harness") {
+      try {
+        await Go().SetHarness(e.target.value);
+        flash(`new tabs start ${agentName(e.target.value)}`);
+      } catch (err) {
+        $("#set-error").textContent = String(err).replace(/^Error: /, "");
+      }
+      await loadSettings();
+      loadProjects();
     } else if (e.target.id === "set-yolo") {
       try {
         await Go().SetYolo(e.target.checked);
@@ -3616,6 +3851,8 @@ async function main() {
   wireShortcuts();
   wireClaudeRemote();
   wireEndTab();
+  wirePanelAutomations();
+  wirePanelAgent();
   setInterval(pollRemoteControl, 3000);
   pollRemoteControl();
   wireProjects();
@@ -3702,7 +3939,7 @@ let phoneView = (() => {
   }
 })();
 
-const chatOn = (tab) => !!tab && !mirrors(tab) && phoneView === "chat" && matchMedia("(max-width: 760px)").matches;
+const chatOn = (tab) => isClaude(tab) && phoneView === "chat" && matchMedia("(max-width: 760px)").matches;
 
 async function pollChat() {
   const tab = activeTab();
@@ -3827,7 +4064,7 @@ function renderChat() {
   el.classList.toggle("hidden", !on);
   $("#btn-view").textContent = phoneView === "chat" ? "▤" : "💬";
   $("#btn-view").title = phoneView === "chat" ? "Show the terminal" : "Show the chat";
-  $("#btn-view").classList.toggle("hidden", !tab || mirrors(tab));
+  $("#btn-view").classList.toggle("hidden", !isClaude(tab));
   if (!on) return;
   const busy = tabStatus(tab) === "busy";
   const box = $("#compose-text");

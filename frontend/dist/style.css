@@ -494,6 +494,7 @@ body.remote.offline .offline-badge { display: inline; color: var(--yellow); }
 .sp-row .ac-check { padding-top: 6px; }
 .pd-select { padding: 7px 10px; border: 1px solid var(--border-strong); border-radius: 6px; background: var(--panel); color: var(--text); font: inherit; min-height: 36px; }
 .pd-select:disabled { opacity: .6; }
+.set-select { flex-shrink: 0; max-width: 55%; }
 
 /* ---------- menus: saved prompts, worktrees ---------- */
 .am-empty { padding: 6px 8px 10px; font-size: 12px; line-height: 17px; white-space: normal; }
@@ -847,6 +848,45 @@ body.short-web .compose { padding-bottom: 8px; }
 @media (max-width: 760px) { .tb-sub { display: block; } .tb-sub:empty { display: none; } }
 /* "Press C to start Claude" can wrap in a narrow panel: give it a real line height */
 .st-press { line-height: 1.15; flex-wrap: wrap; justify-content: center; text-align: center; }
+/* the project's agent and automations in the side panel */
+.pa-agent { display: flex; flex-direction: column; gap: 8px; padding-bottom: 12px; margin-bottom: 4px; border-bottom: 1px solid var(--line); }
+/* a dropdown drawn by Quarters (a native menu can't be styled) */
+.dd { position: relative; }
+.dd-btn { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 36px; padding: 6px 10px 6px 12px; border: 1px solid var(--border-strong); border-radius: 8px; background: var(--term); text-align: left; transition: border-color .15s; }
+.dd-btn:hover:not(:disabled), .dd.open .dd-btn { border-color: var(--accent); }
+.dd-btn:disabled { opacity: .6; cursor: default; }
+.dd-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dd-chev { color: var(--muted); font-size: 11px; transition: transform .15s; }
+.dd.open .dd-chev { transform: rotate(180deg); }
+.dd-menu { position: absolute; z-index: 20; left: 0; right: 0; top: calc(100% + 4px); padding: 4px; border: 1px solid var(--border-strong); border-radius: 10px; background: var(--panel); box-shadow: 0 14px 34px rgba(0, 0, 0, .45); }
+.dd-opt { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 32px; padding: 5px 8px; border-radius: 6px; text-align: left; }
+.dd-opt:hover, .dd-opt:focus-visible { background: var(--hover-strong); outline: none; }
+.dd-opt.on .dd-name { color: var(--accent); }
+.dd-check { width: 12px; color: var(--accent); flex-shrink: 0; }
+.dd-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dd-sub { color: var(--muted); font-size: 11px; white-space: nowrap; }
+.dd-sub.warn { color: var(--yellow); }
+.dd-sep { height: 1px; margin: 4px 6px; background: var(--line); }
+.dd-note { font-size: 12px; color: var(--muted); }
+.dd-apply { display: flex; align-items: center; gap: 6px; }
+.dd-apply .muted { flex: 1; min-width: 0; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dd-apply .btn { min-height: 30px; padding: 4px 12px; }
+.pa-box { display: flex; flex-direction: column; gap: 6px; padding-bottom: 12px; margin-bottom: 4px; border-bottom: 1px solid var(--line); }
+.pa-add { font-size: 12px; color: var(--accent); padding: 2px 6px; border-radius: 6px; }
+.pa-add:hover { background: var(--hover-strong); }
+.pa-list { display: flex; flex-direction: column; gap: 2px; }
+.pa-row { display: flex; align-items: center; gap: 2px; border-radius: 6px; }
+.pa-row:hover { background: var(--hover-strong); }
+.pa-run { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; min-height: 32px; padding: 4px 6px; text-align: left; border-radius: 6px; }
+.pa-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pa-meta { margin-left: auto; font-size: 11px; white-space: nowrap; }
+.pa-run:hover .pa-name { color: var(--accent); }
+.pa-btn { width: 28px; height: 28px; flex-shrink: 0; border-radius: 6px; color: var(--muted); opacity: 0; }
+.pa-row:hover .pa-btn, .pa-btn:focus-visible, .pa-stop { opacity: 1; }
+.pa-btn:hover { color: var(--text); background: var(--panel); }
+.pa-stop { color: var(--red); }
+.pa-del:hover { color: var(--red); }
+@media (hover: none) { .pa-btn { opacity: 1; } }
 .cr-box { padding-bottom: 10px; margin-bottom: 4px; border-bottom: 1px solid var(--line); }
 .cr-box .cr-row { border-bottom: 0; padding-bottom: 6px; margin-bottom: 0; }
 .cr-always { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); cursor: pointer; }

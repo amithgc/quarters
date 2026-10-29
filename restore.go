@@ -13,12 +13,12 @@ import (
 
 // ---- resume sessions after a restart ----
 
-// RestoreItem is a Claude conversation or automation that was open.
+// RestoreItem is an agent's conversation or an automation that was open.
 type RestoreItem struct {
 	Path  string `json:"path"`
 	Name  string `json:"name"` // project name
-	Kind  string `json:"kind"` // "claude" or "auto"
-	Conv  string `json:"conv"` // conversation id ("" = the latest)
+	Kind  string `json:"kind"` // "claude" (any agent) or "auto"
+	Conv  string `json:"conv"` // Claude Code's conversation id ("" = the latest)
 	Cwd   string `json:"cwd"`  // a worktree, or ""
 	Title string `json:"title"`
 	Auto  string `json:"auto"` // automation name
@@ -50,6 +50,9 @@ func (a *App) openItems() []RestoreItem {
 				seenAuto[m.AutoKey] = true
 				out = append(out, RestoreItem{Path: m.Path, Name: name, Kind: "auto", Auto: m.Group.AutoName, Title: m.Group.AutoName})
 			}
+		case m.Kind != "shell" && m.AutoKey == "" && m.Harness != "" && m.Harness != config.Claude:
+			// another agent: its last conversation in the folder
+			out = append(out, RestoreItem{Path: m.Path, Name: name, Kind: "claude", Cwd: m.Cwd, Title: m.Title})
 		case m.Kind != "shell" && m.AutoKey == "":
 			conv := a.conversationOf(info.ID, m, used)
 			used[conv] = true

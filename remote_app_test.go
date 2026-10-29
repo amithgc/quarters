@@ -15,7 +15,7 @@ func TestRemoteCannotCallMacOnly(t *testing.T) {
 	for _, m := range []string{"SetRemote", "SetRemotePassword", "RemoteStatus", "PairDevice", "CancelPairing", "RemoveDevice",
 		"SignOutAllDevices", "OpenConfig", "RevealProject", "Confirm", "ChooseFolder", "ChooseIcon",
 		"Notify", "SetBadge", "SaveLayout", "Call", "Alert", "startup", "NoSuchThing",
-		"SetDeviceAccess", "SetYolo", "SetHotkey", "SetViewing2", "background", "Settings2"} {
+		"SetDeviceAccess", "SetYolo", "SetHotkey", "SetHarness", "SetProjectHarness", "SetViewing2", "background", "Settings2"} {
 		if _, err := b.Call("web1", m, nil); err == nil {
 			t.Errorf("%s was callable remotely", m)
 		}
