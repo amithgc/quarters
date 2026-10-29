@@ -56,7 +56,8 @@ func (a *App) attention() {
 	}
 	for _, info := range done {
 		m := metaOf(info)
-		if m.Kind == "shell" || m.AutoKey != "" || a.viewed(info.ID) {
+		// with prompts queued it isn't your turn: the next one goes in
+		if m.Kind == "shell" || m.AutoKey != "" || a.viewed(info.ID) || a.queued(info.ID) {
 			continue
 		}
 		name := filepath.Base(m.Path)

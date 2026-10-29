@@ -20,31 +20,109 @@ import (
 // ---- git status of each project, refreshed in the background ----
 
 type gitEntry struct {
-	g  stats.Git
-	at time.Time
+	g    stats.Git
+	at   time.Time // when git was run (zero: not yet)
+	sig  string    // gitSig then
+	busy bool
 }
 
-func (a *App) gitOf(path string) (stats.Git, bool) {
+// How fresh git status is kept. Running git for every project every few
+// seconds was most of what Quarters did while otherwise idle, so it runs
+// again only when something may have changed: git's own files moved (a
+// commit, a checkout, git add, a fetch), or a session in the project wrote
+// output since. Edits from outside (your editor) show up within maxAge.
+const (
+	gitMinAge     = 4 * time.Second  // at most this often while a session works
+	gitViewAge    = 10 * time.Second // the project in the side panel
+	gitListAge    = 2 * time.Minute  // the rest of the project list
+	gitConcurrent = 4
+)
+
+// gitOf returns a project's git status as last worked out (false: not yet),
+// working it out again in the background when it may have changed.
+func (a *App) gitOf(path string, maxAge time.Duration) (stats.Git, bool) {
+	sig := gitSig(path)
+	work := a.lastWork(path)
 	a.fmu.Lock()
 	defer a.fmu.Unlock()
 	e, ok := a.f.git[path]
-	if (!ok || time.Since(e.at) > 15*time.Second) && a.f.gitBusy < 4 {
+	age := time.Since(e.at)
+	stale := !ok || age > maxAge || age > gitMinAge && (sig != e.sig || work.After(e.at))
+	if stale && !e.busy && a.f.gitBusy < gitConcurrent {
 		a.f.gitBusy++
-		if !ok {
-			a.f.git[path] = gitEntry{at: time.Now()} // don't start it twice
-		} else {
-			e.at = time.Now()
-			a.f.git[path] = e
-		}
+		e.busy = true
+		a.f.git[path] = e
 		go func() {
 			g := stats.GitStatus(path)
+			sig := gitSig(path) // after: git status may refresh the index
 			a.fmu.Lock()
-			a.f.git[path] = gitEntry{g, time.Now()}
+			a.f.git[path] = gitEntry{g: g, at: time.Now(), sig: sig}
 			a.f.gitBusy--
 			a.fmu.Unlock()
 		}()
 	}
-	return e.g, ok
+	return e.g, !e.at.IsZero()
+}
+
+// gitNow is gitOf for the project in the side panel: the first time, it
+// waits for git rather than show nothing.
+func (a *App) gitNow(path string) stats.Git {
+	a.fmu.Lock()
+	e := a.f.git[path]
+	a.fmu.Unlock()
+	if !e.at.IsZero() {
+		g, _ := a.gitOf(path, gitViewAge)
+		return g
+	}
+	g := stats.GitStatus(path)
+	sig := gitSig(path)
+	a.fmu.Lock()
+	if e := a.f.git[path]; e.at.IsZero() {
+		a.f.git[path] = gitEntry{g: g, at: time.Now(), sig: sig, busy: e.busy}
+	}
+	a.fmu.Unlock()
+	return g
+}
+
+// gitSig changes when git's own files do. It is a few stat calls, not a
+// git run.
+func gitSig(path string) string {
+	dir := filepath.Join(path, ".git")
+	if st, err := os.Stat(dir); err == nil && !st.IsDir() {
+		// a worktree or submodule: .git names the real folder
+		if b, err := os.ReadFile(dir); err == nil {
+			if d, ok := strings.CutPrefix(strings.TrimSpace(string(b)), "gitdir: "); ok {
+				if !filepath.IsAbs(d) {
+					d = filepath.Join(path, d)
+				}
+				dir = d
+			}
+		}
+	}
+	var sb strings.Builder
+	for _, f := range []string{"index", "HEAD", "logs/HEAD", "FETCH_HEAD"} {
+		if st, err := os.Stat(filepath.Join(dir, f)); err == nil {
+			fmt.Fprintf(&sb, "%d.%d;", st.Size(), st.ModTime().UnixNano())
+		} else {
+			sb.WriteString("-;")
+		}
+	}
+	return sb.String()
+}
+
+// lastWork is when a session in project path last wrote output that wasn't
+// an echo of typing.
+func (a *App) lastWork(path string) time.Time {
+	var last time.Time
+	for _, info := range a.sessions.List() {
+		if info.Exited || metaOf(info).Path != path {
+			continue
+		}
+		if work, _, ok := a.sessions.Quiet(info.ID); ok && work.After(last) {
+			last = work
+		}
+	}
+	return last
 }
 
 // ---- what Claude changed: diffs ----

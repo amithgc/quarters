@@ -26,6 +26,8 @@ var remoteMethods = map[string]bool{
 	"Settings": true, "SetFeature": true, "SetClaudeRemote": true, "Chat": true, "TabImage": true, "RemoteControlled": true, "SavePrompts": true, "SetUsageAlertAt": true,
 	"Conversations": true, "Diff": true, "DevLinks": true, "OpenOnMac": true, "ProjectTools": true,
 	"Worktrees": true, "CreateWorktree": true, "RemoveWorktree": true, "RestoreInfo": true, "DismissRestore": true,
+	"Queues": true, "QueueAdd": true, "QueueRemove": true, "QueueMove": true, "QueueNext": true,
+	"Usage": true, "Instructions": true, "ReadInstructions": true, "SaveInstructions": true, "Notes": true, "SaveNotes": true,
 }
 
 // What a device with less than full access may call ("view": watch only;
@@ -37,8 +39,11 @@ var (
 		"Snapshot": true, "Settings": true, "Conversations": true, "Diff": true, "DevLinks": true,
 		"ProjectTools": true, "Worktrees": true, "RestoreInfo": true, "SetViewing": true, "Chat": true, "TabImage": true, "RemoteControlled": true,
 		"PushKey": true, "PushSubscribe": true, "PushUnsubscribe": true,
+		"Queues": true, "Usage": true, "Instructions": true, "ReadInstructions": true, "Notes": true,
 	}
-	typeMethods = map[string]bool{"Write": true, "Resize": true, "Claim": true}
+	// queued prompts are typed in later: the same as typing them now
+	typeMethods = map[string]bool{"Write": true, "Resize": true, "Claim": true,
+		"QueueAdd": true, "QueueRemove": true, "QueueMove": true, "QueueNext": true}
 )
 
 func remoteDir() string { return filepath.Dir(config.Path()) }
@@ -309,14 +314,19 @@ func (b remoteBackend) Call(client, method string, args []json.RawMessage) (any,
 		if err := decodeArgs(args[:min(len(args), 6)], &oldPath, &name, &path, &group, &icon, &autos); err != nil {
 			return nil, err
 		}
-		yolo, harness := "", ""
+		yolo, harness, color := "", "", ""
 		if p, ok := a.project(oldPath); ok {
 			if p.Yolo != nil {
 				yolo = map[bool]string{true: "on", false: "off"}[*p.Yolo]
 			}
-			harness = p.Harness
+			harness, color = p.Harness, p.Color
 		}
-		return a.SaveProject(oldPath, name, path, group, icon, autos, yolo, harness)
+		if len(args) > 8 { // its colour is only a look: any device may change it
+			if err := decodeArgs(args[8:9], &color); err != nil {
+				return nil, err
+			}
+		}
+		return a.SaveProject(oldPath, name, path, group, icon, autos, yolo, harness, color)
 	case "Write":
 		var id int
 		var data string

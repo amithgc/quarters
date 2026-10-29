@@ -108,6 +108,10 @@ type session struct {
 	lastInput time.Time
 	workStart time.Time
 	workLast  time.Time
+
+	// paste: the program asked for bracketed paste (pasted text arrives
+	// marked as a paste, so its line breaks don't send it)
+	paste bool
 }
 
 // NewManager starts the output pump. Output is batched and sent at most
@@ -163,6 +167,9 @@ func (s *session) flush(emit Emitter, watch func(int, []byte)) {
 		copied = append(copied, chunk...)
 	}
 	s.pending.Reset()
+	if on, off := bytes.LastIndex(chunk, []byte("\x1b[?2004h")), bytes.LastIndex(chunk, []byte("\x1b[?2004l")); on != off {
+		s.paste = on > off
+	}
 	if now := time.Now(); now.Sub(s.lastInput) > 250*time.Millisecond {
 		if s.workStart.IsZero() || now.Sub(s.workLast) > quietFor {
 			s.workStart = now
@@ -304,6 +311,49 @@ func (m *Manager) Write(client string, id int, data string) {
 		s.mu.Unlock()
 		_, _ = s.pty.Write([]byte(data))
 	}
+}
+
+// Send types data into a session for Quarters itself (a queued prompt):
+// like Write, but no window becomes the session's owner.
+func (m *Manager) Send(id int, data string) {
+	if s := m.get(id); s != nil && !s.done() {
+		s.mu.Lock()
+		s.lastInput = time.Now()
+		s.mu.Unlock()
+		_, _ = s.pty.Write([]byte(data))
+	}
+}
+
+// Quiet reports when a session last worked (wrote output that wasn't the
+// echo of typing) and was last typed into; ok is false when it has ended.
+func (m *Manager) Quiet(id int) (work, input time.Time, ok bool) {
+	s := m.get(id)
+	if s == nil || s.done() {
+		return time.Time{}, time.Time{}, false
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.workLast, s.lastInput, true
+}
+
+// Pastes reports whether a session's program takes bracketed paste.
+func (m *Manager) Pastes(id int) bool {
+	s := m.get(id)
+	if s == nil {
+		return false
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.paste
+}
+
+// Info describes one session (ok is false when there is none).
+func (m *Manager) Info(id int) (Info, bool) {
+	s := m.get(id)
+	if s == nil {
+		return Info{}, false
+	}
+	return s.info(), true
 }
 
 // Resize changes a session's terminal size, if client owns the session.

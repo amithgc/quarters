@@ -387,3 +387,43 @@ func TestPushEndpointsOnlyKnownServices(t *testing.T) {
 		}
 	}
 }
+
+// The app's files carry an ETag: asking again with it gets a 304, not the
+// whole file; gzipped and plain answers are told apart.
+func TestServeFileETag(t *testing.T) {
+	s, _, _ := newTestServer(t)
+	get := func(gz bool, etag string) *httptest.ResponseRecorder {
+		r := httptest.NewRequest("GET", "/app.js", nil)
+		if gz {
+			r.Header.Set("Accept-Encoding", "gzip")
+		}
+		if etag != "" {
+			r.Header.Set("If-None-Match", etag)
+		}
+		w := httptest.NewRecorder()
+		s.serveFile(w, r, "app", "app.js")
+		return w
+	}
+	for _, gz := range []bool{true, false} {
+		first := get(gz, "")
+		etag := first.Header().Get("ETag")
+		if first.Code != 200 || etag == "" || first.Body.Len() == 0 {
+			t.Fatalf("gzip=%v: %d etag=%q", gz, first.Code, etag)
+		}
+		if (first.Header().Get("Content-Encoding") == "gzip") != gz {
+			t.Fatalf("gzip=%v: Content-Encoding %q", gz, first.Header().Get("Content-Encoding"))
+		}
+		if again := get(gz, etag); again.Code != http.StatusNotModified || again.Body.Len() != 0 {
+			t.Fatalf("gzip=%v: asking with the ETag gave %d (%d bytes)", gz, again.Code, again.Body.Len())
+		}
+		if other := get(!gz, etag); other.Code != 200 {
+			t.Fatalf("gzip=%v: the other encoding's ETag matched", gz)
+		}
+	}
+	if w := httptest.NewRecorder(); true {
+		s.serveFile(w, httptest.NewRequest("GET", "/nope.js", nil), "app", "nope.js")
+		if w.Code != http.StatusNotFound {
+			t.Fatalf("missing file: %d", w.Code)
+		}
+	}
+}

@@ -46,12 +46,13 @@ func TestRemoteAccessLevels(t *testing.T) {
 	view := remoteBackend{a: &App{}, access: func(string) string { return "view" }}
 	typ := remoteBackend{a: &App{}, access: func(string) string { return "type" }}
 	for _, m := range []string{"Write", "Resize", "Claim", "StartSession", "StartCommandSession", "CloseSession",
-		"SaveProject", "RemoveProject", "SetFeature", "SavePrompts", "CreateWorktree", "RemoveWorktree", "OpenOnMac", "DismissRestore"} {
+		"SaveProject", "RemoveProject", "SetFeature", "SavePrompts", "CreateWorktree", "RemoveWorktree", "OpenOnMac", "DismissRestore",
+		"QueueAdd", "QueueRemove", "QueueMove", "QueueNext", "SaveInstructions", "SaveNotes"} {
 		if _, err := view.Call("web1", m, nil); err == nil || !strings.Contains(err.Error(), "only watch") {
 			t.Errorf("view device: %s: %v", m, err)
 		}
 	}
-	for _, m := range []string{"StartSession", "CloseSession", "SaveProject", "SetFeature", "CreateWorktree"} {
+	for _, m := range []string{"StartSession", "CloseSession", "SaveProject", "SetFeature", "CreateWorktree", "SaveInstructions", "SaveNotes"} {
 		if _, err := typ.Call("web1", m, nil); err == nil || !strings.Contains(err.Error(), "only type") {
 			t.Errorf("type device: %s: %v", m, err)
 		}

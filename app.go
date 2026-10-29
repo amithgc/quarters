@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -40,6 +41,7 @@ type App struct {
 	today     todayCache   // today's token use, across projects
 	account   accountCache // the Claude plan's limits
 	agentAcct accountCache // Antigravity's plan and quotas
+	usage     usageCache   // tokens per project and day
 
 	fmu   sync.Mutex // the optional features' state below
 	f     featureState
@@ -257,6 +259,7 @@ type ProjectView struct {
 	Missing    bool   `json:"missing"`
 	Yolo       string `json:"yolo"`    // "", "on" or "off"
 	Harness    string `json:"harness"` // its own coding agent, "" for the default
+	Color      string `json:"color"`   // "#rrggbb" or "accent", "" for one from the name
 	Agent      string `json:"agent"`   // the coding agent its tabs start
 	Git        bool   `json:"git"`     // git status below is known
 	Dirty      int    `json:"dirty"`
@@ -297,12 +300,12 @@ func (a *App) Projects() []ProjectView {
 	for _, p := range list {
 		v := ProjectView{Name: p.Name, Path: p.Path, ShortPath: projects.ShortPath(p.Path),
 			Group: p.Group, Icon: p.Icon, Branch: p.Branch, Missing: p.Missing,
-			Harness: p.Harness, Agent: cfg.HarnessFor(config.Project{Harness: p.Harness}).ID}
+			Harness: p.Harness, Color: p.Color, Agent: cfg.HarnessFor(config.Project{Harness: p.Harness}).ID}
 		if p.Yolo != nil {
 			v.Yolo = map[bool]string{true: "on", false: "off"}[*p.Yolo]
 		}
 		if gitOn && !p.Missing {
-			if g, ok := a.gitOf(p.Path); ok && g.IsRepo {
+			if g, ok := a.gitOf(p.Path, gitListAge); ok && g.IsRepo {
 				v.Git, v.Dirty, v.Ahead, v.Behind = true, len(g.Files), g.Ahead, g.Behind
 				if g.Branch != "" {
 					v.Branch = g.Branch
@@ -396,9 +399,13 @@ func (a *App) SetCollapsed(groups []string) error {
 // returns its full path. icon is an image path ("" for none).
 // yolo is "" (the global setting), "on" or "off"; harness is the
 // project's coding agent ("" for the default).
-func (a *App) SaveProject(oldPath, name, path, group, icon string, autos []config.Automation, yolo, harness string) (string, error) {
+func (a *App) SaveProject(oldPath, name, path, group, icon string, autos []config.Automation, yolo, harness, color string) (string, error) {
 	if !config.KnownHarness(harness) {
 		return "", fmt.Errorf("unknown harness %q", harness)
+	}
+	color = strings.ToLower(strings.TrimSpace(color))
+	if color != "" && color != "accent" && !hexColor.MatchString(color) {
+		return "", fmt.Errorf("a colour is written like #e08a6a (or \"accent\")")
 	}
 	path = strings.TrimSpace(path)
 	if path == "" {
@@ -437,9 +444,11 @@ func (a *App) SaveProject(oldPath, name, path, group, icon string, autos []confi
 	}
 	return full, a.editConfig(func(c *config.Config) error {
 		return c.SaveProject(oldPath, config.Project{Name: name, Path: projects.ShortPath(full),
-			Group: strings.TrimSpace(group), Icon: icon, Automations: autos, Yolo: yp, Harness: harness})
+			Group: strings.TrimSpace(group), Icon: icon, Automations: autos, Yolo: yp, Harness: harness, Color: color})
 	})
 }
+
+var hexColor = regexp.MustCompile(`^#[0-9a-f]{6}$`)
 
 // cleanAutomations trims what the dialog sent and checks it.
 func cleanAutomations(in []config.Automation) ([]config.Automation, error) {

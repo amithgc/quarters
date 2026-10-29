@@ -62,6 +62,8 @@ services. Your projects, your logins and your machine stay yours.
 
 ### Projects, tabs and sessions
 
+<img src="docs/queue.png" alt="Two prompts queued in the side panel while Claude works; the next goes in when it finishes" width="900">
+
 - **One click** opens a project; press **C** to start its coding agent,
   **⇧C** to continue the last conversation, **S** for a shell.
 - **Several tabs per project** (agents and shells), all running in the
@@ -71,9 +73,22 @@ services. Your projects, your logins and your machine stay yours.
   click to see it full screen.
 - **"Your turn" alerts:** when an agent finishes in a tab you aren't looking
   at, you get a notification and a Dock badge, and the tab is marked.
+- **Who's waiting for you:** the ACTIVE list puts the sessions that
+  finished (or are asking you something) first, longest waiting first, with
+  how long; **⌘J** (or a click on "◐ waiting" in the title bar) goes to the
+  next one.
+- **Prompt queue:** line up prompts for a session ("add tests", then "fix
+  lint"…); each goes in when the agent finishes the one before, never over
+  a question it is asking or a message you started typing. On a phone, ⏭
+  in the message card queues what you typed while the agent works.
 - Groups, project icons (favicons found automatically), drag to reorder,
   **⌘P / ⇧⇧** to jump anywhere, git status (●changes ↑ahead ↓behind) in the
   list.
+- **A colour per project** on its tabs and the terminal's frame, so you
+  can tell projects apart at a glance (from its name, or one you pick).
+- **Every command by name:** **⇧⌘P** (or `>` in the jump list).
+- **Focus mode:** **⇧⌘↵** leaves only the terminal; again brings the
+  panels back.
 - **Saved prompts** (⚡): type a common instruction with one click.
 - **The project's automations in the side panel:** run, restart or stop
   each one, edit it, delete it, or add a new one, right where you work.
@@ -120,7 +135,7 @@ whether they're answering.
 
 <table>
 <tr>
-<td width="34%"><img src="docs/stats.png" alt="The side panel: files Claude changed, dev servers, tools, MCP servers and skills"></td>
+<td width="34%"><img src="docs/stats.png" alt="The side panel: usage, git, files Claude changed, tools and instructions, with the bar that jumps between sections"></td>
 <td>
 
 - **Plan:** Claude's usage limits and when they reset, as `/usage` shows
@@ -134,6 +149,14 @@ whether they're answering.
 - **Claude changed:** the files Claude edited this session; click one for its
   diff.
 - **Servers:** `localhost` links your terminals printed, up or down.
+- **Usage:** the project's tokens today, over 7 and 30 days, and its share
+  of yours; **⇧⌘U** ranks every project (from Claude Code's logs).
+- **Instructions:** edit the project's `CLAUDE.md`, `AGENTS.md`,
+  `GEMINI.md` or `CONVENTIONS.md` (the one its agent reads is offered even
+  before it exists), and your own notes on the project, kept by Quarters
+  outside the project folder.
+- Click a section's title to fold it to one line; the bar above the panel
+  jumps to a section or folds them all. Each device remembers its own.
 - **Tools, MCP servers and skills** available in the project.
 - **Claude Remote Control:** a switch that starts new Claude tabs with
   Claude Code's own Remote Control, so you can also continue them from
@@ -144,6 +167,8 @@ whether they're answering.
 </table>
 
 <img src="docs/diff.png" alt="The diff of a file Claude changed" width="900">
+
+<img src="docs/usage.png" alt="Usage by project: every project's tokens over the last 7 days, ranked" width="900">
 
 ### Past conversations, restarts and worktrees
 
@@ -162,7 +187,8 @@ whether they're answering.
 <img src="docs/settings.png" alt="Settings: every optional feature can be switched on or off" width="900">
 
 Every optional feature has a switch, and Claude's permission mode can be
-set globally or per project.
+set globally or per project. **Appearance** picks light, dark or the
+system's look, on each device.
 
 ### Remote access: work from anywhere
 
@@ -325,18 +351,24 @@ step.
 
 ### Keyboard shortcuts
 
+<img src="docs/commands.png" alt="⇧⌘P: every command by name, with its shortcut" width="900">
+
 | keys | action |
 | --- | --- |
 | ⌘/ | all keyboard shortcuts (Help → Keyboard Shortcuts) |
 | click, then **C** / **⇧C** / **S** | open a project, then start Claude / continue / a shell |
 | ⌘P or ⇧⇧ (tap Shift twice) | jump to a project or automation |
+| ⇧⌘P | every command, by name |
 | ⌘T / ⇧⌘T / ⌥⌘T | new Claude tab / continue last conversation / shell tab |
 | ⌘W | close tab |
 | ⌘1–9, ⇧⌘[ ⇧⌘] | switch tabs |
+| ⌘J | go to the session waiting for you longest |
 | ⌘B / ⌘I | show or hide projects / side panel |
+| ⇧⌘↵ | focus mode: only the terminal |
 | ⌘O | add a project |
 | ⌘, / ⌥⌘, | Settings / edit config.json |
 | ⇧⌘F / ⇧⌘G | search past conversations / worktrees |
+| ⇧⌘U | usage by project |
 | ⌥⌘R | start or stop the remote-access server |
 | ⌃⌥Space (from any app) | bring Quarters forward, or hide it |
 | ⌘= / ⌘- / ⌘0 | text size |
@@ -344,7 +376,8 @@ step.
 
 Also: **Shift+Enter** adds a new line in Claude Code; drop files on a
 terminal to type their paths; hover `[Image #N]` to see a pasted image;
-double-click a tab to rename it. Light and dark mode follow macOS.
+double-click a tab to rename it. Light and dark mode follow macOS, or pick
+one in Settings → Appearance (each device keeps its own).
 
 ## Remote access setup
 
@@ -429,6 +462,7 @@ overwriting it.
 | `projects[].name` | label in the list (default: the folder name) |
 | `projects[].group` | heading to group projects under |
 | `projects[].icon` | image next to the project (png, jpg, svg, ico, webp; relative = inside the project) |
+| `projects[].color` | colour of its tabs and terminal frame: `#rrggbb` or `accent` (default: from its name) |
 | `projects[].harness` | the coding agent for this project, overriding `harness` |
 | `projects[].command` | how the project's agent starts in this project |
 | `projects[].yolo` | `true`/`false`: skip the agent's permission prompts here, overriding `yolo` |
@@ -483,6 +517,11 @@ JavaScript frontend in the system WebView.
 - Remote access (`internal/remote`) is an HTTP server with passkey
   (WebAuthn) sign-in and a WebSocket carrying the same calls and events the
   Mac window uses.
+- Idle, it stays out of the way: git runs only when something may have
+  changed, files are read again only when they change, the project list is
+  pushed to windows when it changes, and nothing on a timer runs while the
+  window is hidden. Measured on a Mac with 14 projects, idle in the
+  background: about 2% of one CPU core.
 
 ```
 main.go, app.go, …     the app: window, menus, the functions the frontend calls
@@ -491,7 +530,7 @@ internal/projects      the project list and icons
 internal/session       pseudo-terminals
 internal/stats         Claude Code logs, git, plan usage (Claude, Antigravity), conversations, skills
 internal/remote        remote access: passkeys, sessions, WebSocket, push
-frontend/dist          the frontend (plain ES modules, no bundler)
+frontend/dist          the frontend (plain ES modules, no bundler; ui/ holds the dialogs, loaded when first opened)
 tools/mascot           draws the mascot
 ```
 

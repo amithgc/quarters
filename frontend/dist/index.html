@@ -31,7 +31,7 @@
     </div>
     <div class="tb-right">
       <span id="tb-running" class="tb-count hidden" title="working"><span class="dot green">●</span> <span></span><span class="word"> working</span></span>
-      <span id="tb-waiting" class="tb-count hidden" title="waiting for you"><span class="dot yellow">◐</span> <span></span><span class="word"> waiting</span></span>
+      <button id="tb-waiting" class="tb-count hidden" type="button" title="Waiting for you: go to the one waiting longest (⌘J)"><span class="dot yellow">◐</span> <span></span><span class="word"> waiting</span></button>
       <span id="tb-clock" class="soft"></span>
       <button id="btn-remote" class="tb-remote hidden" type="button" title="Remote access"></button>
       <span class="offline-badge">offline · reconnecting…</span>
@@ -104,6 +104,7 @@
           <textarea id="compose-text" rows="1" placeholder="Message Claude…" enterkeyhint="send" autocapitalize="sentences" spellcheck="true" aria-label="Message"></textarea>
           <div class="compose-row">
             <div id="compose-tools" class="compose-tools"></div>
+            <button id="compose-later" class="hidden" type="button" title="Queue it: sent when the agent finishes" aria-label="Send when the agent finishes">⏭</button>
             <button id="compose-send" type="submit" aria-label="Send">↑</button>
           </div>
         </div>
@@ -135,6 +136,7 @@
         <img id="mascot-img" src="mascot/sleepy.svg" alt="" draggable="false">
         <span class="mascot-text"><span id="mascot-title">Napping</span><span id="mascot-sub" class="muted">no session open</span></span>
       </button>
+      <nav id="ps-nav" class="hidden" aria-label="Side panel sections"></nav>
       <div id="stats" class="scroll"></div>
     </section>
   </main>
@@ -159,12 +161,12 @@
 <div id="palette" class="overlay top hidden">
   <div class="palette-box" role="dialog" aria-label="Jump to project">
     <div class="pal-head">
-      <span class="panel-title accent">JUMP TO PROJECT</span>
+      <span class="panel-title accent pal-title-p">JUMP TO PROJECT</span><span class="panel-title accent pal-title-c">COMMANDS</span>
       <span id="pal-count" class="muted"></span>
     </div>
     <label class="pal-input">
       <span class="accent">❯</span>
-      <input id="pal-query" type="text" placeholder="type to search…" spellcheck="false" autocomplete="off">
+      <input id="pal-query" type="text" placeholder="type to search… (> for commands)" spellcheck="false" autocomplete="off">
     </label>
     <div id="pal-list"></div>
     <div class="pal-sep"></div>
@@ -267,6 +269,12 @@ cloudflared tunnel run --url http://127.0.0.1:8421 quarters</pre>
     <div class="fields">
       <div id="set-error" class="pd-error"></div>
       <div class="field">
+        <span class="field-label">Appearance <span class="soft-note">— this device only</span></span>
+        <div class="set-list">
+          <div class="set-row"><span class="set-text"><b>Theme</b><span class="muted">The window and its terminals. System follows macOS (or the phone).</span></span><span class="seg" id="set-theme"><button type="button" data-theme="system">System</button><button type="button" data-theme="light">Light</button><button type="button" data-theme="dark">Dark</button></span></div>
+        </div>
+      </div>
+      <div class="field">
         <span class="field-label">Features</span>
         <div id="set-features" class="set-list"></div>
       </div>
@@ -326,6 +334,35 @@ cloudflared tunnel run --url http://127.0.0.1:8421 quarters</pre>
   </div>
 </div>
 
+<!-- A text to write: a queued prompt, CLAUDE.md / AGENTS.md, notes -->
+<div id="edit-dialog" class="overlay hidden">
+  <div class="dialog-box edit-box" role="dialog" aria-labelledby="ed-title">
+    <div class="pal-head"><span id="ed-title" class="panel-title accent"></span><span id="ed-sub" class="muted"></span></div>
+    <div id="ed-note" class="ed-note muted hidden"></div>
+    <textarea id="ed-text" class="ed-text" spellcheck="false" autocapitalize="off" autocomplete="off" aria-labelledby="ed-title"></textarea>
+    <div class="dialog-actions">
+      <span id="ed-status" class="muted ed-status"></span>
+      <span class="push"></span>
+      <button id="ed-cancel" class="btn" type="button">Cancel</button>
+      <button id="ed-save" class="btn primary" type="button">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Tokens per project -->
+<div id="usage-dialog" class="overlay hidden">
+  <div class="dialog-box usage-box" role="dialog" aria-labelledby="us-title">
+    <div class="pal-head"><span id="us-title" class="panel-title accent">USAGE BY PROJECT</span>
+      <span class="seg" id="us-range"><button type="button" data-range="today">today</button><button type="button" data-range="week">7 days</button><button type="button" data-range="month">30 days</button></span></div>
+    <div id="us-list" class="us-list"></div>
+    <div class="dialog-actions">
+      <span class="muted us-note">Claude Code's logs: input, output and cache writes (cache reads left out). Other agents don't log tokens Quarters can read yet.</span>
+      <span class="push"></span>
+      <button id="us-close" class="btn" type="button">Close</button>
+    </div>
+  </div>
+</div>
+
 <!-- Saved prompts / worktrees menus -->
 <div id="prompt-menu" class="auto-menu hidden" role="menu"></div>
 <div id="wt-menu" class="auto-menu hidden" role="menu"></div>
@@ -360,6 +397,10 @@ cloudflared tunnel run --url http://127.0.0.1:8421 quarters</pre>
           <button id="pd-icon-clear" class="btn danger hidden" type="button">Remove icon</button>
         </div>
         <div id="pd-icon-found" class="icon-found"></div>
+      </div>
+      <div class="field">
+        <span class="field-label">Colour <span class="soft-note">— marks its tabs and terminal</span></span>
+        <div id="pd-colors" class="swatches"></div>
       </div>
       <div class="field">
         <label for="pd-group">Group</label>

@@ -10,6 +10,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/amithgc/quarters/internal/config"
@@ -25,6 +26,7 @@ type Project struct {
 	Automations []config.Automation
 	Yolo        *bool
 	Harness     string // the project's own choice, "" for the default
+	Color       string // "#rrggbb" or "accent", "" for one from the name
 	Branch      string
 	LastActive  time.Time
 	Missing     bool // the folder does not exist
@@ -53,7 +55,7 @@ func Load(cfg *config.Config) []Project {
 			continue
 		}
 		path := config.ExpandPath(cp.Path)
-		p := Project{Name: cp.Name, Path: path, Group: cp.Group, Command: cp.Command, Automations: cp.Automations, Yolo: cp.Yolo, Harness: cp.Harness}
+		p := Project{Name: cp.Name, Path: path, Group: cp.Group, Command: cp.Command, Automations: cp.Automations, Yolo: cp.Yolo, Harness: cp.Harness, Color: cp.Color}
 		if p.Name == "" {
 			p.Name = filepath.Base(path)
 		}
@@ -125,7 +127,46 @@ func NewestLog(dir string) string {
 	return p
 }
 
+// The project list asks for every project's newest log every couple of
+// seconds, and a folder can hold hundreds of them. Between full looks, only
+// the folder (a new log changes it) and the newest log are checked.
+const logRescan = 30 * time.Second
+
+var newest = struct {
+	sync.Mutex
+	m map[string]newestSeen
+}{m: map[string]newestSeen{}}
+
+type newestSeen struct {
+	dirMod time.Time
+	path   string
+	at     time.Time
+}
+
 func newestLog(dir string) (string, time.Time) {
+	st, err := os.Stat(dir)
+	if err != nil {
+		return "", time.Time{}
+	}
+	newest.Lock()
+	e, ok := newest.m[dir]
+	newest.Unlock()
+	if ok && e.dirMod.Equal(st.ModTime()) && time.Since(e.at) < logRescan {
+		if e.path == "" {
+			return "", time.Time{}
+		}
+		if fi, err := os.Stat(e.path); err == nil {
+			return e.path, fi.ModTime()
+		}
+	}
+	path, mtime := scanLogs(dir)
+	newest.Lock()
+	newest.m[dir] = newestSeen{st.ModTime(), path, time.Now()}
+	newest.Unlock()
+	return path, mtime
+}
+
+func scanLogs(dir string) (string, time.Time) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return "", time.Time{}

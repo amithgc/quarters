@@ -34,6 +34,9 @@ type Harness struct {
 	// Reader names the conversation reader that turns the agent's own log
 	// into the phone's chat view ("" = the terminal only).
 	Reader string `json:"reader,omitempty"`
+	// Instructions is the file in a project's folder the agent reads its
+	// standing instructions from (the stats panel edits it).
+	Instructions string `json:"instructions"`
 }
 
 // Claude is the default harness.
@@ -42,15 +45,15 @@ const Claude = "claude"
 // Harnesses are the agents Quarters knows how to start.
 var Harnesses = []Harness{
 	{ID: Claude, Name: "Claude Code", Bin: "claude", Yolo: []string{"--dangerously-skip-permissions"}, Continue: []string{"--continue"}, Site: "https://claude.com/claude-code",
-		Interrupt: "\x1b", MenuMarker: "❯", Reader: Claude},
-	{ID: "codex", Name: "Codex", Bin: "codex", Yolo: []string{"--dangerously-bypass-approvals-and-sandbox"}, Continue: []string{"resume", "--last"}, Site: "https://github.com/openai/codex"},
-	{ID: "gemini", Name: "Gemini CLI", Bin: "gemini", Yolo: []string{"--yolo"}, Continue: []string{"--resume", "latest"}, Site: "https://github.com/google-gemini/gemini-cli"},
-	{ID: "antigravity", Name: "Antigravity", Bin: "agy", Yolo: []string{"--dangerously-skip-permissions"}, Continue: []string{"--continue"}, Site: "https://antigravity.google"},
-	{ID: "opencode", Name: "OpenCode", Bin: "opencode", Continue: []string{"--continue"}, Site: "https://opencode.ai"},
-	{ID: "copilot", Name: "GitHub Copilot CLI", Bin: "copilot", Yolo: []string{"--allow-all-tools"}, Continue: []string{"--continue"}, Site: "https://github.com/github/copilot-cli"},
-	{ID: "devin", Name: "Devin", Bin: "devin", Yolo: []string{"--permission-mode", "bypass"}, Continue: []string{"--continue"}, Site: "https://docs.devin.ai/cli"},
+		Interrupt: "\x1b", MenuMarker: "❯", Reader: Claude, Instructions: "CLAUDE.md"},
+	{ID: "codex", Name: "Codex", Bin: "codex", Yolo: []string{"--dangerously-bypass-approvals-and-sandbox"}, Continue: []string{"resume", "--last"}, Site: "https://github.com/openai/codex", Instructions: "AGENTS.md"},
+	{ID: "gemini", Name: "Gemini CLI", Bin: "gemini", Yolo: []string{"--yolo"}, Continue: []string{"--resume", "latest"}, Site: "https://github.com/google-gemini/gemini-cli", Instructions: "GEMINI.md"},
+	{ID: "antigravity", Name: "Antigravity", Bin: "agy", Yolo: []string{"--dangerously-skip-permissions"}, Continue: []string{"--continue"}, Site: "https://antigravity.google", Instructions: "AGENTS.md"},
+	{ID: "opencode", Name: "OpenCode", Bin: "opencode", Continue: []string{"--continue"}, Site: "https://opencode.ai", Instructions: "AGENTS.md"},
+	{ID: "copilot", Name: "GitHub Copilot CLI", Bin: "copilot", Yolo: []string{"--allow-all-tools"}, Continue: []string{"--continue"}, Site: "https://github.com/github/copilot-cli", Instructions: "AGENTS.md"},
+	{ID: "devin", Name: "Devin", Bin: "devin", Yolo: []string{"--permission-mode", "bypass"}, Continue: []string{"--continue"}, Site: "https://docs.devin.ai/cli", Instructions: "AGENTS.md"},
 	{ID: "aider", Name: "Aider", Bin: "aider", Yolo: []string{"--yes-always"}, Continue: []string{"--restore-chat-history"}, Site: "https://aider.chat",
-		Interrupt: "\x03"}, // Aider stops a reply with ^C, and ignores Esc
+		Interrupt: "\x03", Instructions: "CONVENTIONS.md"}, // Aider stops a reply with ^C, and ignores Esc
 }
 
 // defaultInterrupt is Esc (see Harness.Interrupt).

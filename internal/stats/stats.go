@@ -372,6 +372,12 @@ func newestLog(dir string) string {
 // ConfiguredMCP lists the MCP servers configured for a project: global and
 // per-project entries in ~/.claude.json plus the project's .mcp.json.
 func ConfiguredMCP(projectPath string) []string {
+	home, _ := os.UserHomeDir()
+	files := []string{filepath.Join(home, ".claude.json"), filepath.Join(projectPath, ".mcp.json")}
+	return memo("mcp\x00"+projectPath, files, func() []string { return configuredMCP(projectPath) })
+}
+
+func configuredMCP(projectPath string) []string {
 	seen := map[string]bool{}
 	var out []string
 	addKeys := func(m map[string]json.RawMessage) {
@@ -412,11 +418,16 @@ func ConfiguredMCP(projectPath string) []string {
 // tokens. It returns 0 when no setting says so.
 func ContextWindow(projectPath string) int {
 	home, _ := os.UserHomeDir()
-	for _, p := range []string{
+	files := []string{
 		filepath.Join(projectPath, ".claude", "settings.local.json"),
 		filepath.Join(projectPath, ".claude", "settings.json"),
 		filepath.Join(home, ".claude", "settings.json"),
-	} {
+	}
+	return memo("window\x00"+projectPath, files, func() int { return contextWindow(files) })
+}
+
+func contextWindow(files []string) int {
+	for _, p := range files {
 		data, err := os.ReadFile(p)
 		if err != nil {
 			continue

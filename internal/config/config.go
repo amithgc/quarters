@@ -23,6 +23,10 @@ type Project struct {
 	// Icon is an image file shown next to the project (png, jpg, svg, ico,
 	// webp). "~" allowed; relative paths are inside the project folder.
 	Icon string `json:"icon,omitempty"`
+	// Color marks the project's tabs and terminal: "#rrggbb", or "accent"
+	// for Quarters' own. Unset: a colour picked from its name, like its
+	// letter tile.
+	Color string `json:"color,omitempty"`
 	// Harness is the coding agent for this project, e.g. "codex" (see
 	// Harnesses). Unset: the global "harness".
 	Harness string `json:"harness,omitempty"`
@@ -132,6 +136,9 @@ var Features = []Feature{
 	{"git_status", "Git status in the project list", "Branch, changed files and ahead/behind next to each project.", true, false},
 	{"changes", "What Claude changed", "The files Claude edited this session, in the stats panel; tap one for its diff.", true, false},
 	{"schedules", "Scheduled automations", "Automations with a time run by themselves (set it in the project's automation).", true, false},
+	{"prompt_queue", "Prompt queue", "Line up prompts for a session in the stats panel: each is sent when the agent finishes the one before.", true, false},
+	{"usage", "Usage by project", "Which projects use your tokens: today, 7 and 30 days, from Claude Code's logs (stats panel and View → Usage by Project).", true, false},
+	{"instructions", "Agent instructions & notes", "Edit the project's CLAUDE.md / AGENTS.md / GEMINI.md and keep your own notes, from the stats panel.", true, false},
 	{"dev_links", "Dev server links", "Links to servers your terminals start (localhost:3000…), with whether they're up.", true, false},
 	{"skills", "Skills & MCP servers", "The project's Claude Code skills and MCP servers in the stats panel.", true, false},
 	{"hotkey", "Global hotkey", "Brings Quarters to the front from any app.", true, true},

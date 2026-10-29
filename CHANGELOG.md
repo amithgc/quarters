@@ -1,5 +1,77 @@
 # Changelog
 
+## 0.5.0 — who's waiting, prompt queue, usage, a lighter app
+
+Run many agents without losing track: who's waiting for you comes first
+(⌘J), prompts queue up for when an agent finishes, usage shows per
+project, and agent instructions are edited in place. Quarters itself got
+much lighter when idle (about 2% of a CPU core, from about 20%), its side
+panel folds, and every command is a keystroke away.
+
+- Who's waiting for you. The ACTIVE list (and the start screen's) puts the
+  sessions that finished while you looked elsewhere first, longest waiting
+  first, with how long they've waited and whether the agent is asking you
+  something. ⌘J (Session → Next Waiting for You), or a click on the title
+  bar's "◐ waiting", opens the next one.
+
+- Prompt queue. Line up prompts for a session in the side panel (QUEUE ·
+  ＋ add prompt; reorder, remove); each is sent when the agent has finished
+  the one before. Quarters waits while the agent asks a question or shows
+  a permission prompt, and never types over a message you started in its
+  input box; a prompt is sent once, and the next only after the agent
+  worked on it. No "your turn" alert while prompts are waiting. On a
+  phone, ⏭ in the message card queues what you typed while the agent works.
+  Settings → Prompt queue.
+
+- Usage by project. The side panel's USAGE shows the project's tokens
+  today, over 7 and 30 days, a 14-day chart and its share of your week;
+  View → Usage by Project (⇧⌘U) ranks every project (worktrees count as
+  their project). Read from Claude Code's logs: input, output and cache
+  writes. Settings → Usage by project.
+
+- Agent instructions and notes. INSTRUCTIONS in the side panel opens the
+  project's CLAUDE.md, AGENTS.md, GEMINI.md or CONVENTIONS.md in an editor
+  (the file the project's agent reads is offered even before it exists; a
+  CLAUDE.md that links to AGENTS.md is saved through the link), and won't
+  save over a version the agent changed meanwhile. Notes are yours: kept
+  with Quarters' settings, not in the project. Devices with less than full
+  access can read them, not save. Settings → Agent instructions & notes.
+
+- Much lighter when idle. The mascot animates when something happens and
+  for a moment each minute, then stands still (its animation was redrawn
+  60 times a second, always); nothing on a timer runs while the window is
+  hidden, and less while Quarters isn't in front. git runs only when
+  something may have changed (a commit, a checkout, a session's output)
+  instead of every 2 seconds for the open project and every 15 for all;
+  the project list is sent to windows when it changes instead of asked for
+  every 3 seconds; ~/.claude.json and the session-log folders are read
+  again only when they change. Measured on a Mac with 14 projects, idle
+  in the background: about 20% of a CPU core before, 2% after.
+
+- Terminals keep their fast GPU drawing: only the ones on screen and the
+  few shown last hold a WebGL context (WebKit allows about 16 and took the
+  oldest away, leaving it on the slow fallback for good).
+
+- Remote access loads less: dialogs most visits never open (settings,
+  editing a project, past conversations, diffs, the editor, usage, the
+  shortcuts list) load the first time they open, and every file carries an
+  ETag, so a phone revalidates instead of downloading the app again.
+
+- The side panel's sections fold to one line (click the title); the bar
+  above jumps to a section or folds them all. One look for all section
+  titles.
+
+- Every command by name: ⇧⌘P, or ">" in the jump list. Focus mode (⇧⌘↵)
+  leaves only the terminal.
+
+- A colour per project marks its tabs and the terminal's frame, from its
+  name or chosen in its dialog ("color" in config.json). Settings →
+  Appearance: System, Light or Dark, on each device.
+
+- Quieter lists: idle projects show no status mark, a project listed in
+  ACTIVE doesn't repeat its status in its group, and dialogs open with a
+  short fade (none with reduced motion).
+
 ## 0.4.0 — coding agents, Homebrew
 
 The first release published as a signed, notarized app, installable with

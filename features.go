@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"crypto/rand"
 	"encoding/json"
 	"fmt"
@@ -26,10 +27,11 @@ type featureState struct {
 	ports     map[string]portCheck  // "127.0.0.1:3000" → up?
 	git       map[string]gitEntry   // project → git status
 	gitBusy   int
-	alerted   map[string]bool   // usage limits already warned about
-	schedRun  map[string]string // automation → day it last ran by itself
-	restore   []RestoreItem     // sessions open when Quarters last quit
-	awake     *exec.Cmd         // caffeinate, while keeping the Mac awake
+	alerted   map[string]bool      // usage limits already warned about
+	schedRun  map[string]string    // automation → day it last ran by itself
+	restore   []RestoreItem        // sessions open when Quarters last quit
+	queues    map[int]*promptQueue // session → prompts waiting to be sent
+	awake     *exec.Cmd            // caffeinate, while keeping the Mac awake
 	hotkeyErr string
 }
 
@@ -40,6 +42,7 @@ func (f *featureState) init() {
 	f.git = map[string]gitEntry{}
 	f.alerted = map[string]bool{}
 	f.schedRun = map[string]string{}
+	f.queues = map[int]*promptQueue{}
 }
 
 type viewing struct {
@@ -54,6 +57,7 @@ const (
 	scheduleEvery  = 20 * time.Second
 	restoreEvery   = 30 * time.Second // what's open, saved in case of a crash
 	usageEvery     = time.Minute
+	projectsEvery  = 2 * time.Second // the project list, checked for changes
 )
 
 // background runs the features that work without any window open.
@@ -64,8 +68,12 @@ func (a *App) background() {
 	restore := time.NewTicker(restoreEvery)
 	usage := time.NewTicker(usageEvery)
 	firstUsage := time.After(5 * time.Second)
+	list := time.NewTicker(projectsEvery)
+	var listed []byte
 	for {
 		select {
+		case <-list.C:
+			listed = a.watchProjects(listed)
 		case <-attention.C:
 			a.attention()
 		case <-awake.C:
@@ -80,6 +88,21 @@ func (a *App) background() {
 			go a.usageAlerts() // fetches over the network: never holds up the rest
 		}
 	}
+}
+
+// watchProjects tells windows when the project list changed (a session
+// started or ended, git status, a config.json edit), so they don't each ask
+// for it every few seconds. last is the list as last sent.
+func (a *App) watchProjects(last []byte) []byte {
+	b, err := json.Marshal(struct {
+		P []ProjectView
+		E string
+	}{a.Projects(), a.ConfigError()})
+	if err != nil || bytes.Equal(b, last) {
+		return last
+	}
+	a.emit("projects", nil)
+	return b
 }
 
 // tabMeta is what a window attaches to a session (see newTab in app.js).

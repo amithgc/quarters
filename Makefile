@@ -38,7 +38,7 @@ lint: ## gofmt, go vet and staticcheck
 	@test -z "$$(gofmt -l .)" || (gofmt -l . && echo "run: make fmt" && exit 1)
 	go vet ./...
 	go run honnef.co/go/tools/cmd/staticcheck@latest ./...
-	node --check frontend/dist/app.js && node --check frontend/dist/layout.js && node --check frontend/dist/remote.js && node --check frontend/dist/sw.js
+	node --check frontend/dist/app.js && node --check frontend/dist/layout.js && node --check frontend/dist/remote.js && node --check frontend/dist/sw.js && for f in frontend/dist/ui/*.js; do node --check $$f || exit 1; done
 
 fmt: ## format the Go code
 	gofmt -w .

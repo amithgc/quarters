@@ -31,11 +31,11 @@ const state = {
   left: DEFAULT_LEFT,
   right: DEFAULT_RIGHT,
   showLeft: true,
+  beforeFocus: null, // focus mode: which panels were showing
   showRight: true,
   stats: null,
   statsPath: null,
   account: null,
-  openSec: { mcp: true, skills: false }, // stats sections unfolded
   collapsed: new Set(), // folded project groups
   tokenView: "session",
   fontSize: Number(localStorage.getItem(FONT_KEY)) || defaultFontSize(),
@@ -46,6 +46,9 @@ const state = {
   tools: {}, // path -> { skills, mcp, at }
   links: [], // dev servers the terminals mentioned
   palette: { open: false, sel: 0, matches: [] },
+  queues: {}, // session id -> prompts waiting to be sent
+  usage: null, // tokens per project (Usage)
+  instructions: {}, // path -> { files, notes, at }
 };
 
 const darkTheme = {
@@ -72,14 +75,56 @@ const lightTheme = {
   brightBlue: "#3F82E0", brightMagenta: "#9466E6", brightCyan: "#24A0A5", brightWhite: "#24232A",
 };
 
-// The terminals follow macOS light / dark mode, like the rest of the window.
+// The window and its terminals follow macOS light / dark mode, unless
+// Settings → Appearance picks one (on this device only).
+const THEME_KEY = "quarters.theme";
 const lightMode = matchMedia("(prefers-color-scheme: light)");
-const termTheme = () => (lightMode.matches ? lightTheme : darkTheme);
-lightMode.addEventListener("change", () => {
+let theme = "system";
+try {
+  theme = localStorage.getItem(THEME_KEY) || "system";
+} catch {}
+const isLight = () => theme === "light" || (theme === "system" && lightMode.matches);
+const termTheme = () => (isLight() ? lightTheme : darkTheme);
+
+function applyTheme() {
+  const root = document.documentElement;
+  if (theme === "system") delete root.dataset.theme;
+  else root.dataset.theme = theme;
+  // the browser's own bar (phones, installed web app) takes the same colour
+  for (const m of document.querySelectorAll('meta[name="theme-color"]')) {
+    m.dataset.media ??= m.getAttribute("media");
+    const forDark = m.dataset.media.includes("dark");
+    m.setAttribute("media", theme === "system" ? m.dataset.media : (theme === "dark") === forDark ? "all" : "not all");
+  }
   for (const list of Object.values(state.tabs)) for (const t of list) t.term.options.theme = termTheme();
-});
+  if (state.projects.length) renderTabs(); // project colours are lighter or darker
+}
+
+function setTheme(v) {
+  theme = ["light", "dark"].includes(v) ? v : "system";
+  try {
+    localStorage.setItem(THEME_KEY, theme);
+  } catch {}
+  applyTheme();
+}
+lightMode.addEventListener("change", applyTheme);
+applyTheme();
 
 // ---------- helpers ----------
+
+// setText and setHTML change an element only when the content differs:
+// writing the same text again still makes the browser lay the page out.
+function setText(el, text) {
+  text = String(text);
+  if (el && el.textContent !== text) el.textContent = text;
+}
+
+function setHTML(el, html) {
+  if (el && el.dataset.html !== html) {
+    el.innerHTML = html;
+    el.dataset.html = html;
+  }
+}
 
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 
@@ -173,13 +218,29 @@ function loadIcon(path, then) {
     .finally(then || (() => { renderProjects(); renderTitle(); if (!activeTab()) renderStart(project(state.current)); }));
 }
 
-// A letter tile in a colour picked from the name, for projects without an icon.
-function monogram(name) {
+function nameHue(name) {
   let h = 0;
   for (const ch of name) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
-  const letter = ([...name.replace(/[^\p{L}\p{N}]/gu, "")][0] || "?").toUpperCase();
-  return `<span class="picon mono" style="background:hsl(${h % 360} 38% 42%)">${esc(letter)}</span>`;
+  return h % 360;
 }
+
+// A letter tile in a colour picked from the name, for projects without an icon.
+function monogram(name) {
+  const letter = ([...name.replace(/[^\p{L}\p{N}]/gu, "")][0] || "?").toUpperCase();
+  return `<span class="picon mono" style="background:hsl(${nameHue(name)} 38% 42%)">${esc(letter)}</span>`;
+}
+
+// A project's colour marks its tabs and the terminal's frame, so windows
+// are told apart at a glance: the one chosen (✎ edit project), else the
+// hue of its letter tile.
+function projectColor(p) {
+  if (!p) return "";
+  if (p.color === "accent") return "var(--accent)";
+  if (p.color) return p.color;
+  return `hsl(${nameHue(p.name)} 50% ${isLight() ? 44 : 66}%)`;
+}
+
+const PROJECT_COLORS = ["#e0605a", "#e5b454", "#7cc48a", "#5fbfc2", "#6f9cf0", "#a98bf2", "#e27fb1", "#9c9aa8"];
 
 function iconHTML(p) {
   if (p.icon) {
@@ -425,17 +486,7 @@ async function newTab(path, kind = "claude", opts = {}) {
   showActive();
 
   term.open(body);
-  // Phones and tablets draw with the DOM renderer: dependable in mobile
-  // browsers and lighter on the battery than WebGL.
-  if (!isTouch()) {
-    try {
-      const gl = new WebglAddon();
-      gl.onContextLoss(() => gl.dispose());
-      term.loadAddon(gl);
-    } catch {
-      /* falls back to the DOM renderer */
-    }
-  }
+  if (el.classList.contains("active")) useGL(tab);
   fitTab(tab);
   // Phones: no AutoFill bar (passwords, cards) over the keyboard.
   term.textarea?.setAttribute("autocomplete", "off");
@@ -591,6 +642,8 @@ function applySessionView() {
 // updateSend makes the card's button ■ (stop) while the agent works and
 // nothing is typed, ↑ (send) otherwise.
 function updateSend(tab = activeTab()) {
+  const later = !!tab && !tab.exited && !mirrors(tab) && tabStatus(tab) === "busy" && !!$("#compose-text").value.trim() && on("prompt_queue");
+  $("#compose-later").classList.toggle("hidden", !later);
   const stop = !!tab && !tab.exited && !mirrors(tab) && tabStatus(tab) === "busy" && !$("#compose-text").value;
   const b = $("#compose-send");
   if (b.dataset.stop === String(stop)) return;
@@ -776,6 +829,7 @@ async function syncSessions(reconnect) {
       if (info.exited && !t.exited) markExited(t, info.code);
     }
   }
+  await loadQueues();
   showActive();
   render();
 }
@@ -793,6 +847,7 @@ function closeTab(tab, silent, gone) {
   if (tab.id && !gone) Go().CloseSession(tab.id);
   delete state.byId[tab.id];
   delete state.byKey[tab.key];
+  dropGL(tab);
   tab.term.dispose();
   tab.el.remove();
   list.splice(i, 1);
@@ -861,6 +916,42 @@ function gridFor(layout, n) {
   return [cols, Math.ceil(n / cols)];
 }
 
+// A terminal drawn with WebGL holds a GPU context, and WebKit allows about
+// 16: past that it takes the oldest one away, and that terminal draws with
+// the much slower DOM renderer from then on. So only the terminals on
+// screen, and the few shown most recently (switching back stays instant),
+// keep one. Phones and tablets always use the DOM renderer: dependable in
+// mobile browsers and lighter on the battery.
+const GL_KEEP = 6;
+let glTabs = []; // tabs drawn with WebGL, the most recently shown last
+
+function useGL(tab) {
+  if (isTouch() || !tab.term.element) return;
+  glTabs = glTabs.filter((t) => t !== tab).concat(tab);
+  if (!tab.gl) {
+    try {
+      const gl = new WebglAddon();
+      gl.onContextLoss(() => dropGL(tab));
+      tab.term.loadAddon(gl);
+      tab.gl = gl;
+    } catch {
+      /* falls back to the DOM renderer */
+    }
+  }
+  for (const t of glTabs.slice(0, Math.max(0, glTabs.length - GL_KEEP)))
+    if (!t.el.classList.contains("active")) dropGL(t);
+}
+
+function dropGL(tab) {
+  glTabs = glTabs.filter((t) => t !== tab);
+  if (!tab.gl) return;
+  const gl = tab.gl;
+  tab.gl = null;
+  try {
+    gl.dispose();
+  } catch {}
+}
+
 function showActive() {
   const cur = activeTab();
   const panes = isSplit(cur) ? tabsOf(cur.path).filter((t) => t.group === cur.group) : cur ? [cur] : [];
@@ -878,6 +969,7 @@ function showActive() {
   const start = !cur && state.current ? project(state.current) : null;
   $("#welcome").classList.toggle("hidden", !!cur || !!start);
   renderStart(start);
+  for (const t of panes) useGL(t);
   if (cur) {
     requestAnimationFrame(() => {
       for (const t of panes) {
@@ -1121,8 +1213,10 @@ function checkAttention() {
       if (t.workStart && now - t.workLast >= QUIET_MS) {
         const worked = t.workLast - t.workStart >= WORK_MS;
         t.workStart = 0;
-        if (worked && !t.exited && !tabSeen(t)) {
+        // with prompts queued it isn't your turn yet: the next one goes in
+        if (worked && !t.exited && !tabSeen(t) && !(state.queues[t.id] || []).length) {
           t.unseen = true;
+          t.doneAt = t.workLast;
           const p = project(t.path);
           Go().Notify(`${p ? p.name : shortAgent(t.harness)} · your turn`, t.title || `${agentName(t.harness)} is waiting for you`, tabKey(t));
         }
@@ -1151,6 +1245,11 @@ function openNotifiedTab(key) {
 // ---------- events from Go ----------
 
 function wireEvents() {
+  rt().EventsOn("queue", (q) => {
+    if (q.items && q.items.length) state.queues[q.id] = q.items;
+    else delete state.queues[q.id];
+    renderStats();
+  });
   rt().EventsOn("pty:data", (chunk) => {
     const tab = state.byId[chunk.id];
     if (!tab) return;
@@ -1187,6 +1286,7 @@ function wireEvents() {
   rt().EventsOn("menu", onMenu);
   rt().EventsOn("settings", loadSettings);
   rt().EventsOn("links", refreshLinks);
+  rt().EventsOn("projects", loadProjects);
   rt().EventsOn("restore:done", () => renderRestore([]));
 }
 
@@ -1264,10 +1364,12 @@ function onMenu(action) {
       break;
     case "toggle-left":
       state.showLeft = !state.showLeft;
+      state.beforeFocus = null;
       applyLayout();
       break;
     case "toggle-right":
       state.showRight = !state.showRight;
+      state.beforeFocus = null;
       applyLayout();
       break;
     case "font-up":
@@ -1279,8 +1381,29 @@ function onMenu(action) {
     case "shortcuts":
       openShortcuts();
       break;
+    case "next-waiting":
+      nextWaiting();
+      break;
+    case "usage":
+      if (on("usage")) openUsage();
+      break;
     case "font-reset":
       setFontSize(defaultFontSize());
+      break;
+    case "commands":
+      openPalette(">");
+      break;
+    case "focus-mode":
+      toggleFocusMode();
+      break;
+    case "theme-system":
+    case "theme-light":
+    case "theme-dark":
+      setTheme(action.slice(6));
+      break;
+    case "fold-sections":
+    case "unfold-sections":
+      for (const el of document.querySelectorAll("#stats .ps")) foldSection(el.dataset.ps, action === "fold-sections");
       break;
     default:
       if (action.startsWith("tab-")) selectEntry(Number(action.slice(4)) - 1);
@@ -1382,12 +1505,9 @@ function wireAutomations() {
 
 // ---------- add / edit project dialog ----------
 
-const dlg = { open: false, oldPath: "", autoName: true, icon: "", foundFor: "", autos: [] };
+const dlg = { open: false, oldPath: "", autoName: true, icon: "", color: "", foundFor: "", autos: [] };
 
 // ---- automations in the dialog ----
-
-const DAYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
-const LAYOUTS = [["grid", "grid"], ["columns", "side by side"], ["rows", "stacked"], ["tabs", "separate tabs"]];
 
 // What the dialog edits: each automation as written in config.json.
 function autosForDialog(p) {
@@ -1399,69 +1519,6 @@ function autosForDialog(p) {
   }));
 }
 
-function renderAutos() {
-  const opt = (a) => LAYOUTS.map(([v, l]) => `<option value="${v}"${a.layout === v ? " selected" : ""}>${l}</option>`).join("");
-  $("#pd-autos").innerHTML = dlg.autos
-    .map((a, i) => `<div class="auto-card" data-a="${i}">
-      <div class="ac-head">
-        <input type="text" class="ac-name" data-f="name" value="${esc(a.name)}" placeholder="name, e.g. Start dev" spellcheck="false">
-        <select data-f="layout" title="How the terminals are arranged">${opt(a)}</select>
-        <label class="ac-check" title="Run it by itself the first time you open the project"><input type="checkbox" data-f="auto"${a.auto ? " checked" : ""}> run on open</label>
-        <button class="ac-del" type="button" data-del-auto title="Delete this automation">✕</button>
-      </div>
-      <div class="ac-tabs">${a.tabs
-        .map((t, j) => `<div class="ac-tab" data-t="${j}">
-          <input type="text" class="t-name" data-f="name" value="${esc(t.name)}" placeholder="name" spellcheck="false">
-          <input type="text" class="t-dir" data-f="dir" value="${esc(t.dir)}" placeholder="folder (in project)" spellcheck="false">
-          <input type="text" class="t-cmd" data-f="command" value="${esc(t.command)}" placeholder="command, e.g. ./run.sh" spellcheck="false">
-          <button class="ac-del" type="button" data-del-tab title="Remove this terminal">✕</button></div>`)
-        .join("")}</div>
-      <div class="ac-foot"><button class="btn" type="button" data-add-tab>＋ terminal</button><span class="muted">empty command = plain shell · folder is relative to the project</span></div>
-      ${on("schedules") || a.at ? `<div class="ac-sched"><span class="muted">⏰ run by itself at</span>
-        <input type="time" data-f="at" value="${esc(a.at)}">
-        <span class="ac-days">${DAYS.map((d) => `<button type="button" class="chip${!a.days.length || a.days.includes(d) ? " on" : ""}" data-day="${d}">${d}</button>`).join("")}</span>
-        ${a.at ? '<button type="button" class="ac-del" data-clear-at title="No schedule">✕</button>' : ""}</div>` : ""}
-    </div>`)
-    .join("");
-}
-
-function wireAutosEditor() {
-  const box = $("#pd-autos");
-  const update = (e) => {
-    const card = e.target.closest("[data-a]"), f = e.target.dataset.f;
-    if (!card || !f) return;
-    const a = dlg.autos[Number(card.dataset.a)];
-    const row = e.target.closest("[data-t]");
-    if (row) a.tabs[Number(row.dataset.t)][f] = e.target.value;
-    else a[f] = e.target.type === "checkbox" ? e.target.checked : e.target.value;
-  };
-  box.addEventListener("input", update);
-  box.addEventListener("change", update);
-  box.addEventListener("click", (e) => {
-    const card = e.target.closest("[data-a]");
-    if (!card) return;
-    const i = Number(card.dataset.a), a = dlg.autos[i];
-    if (e.target.closest("[data-del-auto]")) dlg.autos.splice(i, 1);
-    else if (e.target.closest("[data-del-tab]")) a.tabs.splice(Number(e.target.closest("[data-t]").dataset.t), 1);
-    else if (e.target.closest("[data-add-tab]")) a.tabs.push({ name: "", dir: "", command: "" });
-    else if (e.target.closest("[data-clear-at]")) a.at = "";
-    else if (e.target.closest("[data-day]")) {
-      const d = e.target.closest("[data-day]").dataset.day;
-      const set = new Set(a.days.length ? a.days : DAYS);
-      set.has(d) ? set.delete(d) : set.add(d);
-      a.days = set.size === DAYS.length ? [] : DAYS.filter((x) => set.has(x));
-      if (!set.size) a.days = []; // never "no day": back to every day
-    } else return;
-    renderAutos();
-    if (e.target.closest("[data-add-tab]")) box.querySelector(`[data-a="${i}"] .ac-tab:last-child .t-name`)?.focus();
-  });
-  $("#pd-auto-add").addEventListener("click", () => {
-    dlg.autos.push({ name: "", layout: "grid", auto: false, cols: null, rows: null, at: "", days: [], was: "", tabs: [{ name: "", dir: "", command: "" }] });
-    renderAutos();
-    box.querySelector(".auto-card:last-child .ac-name")?.focus();
-  });
-}
-
 // The automations to save; pane sizes are dropped when the grid changed.
 function autosToSave(list = dlg.autos) {
   return list.map((a) => {
@@ -1471,198 +1528,13 @@ function autosToSave(list = dlg.autos) {
   });
 }
 
-function renderIconField() {
-  const prev = $("#pd-icon-preview");
-  const name = $("#pd-name").value.trim() || baseName($("#pd-path").value.trim()) || "?";
-  if (dlg.icon) {
-    loadIcon(dlg.icon, renderIconField);
-    prev.innerHTML = iconData[dlg.icon] ? `<img class="picon" src="${iconData[dlg.icon]}" alt="">` : iconData[dlg.icon] === null ? '<span class="red">✕</span>' : "";
-  } else prev.innerHTML = monogram(name);
-  $("#pd-icon-clear").classList.toggle("hidden", !dlg.icon);
-  document.querySelectorAll("#pd-icon-found button").forEach((b) => b.classList.toggle("on", b.dataset.icon === dlg.icon));
-}
-
-// Suggest favicons / app icons found in the chosen folder.
-async function findIcons() {
-  const path = $("#pd-path").value.trim();
-  if (!path || path === dlg.foundFor) return;
-  dlg.foundFor = path;
-  const box = $("#pd-icon-found");
-  box.innerHTML = "";
-  const found = (await Go().FindIcons(path).catch(() => [])) || [];
-  if (path !== $("#pd-path").value.trim()) return;
-  for (const f of found) loadIcon(f, () => showFound(found));
-  showFound(found);
-}
-
-function showFound(found) {
-  const ready = found.filter((f) => iconData[f]);
-  $("#pd-icon-found").innerHTML = ready.length
-    ? ready.map((f) => `<button type="button" data-icon="${esc(f)}" title="${esc(f)}"><img src="${iconData[f]}" alt=""></button>`).join("") +
-      '<span class="hint">found in the folder — click to use</span>'
-    : "";
-  renderIconField();
-}
-
 // harnessOptions lists the coding agents for a <select>, marking the ones
 // this machine doesn't have.
 function harnessOptions() {
   return (state.settings?.harnesses || []).map((h) => `<option value="${esc(h.id)}">${esc(h.name)}${h.installed ? "" : " (not installed)"}</option>`).join("");
 }
 
-function openProjectDialog(p) {
-  dlg.open = true;
-  dlg.oldPath = p ? p.path : "";
-  dlg.autoName = !p;
-  $("#pd-title").textContent = p ? "EDIT PROJECT" : "ADD PROJECT";
-  $("#pd-save").textContent = p ? "Save" : "Add project";
-  $("#pd-remove").classList.toggle("hidden", !p);
-  $("#pd-path").value = p ? p.path : "";
-  $("#pd-name").value = p ? p.name : "";
-  $("#pd-group").value = p ? p.group : "";
-  $("#pd-yolo").value = p ? p.yolo || "" : "";
-  $("#pd-yolo").disabled = REMOTE; // only changed on the Mac
-  const def = agentName(state.settings?.harness);
-  $("#pd-harness").innerHTML = `<option value="">as in Settings (${esc(def)})</option>` + harnessOptions();
-  $("#pd-harness").value = p ? p.harness || "" : "";
-  $("#pd-harness").disabled = REMOTE;
-  $("#pd-error").textContent = "";
-  dlg.icon = p ? p.icon || "" : "";
-  dlg.autos = autosForDialog(p);
-  renderAutos();
-  dlg.foundFor = "";
-  $("#pd-icon-found").innerHTML = "";
-  renderIconField();
-  if (p) findIcons();
-  renderGroupChips();
-  $("#proj-dialog").classList.remove("hidden");
-  (p ? $("#pd-name") : $("#pd-path")).focus();
-  if (!p) browseFolder(); // adding starts with the folder picker
-}
-
-function closeProjectDialog() {
-  dlg.open = false;
-  $("#proj-dialog").classList.add("hidden");
-  if (state.focus === "terminal") activeTab()?.term.focus();
-}
-
-function renderGroupChips() {
-  const groups = [...new Set(state.projects.map((p) => p.group).filter(Boolean))];
-  const cur = $("#pd-group").value.trim();
-  $("#pd-groups").innerHTML = groups
-    .map((g) => `<button class="chip${g === cur ? " on" : ""}" type="button" data-group="${esc(g)}">${esc(g)}</button>`)
-    .join("");
-}
-
 const baseName = (path) => path.replace(/\/+$/, "").split("/").pop() || "";
-
-async function browseFolder() {
-  try {
-    const dir = await Go().ChooseFolder($("#pd-path").value.trim());
-    if (!dir) return;
-    $("#pd-path").value = dir;
-    if (dlg.autoName || !$("#pd-name").value.trim()) $("#pd-name").value = baseName(dir);
-    findIcons();
-    renderIconField();
-    $("#pd-error").textContent = "";
-    $("#pd-name").focus();
-    $("#pd-name").select();
-  } catch (e) {
-    $("#pd-error").textContent = String(e);
-  }
-}
-
-async function saveProjectDialog() {
-  try {
-    const full = await Go().SaveProject(dlg.oldPath, $("#pd-name").value, $("#pd-path").value, $("#pd-group").value, dlg.icon, autosToSave(), $("#pd-yolo").value, $("#pd-harness").value);
-    const was = dlg.oldPath;
-    closeProjectDialog();
-    // An edited path moves its open tabs along with it.
-    if (was && was !== full && state.tabs[was]) {
-      state.tabs[full] = state.tabs[was];
-      state.active[full] = state.active[was];
-      delete state.tabs[was];
-      for (const t of state.tabs[full]) t.path = full;
-      if (state.current === was) state.current = full;
-    }
-    await loadProjects();
-    state.selected = full;
-    render();
-    flash(was ? "project saved" : `added ${baseName(full)}`);
-  } catch (e) {
-    $("#pd-error").textContent = String(e);
-  }
-}
-
-async function removeProjectDialog() {
-  const p = project(dlg.oldPath);
-  if (!p) return closeProjectDialog();
-  const open = tabsOf(p.path).filter((t) => !t.exited).length;
-  const msg = `${p.name} will be removed from the list (the folder itself is not touched).` + (open ? ` Its ${open} open tab(s) will be closed.` : "");
-  if (!(await Go().Confirm("Remove project?", msg, "Remove"))) return;
-  try {
-    await Go().RemoveProject(p.path);
-    for (const t of [...tabsOf(p.path)]) closeTab(t, true);
-    if (state.current === p.path) state.current = null;
-    closeProjectDialog();
-    await loadProjects();
-    showActive();
-    render();
-    flash(`removed ${p.name}`);
-  } catch (e) {
-    $("#pd-error").textContent = String(e);
-  }
-}
-
-function wireProjectDialog() {
-  wireAutosEditor();
-  $("#proj-form").addEventListener("submit", (e) => {
-    e.preventDefault();
-    saveProjectDialog();
-  });
-  $("#pd-browse").addEventListener("click", browseFolder);
-  $("#pd-cancel").addEventListener("click", closeProjectDialog);
-  $("#pd-remove").addEventListener("click", removeProjectDialog);
-  $("#pd-name").addEventListener("input", () => {
-    dlg.autoName = !$("#pd-name").value.trim();
-    renderIconField();
-  });
-  $("#pd-path").addEventListener("change", findIcons);
-  $("#pd-icon-choose").addEventListener("click", async () => {
-    try {
-      const f = await Go().ChooseIcon($("#pd-path").value.trim());
-      if (f) {
-        dlg.icon = f;
-        renderIconField();
-      }
-    } catch (e) {
-      $("#pd-error").textContent = String(e);
-    }
-  });
-  $("#pd-icon-clear").addEventListener("click", () => {
-    dlg.icon = "";
-    renderIconField();
-  });
-  $("#pd-icon-found").addEventListener("click", (e) => {
-    const b = e.target.closest("[data-icon]");
-    if (!b) return;
-    dlg.icon = dlg.icon === b.dataset.icon ? "" : b.dataset.icon;
-    renderIconField();
-  });
-  $("#pd-group").addEventListener("input", renderGroupChips);
-  $("#pd-groups").addEventListener("click", (e) => {
-    const g = e.target.closest("[data-group]")?.dataset.group;
-    if (g == null) return;
-    $("#pd-group").value = $("#pd-group").value.trim() === g ? "" : g;
-    renderGroupChips();
-  });
-  $("#proj-dialog").addEventListener("keydown", (e) => {
-    if (e.key === "Escape") closeProjectDialog();
-  });
-  $("#proj-dialog").addEventListener("mousedown", (e) => {
-    if (e.target.id === "proj-dialog") closeProjectDialog();
-  });
-}
 
 // ---------- layout + resizing ----------
 
@@ -1673,7 +1545,22 @@ function applyLayout() {
   r.setProperty("--right", state.right + "px");
   main.classList.toggle("no-left", !state.showLeft);
   main.classList.toggle("no-right", !state.showRight);
+  document.body.classList.toggle("focus-mode", !!state.beforeFocus);
   fitActive();
+}
+
+// Focus mode: only the terminal, both panels and the hints bar hidden; the
+// same key brings back what was showing.
+function toggleFocusMode() {
+  if (state.beforeFocus) {
+    ({ left: state.showLeft, right: state.showRight } = state.beforeFocus);
+    state.beforeFocus = null;
+  } else {
+    state.beforeFocus = { left: state.showLeft, right: state.showRight };
+    state.showLeft = state.showRight = false;
+    flash("focus mode · ⇧⌘↵ to bring the panels back");
+  }
+  applyLayout();
 }
 
 let fitPending = false;
@@ -1741,15 +1628,11 @@ function render() {
 // sessions: working ones first, then those waiting for you.
 function renderActiveList() {
   const el = $("#active-list");
-  const rank = { busy: 0, waiting: 1 };
-  const live = orderedProjects()
-    .map((p) => ({ p, st: projectStatus(p.path), n: tabsOf(p.path).filter((t) => !t.exited).length }))
-    .filter((x) => x.st !== "idle")
-    .sort((a, b) => rank[a.st] - rank[b.st]);
+  const live = activeProjects(orderedProjects()).map((p) => ({ p, st: projectStatus(p.path), w: waitingIn(p.path), n: tabsOf(p.path).filter((t) => !t.exited).length }));
   const html = live.length
     ? `<div class="al-head muted">Active now · ${live.length}</div>` +
-      live.map(({ p, st, n }) => `<button type="button" class="al-row" data-open="${esc(p.path)}">${iconHTML(p)}<span class="al-name">${esc(p.name)}</span>
-        <span class="al-st">${STATUS_ICON[st]} ${st === "busy" ? "working" : "waiting for you"}${n > 1 ? ` · ${n} tabs` : ""}</span></button>`).join("")
+      live.map(({ p, st, w, n }) => `<button type="button" class="al-row${w ? " attn" : ""}" data-open="${esc(p.path)}">${iconHTML(p)}<span class="al-name">${esc(p.name)}</span>
+        <span class="al-st">${w ? `${STATUS_ICON.waiting} ${waitLabel(w)}` : `${STATUS_ICON[st]} ${st === "busy" ? "working" : "your turn"}`}${n > 1 ? ` · ${n} tabs` : ""}</span></button>`).join("")
     : "";
   if (el.dataset.html === html) return;
   el.dataset.html = html;
@@ -1760,33 +1643,29 @@ function renderActiveList() {
 function renderTitle() {
   const path = state.current || state.selected;
   const p = project(path);
-  $("#tb-name").textContent = p ? p.name : "";
+  setText($("#tb-name"), p ? p.name : "");
   const ic = p ? iconHTML(p) : "";
   if ($("#tb-icon").dataset.html !== ic) {
     $("#tb-icon").innerHTML = ic;
     $("#tb-icon").dataset.html = ic;
   }
-  $("#tb-path").textContent = p ? p.shortPath : "";
+  setText($("#tb-path"), p ? p.shortPath : "");
   // phones: what the tab you're looking at is doing, under the title
   const cur = activeTab();
   const st = cur && tabStatus(cur);
   const what = cur ? cur.fixedTitle || cur.title || (cur.kind === "shell" ? "shell" : shortAgent(cur.harness)) : "";
   const doing = { busy: "working", waiting: cur && (cur.kind === "shell" || cur.autoKey) ? "ready" : "your turn", ended: "ended" }[st] || "";
-  $("#tb-sub").textContent = cur ? `${what} · ${doing}` : p ? `press C to start ${shortAgent(p.agent)}` : "";
-  let busy = 0, waiting = 0;
-  for (const list of Object.values(state.tabs))
-    for (const t of list) {
-      const s = tabStatus(t);
-      if (s === "busy") busy++;
-      else if (s === "waiting") waiting++;
-    }
+  setText($("#tb-sub"), cur ? `${what} · ${doing}` : p ? `press C to start ${shortAgent(p.agent)}` : "");
+  let busy = 0;
+  for (const list of Object.values(state.tabs)) for (const t of list) if (tabStatus(t) === "busy") busy++;
+  const waiting = waitingTabs().length;
   const r = $("#tb-running"), w = $("#tb-waiting");
   r.classList.toggle("hidden", !busy);
   w.classList.toggle("hidden", !waiting);
-  r.children[1].textContent = busy;
-  w.children[1].textContent = waiting;
+  setText(r.children[1], busy);
+  setText(w.children[1], waiting);
   const now = new Date();
-  $("#tb-clock").textContent = `${now.toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" })} · ${now.toLocaleTimeString([], { hour: "numeric", minute: "2-digit", hour12: true })}`;
+  setText($("#tb-clock"), `${now.toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" })} · ${now.toLocaleTimeString([], { hour: "numeric", minute: "2-digit", hour12: true })}`);
 }
 
 // Projects in list order: each group gathered together, groups in the order they first appear in config.json.
@@ -1809,17 +1688,19 @@ function visibleProjects() {
 }
 
 let lastProjectsHTML = "";
-function projectRow(p, pos, filtering, live) {
+// quiet: the row is also in ACTIVE above, which shows its status
+function projectRow(p, pos, filtering, live, quiet) {
   const sel = p.path === state.selected;
   const st = projectStatus(p.path);
   const n = tabsOf(p.path).length;
   const gitBits = p.git ? `${p.dirty ? ` <span class="yellow gitn" title="${p.dirty} changed file${p.dirty === 1 ? "" : "s"}"><i>●</i>${p.dirty}</span>` : ""}${p.ahead ? ` <span class="green gitn" title="${p.ahead} commit(s) to push"><i>↑</i>${p.ahead}</span>` : ""}${p.behind ? ` <span class="red gitn" title="${p.behind} commit(s) to pull"><i>↓</i>${p.behind}</span>` : ""}` : "";
-  const rc = tabsOf(p.path).some((t) => rcOn(t));
+  const rc = !quiet && tabsOf(p.path).some((t) => rcOn(t));
   const branch = p.missing ? "folder missing" : p.branch ? `⎇ ${esc(p.branch)}${gitBits}` : esc(p.shortPath);
+  const wait = live && waitingIn(p.path);
   const attn = tabsOf(p.path).some((t) => t.unseen);
   return `<div class="proj${sel ? " selected" : ""}${attn ? " attn" : ""}${p.path === state.current ? " current" : ""}${p.missing ? " missing" : ""}" data-path="${esc(p.path)}" data-raw="${esc(p.group || "")}"${filtering || live ? "" : ' draggable="true"'} role="button" tabindex="-1" title="${esc(p.path)}">
     <span class="l1"><span class="name"><span class="marker">${sel ? "▸" : ""}</span>${iconHTML(p)}<span class="nm">${pos.length ? highlight(p.name, pos) : esc(p.name)}</span></span>
-      <span class="status">${rc ? `<span class="rc-ic" title="Claude Remote Control: continue in claude.ai/code or the Claude app">${RC_ICON}</span>` : ""}${(p.automations || []).some((a) => autoRunning(p.path, a)) ? '<span class="tabs-count green" title="An automation is running">▶</span>' : ""}${n > 1 ? `<span class="tabs-count">${n}×</span>` : ""}${STATUS_ICON[st]}</span></span>
+      <span class="status">${wait ? `<span class="wait-age" title="${esc(shortAgent(wait.harness))} ${asking(wait) ? "is asking you something" : "finished"} ${fmtAgo(wait.doneAt) === "now" ? "just now" : fmtAgo(wait.doneAt) + " ago"}">${asking(wait) ? "?" : ""}${fmtAgo(wait.doneAt)}</span>` : ""}${rc ? `<span class="rc-ic" title="Claude Remote Control: continue in claude.ai/code or the Claude app">${RC_ICON}</span>` : ""}${!quiet && (p.automations || []).some((a) => autoRunning(p.path, a)) ? '<span class="tabs-count green" title="An automation is running">▶</span>' : ""}${!quiet && n > 1 ? `<span class="tabs-count">${n}×</span>` : ""}${quiet || st === "idle" ? "" : STATUS_ICON[st]}</span></span>
     <span class="l2"><span class="branch">${branch}</span><span>${fmtAgo(p.lastActive)}</span></span>
     <span class="actions">
       ${(p.automations || []).length ? `<button class="act act-auto" type="button" data-act="auto" title="Automations">▶</button>` : ""}
@@ -1840,7 +1721,7 @@ const ACTIVE_GROUP = "\u2605active";
 
 function renderProjects() {
   const vis = visibleProjects();
-  $("#project-count").textContent = state.projects.length;
+  setText($("#project-count"), state.projects.length);
   let html = "";
   if (!state.projects.length) {
     html = `<div class="empty">No projects yet.<br><br>Press <b>⌘O</b> to add a folder, or <b>⌘,</b> to edit<br><span class="soft">${esc("~/.config/quarters/config.json")}</span></div>`;
@@ -1850,14 +1731,15 @@ function renderProjects() {
   let group = null;
   const grouped = state.projects.some((p) => p.group);
   const filtering = !!$("#filter").value.trim();
-  // ACTIVE: projects with open sessions, working ones first (they also stay in their group)
-  const rank = { busy: 0, waiting: 1 };
-  const live = filtering ? [] : state.projects.filter((p) => projectStatus(p.path) !== "idle").sort((a, b) => rank[projectStatus(a.path)] - rank[projectStatus(b.path)]);
+  // ACTIVE: projects with open sessions, those waiting for you first (they
+  // also stay in their group, where their status isn't said twice)
+  const live = filtering ? [] : activeProjects(state.projects);
+  const shownLive = new Set(state.collapsed.has(ACTIVE_GROUP) ? [] : live.map((p) => p.path));
   if (live.length) {
     const folded = state.collapsed.has(ACTIVE_GROUP);
     const gst = live.some((p) => projectStatus(p.path) === "busy") ? STATUS_ICON.busy : STATUS_ICON.waiting;
     html += `<div class="active-sec"><button class="group active-head${folded ? " folded" : ""}" type="button" data-group="${ACTIVE_GROUP}" title="${folded ? "Expand" : "Collapse"}">
-      <span class="chev">▾</span>ACTIVE ${gst}<span class="gcount">${live.length}</span></button>`;
+      <span class="chev">▾</span>ACTIVE${folded ? ` <span class="gstat">${gst}</span>` : ""}<span class="gcount">${live.length}</span></button>`;
     if (!folded) for (const p of live) html += projectRow(p, [], false, true);
     html += `</div>`;
   }
@@ -1873,7 +1755,7 @@ function renderProjects() {
         <span class="chev">▾</span>${esc(g)}${folded && gst ? ` <span class="gstat">${gst}</span>` : ""}<span class="gcount">${members.length}</span></button>`;
     }
     if (grouped && !filtering && state.collapsed.has(g)) continue;
-    html += projectRow(p, pos, filtering, false);
+    html += projectRow(p, pos, filtering, false, shownLive.has(p.path));
   }
   if (html !== lastProjectsHTML && !projDrag.path) {
     lastProjectsHTML = html;
@@ -1881,7 +1763,10 @@ function renderProjects() {
   }
 }
 
+let shownColor = "";
 function renderTabs() {
+  const pc = projectColor(project(state.current)) || "var(--accent)";
+  if (pc !== shownColor) $("#center").style.setProperty("--pc", (shownColor = pc));
   document.body.classList.toggle("one-tab", tabsOf(state.current).length <= 1);
   if ($("#tab-list .tab-rename")) return; // don't wipe a rename in progress
   const cur = activeTab();
@@ -1907,7 +1792,7 @@ function renderTabs() {
     $("#tab-list").dataset.html = html;
   }
   // pane headers of split automations show each shell's status
-  for (const t of tabsOf(state.current)) if (t.head) t.head.querySelector(".pane-status").innerHTML = STATUS_ICON[tabStatus(t)];
+  for (const t of tabsOf(state.current)) if (t.head) setHTML(t.head.querySelector(".pane-status"), STATUS_ICON[tabStatus(t)]);
   // on a phone a split automation shows one pane at a time; these switch between them
   const panes = isSplit(cur) ? tabsOf(cur.path).filter((t) => t.group === cur.group) : [];
   const pb = panes.length > 1
@@ -1919,7 +1804,7 @@ function renderTabs() {
   }
   const p = project(state.current);
   // the marks keep the path in order while the right-to-left box cuts it from the start
-  $("#tab-path").textContent = p ? `\u200E${p.shortPath}\u200E` : "";
+  setText($("#tab-path"), p ? `\u200E${p.shortPath}\u200E` : "");
   $("#btn-new-tab").classList.toggle("hidden", !state.current && !state.selected);
   $("#btn-new-shell").classList.toggle("hidden", !state.current && !state.selected);
   const ap = project(state.current || state.selected);
@@ -1975,27 +1860,25 @@ function renderStats(force) {
   const other = cur && cur.path === path && !mirrors(cur) ? !isClaude(cur) : !!p && p.agent !== "claude";
   const otherId = other ? (cur && cur.path === path && !mirrors(cur) ? cur.harness : p.agent) : "";
   const otherName = other ? agentName(otherId) : "";
-  const plan = other ? renderAgentPlan(otherId) : renderPlan() + renderClaudeRemote();
+  const plan = other ? sec("plan", renderAgentPlan(otherId)) : sec("plan", renderPlan()) + renderClaudeRemote();
   if (!path || !s) {
-    const h = plan + `<div class="sec-row"><span class="panel-title">SESSION</span></div><div class="muted">Select a project.</div>`;
-    if (el.dataset.html !== h) {
-      el.dataset.html = h;
-      el.innerHTML = h;
-    }
+    setHTML(el, plan + sec("session", `<div class="sec-row"><span class="sec">SESSION</span></div><div class="muted">Select a project.</div>`));
+    renderPanelNav();
     return;
   }
   const live = tabsOf(path).some((t) => !t.exited);
   const state_ = live ? '<span class="green">● live</span>' : s.has ? `<span class="muted">last ${fmtAgo(s.last)}</span>` : '<span class="muted">○ none yet</span>';
-  let h = plan + renderPanelAgent(path) + renderPanelAutomations(path) + `<div class="sec-row"><span class="panel-title">SESSION</span>${state_}</div>`;
-  if (cur && cur.path === path) h += `<button class="end-btn" type="button" data-end-tab title="Ends the session in this tab">${cur.exited ? "Close tab" : cur.kind === "shell" || cur.autoKey ? "End this shell" : `End this ${esc(shortAgent(cur.harness))} session`}</button>`;
+  let h = plan + sec("agent", renderPanelAgent(path)) + sec("automations", renderPanelAutomations(path));
+  let ss = `<div class="sec-row"><span class="sec">SESSION</span>${state_}</div>`;
+  if (cur && cur.path === path) ss += `<button class="end-btn" type="button" data-end-tab title="Ends the session in this tab">${cur.exited ? "Close tab" : cur.kind === "shell" || cur.autoKey ? "End this shell" : `End this ${esc(shortAgent(cur.harness))} session`}</button>`;
 
   if (other) {
-    h += `<div class="muted">${esc(otherName)} runs as it is here: its model, context and token use show in its own window, not in this panel.</div>`;
+    ss += `<div class="muted">${esc(otherName)} runs as it is here: its model, context and token use show in its own window, not in this panel.</div>`;
   } else if (s.has) {
-    if (s.title) h += `<div class="title-line" title="${esc(s.title)}">${esc(s.title)}</div>`;
+    if (s.title) ss += `<div class="title-line" title="${esc(s.title)}">${esc(s.title)}</div>`;
     const end = live ? Date.now() : s.last;
     const frac = s.window ? s.context / s.window : 0;
-    h += `<div class="kv">
+    ss += `<div class="kv">
       <div class="row"><span class="muted">model</span><span>${esc(prettyModel(s.model))}</span></div>
       <div class="row"><span class="muted">${end - s.start > 86400000 ? "started" : "elapsed"}</span><span>${end - s.start > 86400000 ? fmtAgo(s.start) + " ago" : fmtDuration(end - s.start)}</span></div>
       <div class="row"><span class="muted">mode</span><span class="violet">${esc(MODES[s.mode] ?? s.mode)}</span></div>
@@ -2004,16 +1887,18 @@ function renderStats(force) {
       <div class="row"><span class="muted">context</span><span>${fmtTokens(s.context)} / ${fmtTokens(s.window)}  <span class="accent">${Math.round(frac * 100)}%</span></span></div>
       <div class="meter${frac > 0.8 ? " hot" : ""}"><div style="width:${Math.min(100, frac * 100).toFixed(1)}%"></div></div></div>`;
   } else {
-    h += `<div class="muted">No Claude Code history in this folder yet.</div>`;
+    ss += `<div class="muted">No Claude Code history in this folder yet.</div>`;
   }
+  h += sec("session", ss);
+  if (cur && cur.path === path) h += sec("queue", renderPanelQueue(cur));
 
   // tokens
   if (!other) {
+    let t = "";
     const u = state.tokenView === "today" ? s.today : s.usage;
     const prompt = (u.Input || 0) + (u.CacheRead || 0) + (u.CacheWrite || 0);
     const hit = prompt ? Math.round((100 * (u.CacheRead || 0)) / prompt) : 0;
-    h += `<div class="divider"></div>
-      <div class="sec-row"><span class="sec">TOKENS</span>
+    t += `<div class="sec-row"><span class="sec">TOKENS</span>
         <span class="seg"><button type="button" data-view="session" class="${state.tokenView === "session" ? "on" : ""}">session</button><button type="button" data-view="today" class="${state.tokenView === "today" ? "on" : ""}">today</button></span></div>
       <div class="tiles">
         <div class="tile"><div class="t-label">input</div><div class="t-value">${fmtTokens(u.Input)}</div></div>
@@ -2021,12 +1906,12 @@ function renderStats(force) {
         <div class="tile"><div class="t-label">cache read</div><div class="t-value">${fmtTokens(u.CacheRead)}</div></div>
         <div class="tile"><div class="t-label">cache hit</div><div class="t-value green">${hit}%</div></div>
       </div>`;
-    if (state.tokenView === "today") h += `<div class="muted" style="margin-top:-6px;font-size:12px">${s.todaySessions} sessions today, all projects</div>`;
+    if (state.tokenView === "today") t += `<div class="muted" style="margin-top:-6px;font-size:12px">${s.todaySessions} sessions today, all projects</div>`;
 
     // activity
     const act = s.activity || [];
     const peak = Math.max(1, ...act);
-    h += `<div class="kv" style="gap:6px"><div class="row" style="font-size:12px"><span class="muted">tokens / 5 min</span><span class="muted">last 2h</span></div>
+    t += `<div class="kv" style="gap:6px"><div class="row" style="font-size:12px"><span class="muted">tokens / 5 min</span><span class="muted">last 2h</span></div>
       <div class="chart">${act
         .map((v, i) => {
           const cls = !v ? "zero" : i === act.length - 1 ? "now" : "";
@@ -2034,58 +1919,63 @@ function renderStats(force) {
           return `<div class="${cls}" style="height:${hgt}px" title="${fmtTokens(v)} tokens"></div>`;
         })
         .join("")}</div></div>`;
+    h += sec("tokens", t);
   }
+
+  h += sec("usage", renderPanelUsage(path));
 
   // git
   const g = s.git;
   if (g && g.IsRepo) {
     const sync = g.Ahead || g.Behind ? ` <span class="muted">↑${g.Ahead} ↓${g.Behind}</span>` : "";
-    h += `<div class="divider"></div><div class="sec-row"><span class="sec">GIT</span><span><span class="violet">⎇ ${esc(g.Branch)}</span>${sync}</span></div><div class="files">`;
+    let t = `<div class="sec-row"><span class="sec">GIT</span><span><span class="violet">⎇ ${esc(g.Branch)}</span>${sync}</span></div><div class="files">`;
     const files = g.Files || [];
-    if (!files.length) h += `<div class="green">✓ working tree clean</div>`;
+    if (!files.length) t += `<div class="green">✓ working tree clean</div>`;
     for (const f of files.slice(0, 8)) {
       const col = f.Status === "A" || f.Status === "??" ? "green" : f.Status === "D" ? "red" : "yellow";
       const diff = `${f.Added ? `<span class="green">+${f.Added}</span>` : ""}${f.Del ? ` <span class="red">−${f.Del}</span>` : ""}`;
       const st = f.Status === "??" ? "U" : f.Status;
       const cut = f.Path.replace(/\/$/, "").lastIndexOf("/");
       const dir = cut >= 0 ? f.Path.slice(0, cut + 1) : "", base = f.Path.slice(cut + 1);
-      h += `<button type="button" class="row file-row" data-diff="${esc(f.Path)}"><span class="path" title="${esc(f.Path)} — show changes"><span class="${col} st">${esc(st)}</span><span class="muted">${esc(dir)}</span>${esc(base)}</span><span>${diff}</span></button>`;
+      t += `<button type="button" class="row file-row" data-diff="${esc(f.Path)}"><span class="path" title="${esc(f.Path)} — show changes"><span class="${col} st">${esc(st)}</span><span class="muted">${esc(dir)}</span>${esc(base)}</span><span>${diff}</span></button>`;
     }
-    if (files.length > 8) h += `<div class="muted">+ ${files.length - 8} more</div>`;
-    h += `</div>`;
+    if (files.length > 8) t += `<div class="muted">+ ${files.length - 8} more</div>`;
+    h += sec("git", t + `</div>`);
   }
 
   // files Claude edited this session
   const edited = (s.edited || []).filter((f) => f.startsWith(path + "/")).map((f) => f.slice(path.length + 1));
   if (!other && on("changes") && edited.length) {
-    h += `<div class="divider"></div><div class="sec-row"><span class="sec">CLAUDE CHANGED</span><span class="muted" style="font-size:12px">${edited.length} file${edited.length === 1 ? "" : "s"} · tap for diff</span></div><div class="files">`;
+    let t = `<div class="sec-row"><span class="sec">CLAUDE CHANGED</span><span class="muted note">${edited.length} file${edited.length === 1 ? "" : "s"} · tap for diff</span></div><div class="files">`;
     for (const f of edited.slice(-12).reverse()) {
       const g = ((s.git && s.git.Files) || []).find((x) => x.Path === f);
       const cut = f.lastIndexOf("/");
       const diff = g ? `${g.Added ? `<span class="green">+${g.Added}</span>` : ""}${g.Del ? ` <span class="red">−${g.Del}</span>` : ""}${!g.Added && !g.Del ? `<span class="${g.Status === "??" ? "green" : "yellow"}">${g.Status === "??" ? "new" : esc(g.Status)}</span>` : ""}` : s.git && s.git.IsRepo ? '<span class="muted">committed</span>' : "";
-      h += `<button type="button" class="row file-row" data-diff="${esc(f)}"><span class="path" title="${esc(f)}"><span class="violet st">✎</span><span class="muted">${esc(cut >= 0 ? f.slice(0, cut + 1) : "")}</span>${esc(f.slice(cut + 1))}</span><span>${diff}</span></button>`;
+      t += `<button type="button" class="row file-row" data-diff="${esc(f)}"><span class="path" title="${esc(f)}"><span class="violet st">✎</span><span class="muted">${esc(cut >= 0 ? f.slice(0, cut + 1) : "")}</span>${esc(f.slice(cut + 1))}</span><span>${diff}</span></button>`;
     }
-    if (edited.length > 12) h += `<div class="muted">+ ${edited.length - 12} earlier</div>`;
-    h += `</div>`;
+    if (edited.length > 12) t += `<div class="muted">+ ${edited.length - 12} earlier</div>`;
+    h += sec("changed", t + `</div>`);
   }
 
   // local servers the terminals started
   const links = state.links.filter((l) => l.path === path);
   if (on("dev_links") && links.length) {
-    h += `<div class="divider"></div><div class="sec-row"><span class="sec">SERVERS</span><span class="muted" style="font-size:12px">${REMOTE ? "tap to open on the Mac" : "click to open"}</span></div><div class="kv" style="gap:4px;font-size:12px">`;
+    let t = `<div class="sec-row"><span class="sec">SERVERS</span><span class="muted note">${REMOTE ? "tap to open on the Mac" : "click to open"}</span></div><div class="kv" style="gap:4px;font-size:12px">`;
     for (const l of links)
-      h += `<button type="button" class="row link-row" data-link="${esc(l.url)}" title="${esc(l.url)} · from ${esc(l.title)}"><span>${l.up ? '<span class="green">●</span>' : '<span class="muted">○</span>'} ${esc(l.url.replace(/^https?:\/\//, ""))}</span><span class="muted">${l.up ? esc(l.title) : "not answering"}</span></button>`;
-    h += `</div>`;
+      t += `<button type="button" class="row link-row" data-link="${esc(l.url)}" title="${esc(l.url)} · from ${esc(l.title)}"><span>${l.up ? '<span class="green">●</span>' : '<span class="muted">○</span>'} ${esc(l.url.replace(/^https?:\/\//, ""))}</span><span class="muted">${l.up ? esc(l.title) : "not answering"}</span></button>`;
+    h += sec("servers", t + `</div>`);
   }
 
   // tools
   if (!other && s.has && s.tools && s.tools.length) {
     const top = s.tools[0].Count || 1;
-    h += `<div class="divider"></div><div class="sec-row"><span class="sec">TOOLS</span><span class="muted" style="font-size:12px">calls this session</span></div><div class="kv">`;
-    for (const t of s.tools)
-      h += `<div class="tool"><div class="row"><span>${esc(t.Name)}</span><span class="soft">${t.Count}</span></div><div class="tool-bar" style="width:${Math.round((100 * t.Count) / top)}%"></div></div>`;
-    h += `</div>`;
+    let t = `<div class="sec-row"><span class="sec">TOOLS</span><span class="muted note">calls this session</span></div><div class="kv">`;
+    for (const x of s.tools)
+      t += `<div class="tool"><div class="row"><span>${esc(x.Name)}</span><span class="soft">${x.Count}</span></div><div class="tool-bar" style="width:${Math.round((100 * x.Count) / top)}%"></div></div>`;
+    h += sec("tools", t + `</div>`);
   }
+
+  h += sec("instructions", renderPanelInstructions(path));
 
   // skills and MCP servers (with what each is), when switched on
   const tools = on("skills") ? state.tools[path] : null;
@@ -2093,27 +1983,25 @@ function renderStats(force) {
     /* Claude Code's skills and MCP servers */
   } else if (tools) {
     const calls = Object.fromEntries((s.mcp || []).map((m) => [m.name, m.calls]));
-    h += `<div class="divider"></div><details class="tools-sec"${state.openSec.mcp ? " open" : ""} data-sec="mcp"><summary class="sec-row"><span class="sec">MCP SERVERS · ${tools.mcp.length}</span><span class="chev">▾</span></summary><div class="kv tools-list">`;
-    if (!tools.mcp.length) h += `<div class="muted">None configured.</div>`;
+    let t = `<div class="sec-row"><span class="sec">MCP SERVERS</span><span class="muted">${tools.mcp.length}</span></div><div class="kv tools-list">`;
+    if (!tools.mcp.length) t += `<div class="muted">None configured.</div>`;
     for (const m of tools.mcp)
-      h += `<div class="tool-item"><div class="row"><span><b>${esc(m.name)}</b> <span class="badge-s">${esc(m.scope)}</span></span>${calls[m.name] ? `<span class="green">● ${calls[m.name]} calls</span>` : '<span class="muted">○</span>'}</div><div class="muted ti-sub">${esc(m.type)} · ${esc(m.target || "—")}</div></div>`;
-    h += `</div></details>`;
-    h += `<details class="tools-sec"${state.openSec.skills ? " open" : ""} data-sec="skills"><summary class="sec-row"><span class="sec">SKILLS · ${tools.skills.length}</span><span class="chev">▾</span></summary><div class="kv tools-list">`;
-    if (!tools.skills.length) h += `<div class="muted">No skills.</div>`;
+      t += `<div class="tool-item"><div class="row"><span><b>${esc(m.name)}</b> <span class="badge-s">${esc(m.scope)}</span></span>${calls[m.name] ? `<span class="green">● ${calls[m.name]} calls</span>` : '<span class="muted">○</span>'}</div><div class="muted ti-sub">${esc(m.type)} · ${esc(m.target || "—")}</div></div>`;
+    h += sec("mcp", t + `</div>`);
+    t = `<div class="sec-row"><span class="sec">SKILLS</span><span class="muted">${tools.skills.length}</span></div><div class="kv tools-list">`;
+    if (!tools.skills.length) t += `<div class="muted">No skills.</div>`;
     for (const sk of tools.skills)
-      h += `<div class="tool-item" title="${esc(sk.about)}"><div class="row"><span><b>${esc(sk.name)}</b></span><span class="badge-s">${esc(sk.scope)}</span></div>${sk.about ? `<div class="muted ti-sub ti-about">${esc(sk.about)}</div>` : ""}</div>`;
-    h += `</div></details>`;
+      t += `<div class="tool-item" title="${esc(sk.about)}"><div class="row"><span><b>${esc(sk.name)}</b></span><span class="badge-s">${esc(sk.scope)}</span></div>${sk.about ? `<div class="muted ti-sub ti-about">${esc(sk.about)}</div>` : ""}</div>`;
+    h += sec("skills", t + `</div>`);
   } else if (s.mcp && s.mcp.length) {
-    h += `<div class="divider"></div><div class="sec">MCP SERVERS</div><div class="kv" style="font-size:12px">`;
+    let t = `<div class="sec-row"><span class="sec">MCP SERVERS</span><span class="muted">${s.mcp.length}</span></div><div class="kv" style="font-size:12px">`;
     for (const m of s.mcp)
-      h += `<div class="row"><span>${esc(m.name)}</span>${m.calls ? `<span class="green">● ${m.calls} calls</span>` : '<span class="muted">○ configured</span>'}</div>`;
-    h += `</div>`;
+      t += `<div class="row"><span>${esc(m.name)}</span>${m.calls ? `<span class="green">● ${m.calls} calls</span>` : '<span class="muted">○ configured</span>'}</div>`;
+    h += sec("mcp", t + `</div>`);
   }
   // keep the scroll position and only redraw when something changed
-  if (el.dataset.html !== h) {
-    el.dataset.html = h;
-    el.innerHTML = h;
-  }
+  setHTML(el, h);
+  renderPanelNav();
 }
 
 function fmtResets(ms) {
@@ -2180,8 +2068,41 @@ const MOODS = ["thinking", "happy", "sleepy", "sad", "nervous", "excited"];
 const QUIET_MS = 3000; // Claude counts as "your turn" only after this long without output, so short pauses don't flicker
 let mascotMood = "", cheerUntil = 0;
 
-function preloadMascot() {
-  for (const m of MOODS) new Image().src = `mascot/${m}.svg`;
+// The mascot's SVGs animate with CSS, which the browser redraws about 60
+// times a second even when nothing on screen changes: that was most of what
+// an idle Quarters window cost. So it plays when something happens (its
+// mood changes, you point at it) and for a moment every minute, and
+// otherwise stands still; while Quarters isn't in front, it always does.
+const MASCOT_PLAY_MS = 20000;
+const MASCOT_BURST_MS = 6000;
+const MASCOT_BURST_EVERY = 60000;
+const mascotSrc = {}; // mood → { play, rest }: object URLs of the SVG, animated and still
+let mascotPlayUntil = Date.now() + MASCOT_PLAY_MS, mascotBurst = Date.now() + MASCOT_BURST_EVERY;
+
+async function preloadMascot() {
+  const url = (svg) => URL.createObjectURL(new Blob([svg], { type: "image/svg+xml" }));
+  await Promise.all(
+    MOODS.map(async (m) => {
+      try {
+        const svg = await (await fetch(`mascot/${m}.svg`)).text();
+        mascotSrc[m] = { play: url(svg), rest: url(svg.replace("</style>", "* { animation: none !important; }\n</style>")) };
+      } catch {
+        /* the plain file, animated */
+      }
+    }),
+  );
+  renderMascot();
+}
+
+function wakeMascot(ms = MASCOT_PLAY_MS) {
+  mascotPlayUntil = Math.max(mascotPlayUntil, Date.now() + ms);
+}
+
+function setMascot(img, mood, play) {
+  if (!img) return;
+  const s = mascotSrc[mood];
+  const src = s ? (play ? s.play : s.rest) : `mascot/${mood}.svg`;
+  if (img.getAttribute("src") !== src) img.src = src;
 }
 
 function mascotState() {
@@ -2206,12 +2127,21 @@ function mascotState() {
 
 function renderMascot() {
   const [mood, title, sub] = mascotState();
+  const now = Date.now();
   if (mood !== mascotMood) {
     mascotMood = mood;
-    $("#mascot-img").src = `mascot/${mood}.svg`;
+    wakeMascot();
   }
-  $("#mascot-title").textContent = title;
-  $("#mascot-sub").textContent = sub;
+  if (now > mascotBurst) {
+    mascotBurst = now + MASCOT_BURST_EVERY;
+    wakeMascot(MASCOT_BURST_MS);
+  }
+  // working: it keeps thinking while you watch
+  const play = document.visibilityState === "visible" && document.hasFocus() && (mood === "thinking" || now < mascotPlayUntil);
+  setMascot($("#mascot-img"), mood, play);
+  setMascot($(".welcome-mascot"), "excited", play);
+  setText($("#mascot-title"), title);
+  setText($("#mascot-sub"), sub);
 }
 
 // Double-tap Shift (with nothing typed in between) toggles the project jumper, even inside the terminal.
@@ -2235,10 +2165,10 @@ function wireDoubleShift() {
 
 // ---------- palette ----------
 
-function openPalette() {
+function openPalette(query = "") {
   state.palette.open = true;
   state.palette.sel = 0;
-  $("#pal-query").value = "";
+  $("#pal-query").value = query;
   $("#palette").classList.remove("hidden");
   renderPalette();
   $("#pal-query").focus();
@@ -2250,8 +2180,44 @@ function closePalette() {
   if (state.focus === "terminal") activeTab()?.term.focus();
 }
 
+// Every command, for the palette's ">" mode (⇧⌘P). mac: only in the Mac app.
+const COMMANDS = [
+  ["new-claude", "New agent tab", "⌘T"],
+  ["continue", "Continue the last conversation", "⇧⌘T"],
+  ["new-shell", "New shell tab", "⌥⌘T"],
+  ["close-tab", "Close the tab", "⌘W"],
+  ["next-tab", "Next tab", "⇧⌘]"],
+  ["prev-tab", "Previous tab", "⇧⌘["],
+  ["next-waiting", "Go to the session waiting for you", "⌘J"],
+  ["clear", "Clear the scrollback", "⌘K"],
+  ["add-project", "Add a project…", "⌘O"],
+  ["history", "Search past conversations…", "⇧⌘F"],
+  ["worktrees", "Worktrees…", "⇧⌘G"],
+  ["usage", "Usage by project…", "⇧⌘U"],
+  ["toggle-left", "Show or hide the projects panel", "⌘B"],
+  ["toggle-right", "Show or hide the side panel", "⌘I"],
+  ["focus-mode", "Focus mode: only the terminal", "⇧⌘↵"],
+  ["fold-sections", "Fold every side panel section", ""],
+  ["unfold-sections", "Unfold every side panel section", ""],
+  ["theme-system", "Theme: follow the system", ""],
+  ["theme-light", "Theme: light", ""],
+  ["theme-dark", "Theme: dark", ""],
+  ["font-up", "Bigger text", "⌘="],
+  ["font-down", "Smaller text", "⌘-"],
+  ["font-reset", "Normal text size", "⌘0"],
+  ["settings", "Settings…", "⌘,"],
+  ["shortcuts", "Keyboard shortcuts", "⌘/"],
+  ["reveal", "Show the project in Finder", "⇧⌘R", "mac"],
+  ["edit-config", "Edit config.json…", "⌥⌘,", "mac"],
+  ["remote", "Remote access…", "", "mac"],
+  ["remote-toggle", "Start or stop the remote-access server", "⌥⌘R", "mac"],
+].filter(([, , , mac]) => !mac || !REMOTE).map(([action, title, keys]) => ({ action, title, keys }));
+
 function renderPalette() {
-  const q = $("#pal-query").value.trim();
+  const raw = $("#pal-query").value.trim();
+  if (raw.startsWith(">")) return renderCommands(raw.slice(1).trim());
+  $("#palette").classList.remove("commands");
+  const q = raw;
   const matches = state.projects
     .map((p) => ({ p, m: fuzzy(q, p.name) || (q.includes("/") ? fuzzy(q, p.path) : null) }))
     .filter((x) => x.m);
@@ -2286,10 +2252,27 @@ function renderPalette() {
   $("#pal-list .sel")?.scrollIntoView({ block: "nearest" });
 }
 
+function renderCommands(q) {
+  $("#palette").classList.add("commands");
+  const matches = COMMANDS.map((c) => ({ c, m: q ? fuzzy(q, c.title) : { score: 0, pos: [] } })).filter((x) => x.m);
+  if (q) matches.sort((x, y) => y.m.score - x.m.score);
+  state.palette.matches = matches;
+  state.palette.sel = Math.min(state.palette.sel, Math.max(0, matches.length - 1));
+  $("#pal-count").textContent = `${matches.length} commands`;
+  $("#pal-list").innerHTML =
+    matches
+      .map(({ c, m }, i) => `<button class="pal-item${i === state.palette.sel ? " sel" : ""}" type="button" data-i="${i}">
+        <span class="marker">${i === state.palette.sel ? "▸" : ""}</span><span class="grow"><span class="nm">${highlight(c.title, m.pos || [])}</span></span>
+        <span class="meta">${esc(c.keys)}</span></button>`)
+      .join("") || `<div class="empty">No matching command.</div>`;
+  $("#pal-list .sel")?.scrollIntoView({ block: "nearest" });
+}
+
 function pickPalette(i, newTabToo) {
   const m = state.palette.matches[i];
   closePalette();
   if (!m) return;
+  if (m.c) return onMenu(m.c.action);
   if (m.a) return runAutomation(m.p.path, m.a);
   if (newTabToo) newTab(m.p.path, "claude");
   else openProject(m.p.path);
@@ -2663,7 +2646,7 @@ function wireViewport() {
   window.addEventListener("resize", fit);
   document.addEventListener("focusin", () => setTimeout(fit, 50));
   document.addEventListener("focusout", () => setTimeout(fit, 50));
-  setInterval(fit, 400); // toolbars and the keyboard don't always say when they move
+  every(400, fit, { behind: 1 }); // toolbars and the keyboard don't always say when they move
   fit();
 }
 
@@ -2715,7 +2698,7 @@ function renderPanelAgent(path) {
     ? `<div class="dd-menu" role="listbox" aria-label="Coding agent">${opt("", "Default", def)}<div class="dd-sep"></div>${list.map((x) => opt(x.id, x.name, x.installed ? x.bin : "not installed", !x.installed)).join("")}</div>`
     : "";
   const changed = value !== saved;
-  return `<div class="pa-agent"><div class="sec-row"><span class="panel-title">AGENT</span>${REMOTE ? '<span class="muted" style="font-size:12px">change it on the Mac</span>' : ""}</div>
+  return `<div class="pa-agent"><div class="sec-row"><span class="panel-title">AGENT</span>${REMOTE ? '<span class="muted note">change it on the Mac</span>' : ""}</div>
     <div class="dd${agentPick.open ? " open" : ""}">
       <button type="button" class="dd-btn" data-dd-toggle aria-haspopup="listbox" aria-expanded="${agentPick.open}"${REMOTE ? " disabled" : ""}>
         <span class="dd-label">${esc(h ? h.name : `Default · ${def}`)}</span>${missing ? '<span class="dd-sub warn">not installed</span>' : ""}<span class="dd-chev">▾</span>
@@ -2796,7 +2779,7 @@ async function deleteAutomation(p, i) {
   const keep = autosForDialog(p);
   keep.splice(i, 1);
   try {
-    await Go().SaveProject(p.path, p.name, p.path, p.group, p.icon, autosToSave(keep), p.yolo || "", p.harness || "");
+    await Go().SaveProject(p.path, p.name, p.path, p.group, p.icon, autosToSave(keep), p.yolo || "", p.harness || "", p.color || "");
   } catch (err) {
     return flash(String(err).replace(/^Error: /, ""));
   }
@@ -2944,6 +2927,21 @@ function wireCompose() {
   });
   // the send button keeps the keyboard up
   $("#compose-send").addEventListener("pointerdown", (e) => e.preventDefault());
+  $("#compose-later").addEventListener("pointerdown", (e) => e.preventDefault());
+  $("#compose-later").addEventListener("click", async () => {
+    const tab = activeTab();
+    if (!tab || tab.exited || !box.value.trim()) return;
+    if (!canType()) return watchOnly();
+    try {
+      await Go().QueueAdd(tab.id, box.value);
+    } catch (err) {
+      return flash(String(err).replace(/^Error: /, ""));
+    }
+    box.value = "";
+    grow();
+    updateSend(tab);
+    flash(`Queued: it goes in when ${shortAgent(tab.harness)} finishes`);
+  });
   // a tap on the terminal opens the text field's keyboard, not the terminal's
   document.addEventListener("focusin", (e) => {
     if (e.target.classList?.contains("xterm-helper-textarea") && getComputedStyle(form).display !== "none") box.focus();
@@ -3095,117 +3093,6 @@ function wireRemoteUI() {
 // The Mac's Remote Access dialog: turn it on, pair devices, see who signed in.
 const rmd = { open: false, timer: 0, pairing: null, devices: 0, status: null };
 
-// toggleRemote starts or stops the remote-access server from the menu.
-async function toggleRemote() {
-  if (REMOTE) return;
-  const v = await Go().RemoteStatus();
-  if (!v.url) return openRemoteDialog();
-  try {
-    await Go().SetRemote(!v.running, v.url, v.listen);
-    flash(v.running ? "remote server stopped" : `remote server started · ${v.url}`);
-  } catch (e) {
-    flash(String(e).replace(/^Error: /, ""));
-    openRemoteDialog();
-  }
-  Go().RemoteStatus().then(renderRemotePill).catch(() => {});
-}
-
-async function openRemoteDialog() {
-  if (REMOTE) return;
-  rmd.open = true;
-  rmd.pairing = null;
-  $("#remote-dialog").classList.remove("hidden");
-  $("#rm-error").textContent = "";
-  const v = await Go().RemoteStatus();
-  $("#rm-url").value = v.url || "";
-  $("#rm-listen").value = v.listen || "";
-  $("#rm-lan").checked = !!v.lan;
-  $("#rm-user").value = v.user || "";
-  $("#rm-pass").value = $("#rm-pass2").value = "";
-  rmd.devices = (v.devices || []).length;
-  renderRemote(v);
-  clearInterval(rmd.timer);
-  rmd.timer = setInterval(refreshRemoteDialog, 2000);
-}
-
-function closeRemoteDialog() {
-  rmd.open = false;
-  clearInterval(rmd.timer);
-  if (rmd.pairing) Go().CancelPairing();
-  rmd.pairing = null;
-  $("#remote-dialog").classList.add("hidden");
-}
-
-async function refreshRemoteDialog() {
-  if (!rmd.open) return;
-  const v = await Go().RemoteStatus();
-  const n = (v.devices || []).length;
-  if (rmd.pairing && n > rmd.devices) {
-    const d = v.devices[n - 1];
-    rmd.pairing = null;
-    flash(`paired ${d.name}`);
-  }
-  rmd.devices = n;
-  renderRemote(v);
-}
-
-function renderRemote(v) {
-  rmd.status = v;
-  $("#rm-state").innerHTML = v.running ? '<span class="green">● running</span>' : v.enabled ? '<span class="red">● failed to start</span>' : '<span class="muted">○ stopped</span>';
-  const online = (v.devices || []).reduce((n, d) => n + (d.online || 0), 0);
-  $("#rm-power-text").innerHTML = v.running
-    ? `<b class="green">Server running</b> <span class="muted">at <a href="#" class="rm-addr" title="Open in your browser">${esc(v.address || v.url)}</a>${online ? ` · ${online} connected` : ""}</span>`
-    : `<b>Server stopped</b> <span class="muted">— nothing can reach this Mac from outside</span>`;
-  $("#rm-toggle").textContent = v.running ? "Stop server" : "Start server";
-  $("#rm-toggle").classList.toggle("primary", !v.running);
-  if (v.error) $("#rm-error").textContent = v.error;
-  const devs = v.devices || [];
-  $("#rm-devices").innerHTML = devs.length
-    ? devs.map((d) => `<div class="rm-dev"><span class="${d.online ? "green" : "muted"}">${d.online ? "●" : "○"}</span>
-        <span class="grow"><b>${esc(d.name)}</b>${d.push ? ' <span title="Gets phone alerts">🔔</span>' : ""} <span class="muted">${d.lastUsed ? `last used ${fmtAgo(d.lastUsed)} ago${d.lastIP ? " · " + esc(d.lastIP) : ""}` : ""}</span></span>
-        <select class="rm-access" data-access="${esc(d.id)}" title="What this device may do">${[["full", "full control"], ["type", "type only"], ["view", "watch only"]].map(([v, l]) => `<option value="${v}"${(d.access || "full") === v ? " selected" : ""}>${l}</option>`).join("")}</select>
-        <button class="btn danger" type="button" data-remove="${esc(d.id)}">Remove</button></div>`).join("")
-    : '<div class="muted">No devices yet. Turn remote access on, then pair your phone.</div>';
-  $("#rm-pw-state").innerHTML = v.user
-    ? `On for <b>${esc(v.user)}</b>. Set a new password to change it (its browsers are signed out); remove <i>Password · ${esc(v.user)}</i> under Devices to turn it off.`
-    : "Off. Set one (10+ characters) for browsers that can't use a passkey, such as at the Mac's home-network address.";
-  $("#rm-pw-set").textContent = v.user ? "Change password" : "Set password";
-  const li = $("#rm-lan-info"), lanOn = v.running && v.lan && (v.lanURLs || []).length > 0;
-  li.classList.toggle("hidden", !lanOn);
-  if (lanOn && li.dataset.key !== v.lanURLs.join() + "|" + v.user) { // rebuilt only when it changes
-    li.dataset.key = v.lanURLs.join() + "|" + v.user;
-    li.innerHTML = `<img src="${v.lanQR}" alt="QR code of ${esc(v.lanURLs[0])}" width="132" height="132">
-      <div><b>On your home network</b><div class="muted">Scan with your phone's camera, or open:</div>
-      ${v.lanURLs.map((u) => `<div><code>${esc(u)}</code></div>`).join("")}
-      <div class="muted">${v.user ? `Sign in as <b>${esc(v.user)}</b>.` : '<span class="red">Set a password below first.</span>'}</div></div>`;
-  }
-  $("#rm-pair").disabled = !v.running;
-  $("#rm-signout").disabled = !v.running;
-  const pb = $("#rm-pairing");
-  pb.classList.toggle("hidden", !rmd.pairing);
-  if (rmd.pairing) {
-    const left = Math.max(0, Math.round((rmd.pairing.expires - Date.now()) / 1000));
-    if (!pb.dataset.url || pb.dataset.url !== rmd.pairing.url) {
-      pb.dataset.url = rmd.pairing.url;
-      pb.innerHTML = `<img src="${rmd.pairing.qr}" alt="pairing QR code">
-        <div class="rm-pair-text"><b>Scan with your phone's camera</b>
-          <span class="muted">or open this link on the device (it works once):</span>
-          <code>${esc(rmd.pairing.url)}</code>
-          <span class="muted" id="rm-left"></span>
-          <button class="btn" type="button" id="rm-pair-cancel">Cancel</button></div>`;
-      requestAnimationFrame(() => pb.scrollIntoView({ block: "nearest", behavior: "smooth" }));
-      $("#rm-pair-cancel").onclick = () => {
-        Go().CancelPairing();
-        rmd.pairing = null;
-        refreshRemoteDialog();
-      };
-    }
-    $("#rm-left").textContent = left ? `expires in ${Math.floor(left / 60)}:${String(left % 60).padStart(2, "0")}` : "expired";
-  } else pb.dataset.url = "";
-  $("#rm-log").textContent = (v.log || []).join("\n") || "nothing yet";
-  renderRemotePill(v);
-}
-
 function renderRemotePill(v) {
   const pill = $("#btn-remote");
   const online = (v.devices || []).reduce((n, d) => n + (d.online || 0), 0);
@@ -3216,90 +3103,12 @@ function renderRemotePill(v) {
   pill.title = v.running ? `Remote server running (${v.address || v.url})${online ? ` · ${online} connected` : ""} — click to manage` : v.error || "Remote server stopped — click to start it";
 }
 
-function wireRemoteDialog() {
+// The remote pill in the title bar (the Mac app): it opens the dialog.
+function wireRemotePill() {
   $("#btn-remote").addEventListener("click", openRemoteDialog);
-  $("#rm-close").addEventListener("click", closeRemoteDialog);
-  $("#remote-dialog").addEventListener("mousedown", (e) => e.target.id === "remote-dialog" && closeRemoteDialog());
-  $("#remote-dialog").addEventListener("keydown", (e) => e.key === "Escape" && closeRemoteDialog());
-  // Save keeps the server as it is (restarting it with the new addresses if it runs).
-  const setRemote = async (on) => {
-    $("#rm-error").textContent = "";
-    try {
-      await Go().SetRemote(on, $("#rm-url").value, $("#rm-listen").value, $("#rm-lan").checked);
-      return true;
-    } catch (e) {
-      $("#rm-error").textContent = String(e).replace(/^Error: /, "");
-      return false;
-    } finally {
-      refreshRemoteDialog();
-    }
-  };
-  $("#rm-save").addEventListener("click", async () => (await setRemote(!!(rmd.status && rmd.status.enabled))) && flash("remote access saved"));
-  $("#rm-lan").addEventListener("change", async () => (await setRemote(!!(rmd.status && rmd.status.enabled))) && flash($("#rm-lan").checked ? "home network on" : "home network off"));
-  $("#rm-pw-set").addEventListener("click", async () => {
-    const user = $("#rm-user").value.trim(), pw = $("#rm-pass").value;
-    $("#rm-error").textContent = "";
-    if (pw !== $("#rm-pass2").value) return ($("#rm-error").textContent = "the two passwords are different");
-    try {
-      await Go().SetRemotePassword(user, pw);
-      $("#rm-pass").value = $("#rm-pass2").value = "";
-      flash(`password set for ${user}`);
-    } catch (e) {
-      $("#rm-error").textContent = String(e).replace(/^Error: /, "");
-    }
-    refreshRemoteDialog();
-  });
-  $("#rm-power-text").addEventListener("click", (e) => {
-    if (!e.target.closest(".rm-addr")) return;
-    e.preventDefault();
-    openLink(rmd.status.address || rmd.status.url);
-  });
-  $("#rm-toggle").addEventListener("click", async () => {
-    const on = !(rmd.status && rmd.status.running);
-    if (await setRemote(on)) flash(on ? "remote server started" : "remote server stopped");
-  });
-  $("#rm-pair").addEventListener("click", async () => {
-    try {
-      rmd.pairing = await Go().PairDevice();
-      refreshRemoteDialog();
-    } catch (e) {
-      $("#rm-error").textContent = String(e);
-    }
-  });
-  $("#rm-signout").addEventListener("click", async () => {
-    if (await Go().Confirm("Sign out all browsers?", "Every signed-in browser is disconnected. Devices stay paired and can sign in again with their passkey.", "Sign out all")) {
-      Go().SignOutAllDevices();
-      refreshRemoteDialog();
-    }
-  });
-  $("#rm-devices").addEventListener("change", async (e) => {
-    const sel = e.target.closest("[data-access]");
-    if (!sel) return;
-    try {
-      await Go().SetDeviceAccess(sel.dataset.access, sel.value);
-      flash(`${sel.closest(".rm-dev").querySelector("b").textContent}: ${sel.selectedOptions[0].textContent}`);
-    } catch (err) {
-      flash(String(err));
-    }
-    refreshRemoteDialog();
-  });
-  $("#rm-devices").addEventListener("click", async (e) => {
-    const b = e.target.closest("[data-remove]");
-    if (!b) return;
-    const name = b.closest(".rm-dev").querySelector("b").textContent;
-    if (b.dataset.remove === "password") {
-      if (!(await Go().Confirm("Turn off password sign-in?", "Browsers signed in with the password are signed out at once. You can set a password again later.", "Turn off"))) return;
-    } else if (!(await Go().Confirm(`Remove ${name}?`, "It is signed out at once and its passkey stops working here. You can pair it again later.", "Remove"))) return;
-    try {
-      await Go().RemoveDevice(b.dataset.remove);
-    } catch (err) {
-      flash(String(err));
-    }
-    refreshRemoteDialog();
-  });
   const pill = () => Go().RemoteStatus().then(renderRemotePill).catch(() => {});
   pill();
-  setInterval(() => !rmd.open && pill(), 5000);
+  every(5000, () => !rmd.open && pill());
 }
 
 // ---------- settings: optional features, switched on and off ----------
@@ -3339,144 +3148,6 @@ async function loadSettings() {
 }
 
 const set = { open: false, prompts: [] };
-
-async function openSettings() {
-  await loadSettings();
-  if (!state.settings) return;
-  set.open = true;
-  set.prompts = (state.settings.prompts || []).map((p) => ({ ...p }));
-  $("#set-error").textContent = "";
-  renderSettings(true);
-  $("#settings-dialog").classList.remove("hidden");
-  $("#set-close").focus();
-}
-
-function closeSettings() {
-  set.open = false;
-  $("#settings-dialog").classList.add("hidden");
-  if (state.focus === "terminal") activeTab()?.term.focus();
-}
-
-function renderSettings(full) {
-  const v = state.settings;
-  $("#set-path").textContent = v.configPath;
-  $("#set-features").innerHTML = v.features
-    .map((f) => {
-      const locked = (f.macOnly && REMOTE) || !canChange();
-      const note = f.key === "keep_awake" && v.awake ? ' <span class="green">· keeping it awake now</span>' : f.key === "hotkey" && f.on ? ` <span class="soft">· ${esc(v.hotkey)}</span>` : "";
-      return `<label class="set-row${locked ? " locked" : ""}"><span class="set-text"><b>${esc(f.title)}</b><span class="muted">${esc(f.about)}${note}${f.macOnly && REMOTE ? " · change it on the Mac" : ""}</span></span>
-        <input type="checkbox" class="switch" data-feature="${f.key}"${f.on ? " checked" : ""}${locked ? " disabled" : ""}></label>`;
-    })
-    .join("");
-  $("#set-harness").innerHTML = harnessOptions();
-  $("#set-harness").value = v.harness;
-  $("#set-harness").disabled = REMOTE;
-  const h = (v.harnesses || []).find((x) => x.id === v.harness);
-  $("#set-harness-note").innerHTML = h && !h.installed
-    ? `<span class="red">${esc(h.bin)} isn't installed on this machine</span> · <a href="${esc(h.site)}" target="_blank" rel="noopener">get ${esc(h.name)}</a>`
-    : "What new tabs start. Each project can choose its own (✎ edit project).";
-  $("#set-yolo").checked = v.yolo;
-  $("#set-yolo").disabled = REMOTE;
-  if (full) {
-    $("#set-alert").value = v.usageAlertAt;
-    $("#set-hotkey").value = v.hotkey;
-    renderPromptRows();
-  }
-  $("#set-alert").disabled = !canChange();
-  $("#set-save").disabled = !canChange();
-  $("#set-prompt-add").disabled = !canChange();
-  $("#set-hotkey-note").innerHTML = v.hotkeyError ? `<span class="red">${esc(v.hotkeyError)}</span>` : "brings Quarters to the front from any app (again: hides it)";
-}
-
-function renderPromptRows() {
-  $("#set-prompts").innerHTML =
-    set.prompts
-      .map((p, i) => `<div class="sp-row" data-p="${i}">
-        <input type="text" data-f="name" value="${esc(p.name)}" placeholder="name" spellcheck="false">
-        <textarea data-f="text" rows="2" placeholder="what to type, e.g. run the tests and fix what fails" spellcheck="false">${esc(p.text)}</textarea>
-        <label class="ac-check" title="Press Enter after typing it"><input type="checkbox" data-f="send"${p.send ? " checked" : ""}> send</label>
-        <button type="button" class="ac-del" data-del-prompt title="Delete">✕</button></div>`)
-      .join("") || '<div class="muted">No saved prompts yet.</div>';
-}
-
-async function saveSettings() {
-  const v = state.settings;
-  $("#set-error").textContent = "";
-  try {
-    const at = Number($("#set-alert").value);
-    if (at !== v.usageAlertAt) await Go().SetUsageAlertAt(at);
-    const hk = $("#set-hotkey").value.trim();
-    if (!REMOTE && hk !== v.hotkey) await Go().SetHotkey(hk);
-    await Go().SavePrompts(set.prompts);
-    await loadSettings();
-    closeSettings();
-    flash("settings saved");
-  } catch (e) {
-    $("#set-error").textContent = String(e).replace(/^Error: /, "");
-    loadSettings();
-  }
-}
-
-function wireSettings() {
-  const dlgEl = $("#settings-dialog");
-  dlgEl.addEventListener("change", async (e) => {
-    const key = e.target.dataset.feature;
-    if (key) {
-      $("#set-error").textContent = "";
-      try {
-        await Go().SetFeature(key, e.target.checked);
-        flash(`${state.settings.features.find((f) => f.key === key)?.title.toLowerCase()} ${e.target.checked ? "on" : "off"}`);
-      } catch (err) {
-        e.target.checked = !e.target.checked;
-        $("#set-error").textContent = String(err).replace(/^Error: /, "");
-      }
-      loadSettings();
-    } else if (e.target.id === "set-harness") {
-      try {
-        await Go().SetHarness(e.target.value);
-        flash(`new tabs start ${agentName(e.target.value)}`);
-      } catch (err) {
-        $("#set-error").textContent = String(err).replace(/^Error: /, "");
-      }
-      await loadSettings();
-      loadProjects();
-    } else if (e.target.id === "set-yolo") {
-      try {
-        await Go().SetYolo(e.target.checked);
-      } catch (err) {
-        $("#set-error").textContent = String(err).replace(/^Error: /, "");
-      }
-      loadSettings();
-    }
-  });
-  const box = $("#set-prompts");
-  const update = (e) => {
-    const row = e.target.closest("[data-p]"), f = e.target.dataset.f;
-    if (!row || !f) return;
-    set.prompts[Number(row.dataset.p)][f] = e.target.type === "checkbox" ? e.target.checked : e.target.value;
-  };
-  box.addEventListener("input", update);
-  box.addEventListener("change", update);
-  box.addEventListener("click", (e) => {
-    if (!e.target.closest("[data-del-prompt]")) return;
-    set.prompts.splice(Number(e.target.closest("[data-p]").dataset.p), 1);
-    renderPromptRows();
-  });
-  $("#set-prompt-add").addEventListener("click", () => {
-    set.prompts.push({ name: "", text: "", send: true });
-    renderPromptRows();
-    box.querySelector(".sp-row:last-child input")?.focus();
-  });
-  $("#set-save").addEventListener("click", saveSettings);
-  $("#set-close").addEventListener("click", closeSettings);
-  $("#set-config").addEventListener("click", () => onMenu("edit-config"));
-  $("#set-remote").addEventListener("click", () => {
-    closeSettings();
-    openRemoteDialog();
-  });
-  dlgEl.addEventListener("keydown", (e) => e.key === "Escape" && closeSettings());
-  dlgEl.addEventListener("mousedown", (e) => e.target === dlgEl && closeSettings());
-}
 
 // ---------- menus: saved prompts and worktrees ----------
 
@@ -3647,44 +3318,6 @@ async function doRestore() {
 
 // ---------- past conversations ----------
 
-const hist = { open: false, path: "", list: [], sel: 0, timer: 0 };
-
-function openHistory(path) {
-  path = path || state.current || state.selected;
-  if (!path || !on("history")) return;
-  hist.open = true;
-  hist.path = path;
-  hist.sel = 0;
-  hist.list = [];
-  $("#hi-title").textContent = `CONVERSATIONS · ${project(path)?.name || ""}`;
-  $("#hi-query").value = "";
-  $("#hi-list").innerHTML = "";
-  $("#history-dialog").classList.remove("hidden");
-  if (!isTouch()) $("#hi-query").focus();
-  searchHistory();
-}
-
-function closeHistory() {
-  hist.open = false;
-  $("#history-dialog").classList.add("hidden");
-  if (state.focus === "terminal") activeTab()?.term.focus();
-}
-
-async function searchHistory() {
-  const q = $("#hi-query").value, path = hist.path;
-  $("#hi-count").textContent = "searching…";
-  let list = [];
-  try {
-    list = (await Go().Conversations(path, q)) || [];
-  } catch (e) {
-    flash(String(e));
-  }
-  if (!hist.open || q !== $("#hi-query").value || path !== hist.path) return;
-  hist.list = list;
-  hist.sel = Math.min(hist.sel, Math.max(0, list.length - 1));
-  renderHistory();
-}
-
 // mark wraps each case-insensitive hit of q in s.
 function mark(s, q) {
   if (!q) return esc(s);
@@ -3694,114 +3327,7 @@ function mark(s, q) {
   return out + esc(s.slice(i));
 }
 
-function renderHistory() {
-  const q = $("#hi-query").value.trim();
-  const n = hist.list.length;
-  $("#hi-count").textContent = `${n} conversation${n === 1 ? "" : "s"}`;
-  const openIds = new Set(Object.values(state.byId).filter((t) => !t.exited).map((t) => t.startOpts?.resume).filter(Boolean));
-  const when = (ms) => new Date(ms).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
-  $("#hi-list").innerHTML =
-    hist.list
-      .map((c, i) => `<button type="button" class="hi-item${i === hist.sel ? " sel" : ""}" data-i="${i}">
-        <div class="row"><span class="hi-title">${esc(c.title || c.first || "untitled")}</span><span class="muted">${fmtAgo(c.last)}${fmtAgo(c.last) === "now" ? "" : " ago"}</span></div>
-        ${c.match ? `<div class="hi-sub">${mark(c.match, q)}</div>` : c.title && c.first ? `<div class="hi-sub muted">❯ ${esc(c.first)}</div>` : ""}
-        <div class="muted hi-meta">${c.prompts} prompt${c.prompts === 1 ? "" : "s"} · ${when(c.start)}${openIds.has(c.id) ? ' · <span class="green">open</span>' : ""}</div></button>`)
-      .join("") || `<div class="empty">${q ? "Nothing matches." : "No conversations in this project yet."}</div>`;
-  $("#hi-list .sel")?.scrollIntoView({ block: "nearest" });
-}
-
-function pickHistory(i) {
-  const c = hist.list[i];
-  if (!c) return;
-  const path = hist.path;
-  closeHistory();
-  if (!canChange()) return watchOnly();
-  const open = Object.values(state.byId).find((t) => t.startOpts?.resume === c.id && !t.exited && t.path === path);
-  if (open) {
-    openProject(path);
-    return selectTab(tabsOf(path).indexOf(open));
-  }
-  newTab(path, "resume", { resume: c.id });
-}
-
-function wireHistory() {
-  $("#hi-query").addEventListener("input", () => {
-    hist.sel = 0;
-    clearTimeout(hist.timer);
-    hist.timer = setTimeout(searchHistory, 180);
-  });
-  $("#hi-query").addEventListener("keydown", (e) => {
-    const n = hist.list.length;
-    if (e.key === "Escape") closeHistory();
-    else if (e.key === "ArrowDown") hist.sel = Math.min(n - 1, hist.sel + 1);
-    else if (e.key === "ArrowUp") hist.sel = Math.max(0, hist.sel - 1);
-    else if (e.key === "Enter") {
-      e.preventDefault();
-      e.stopPropagation();
-      return pickHistory(hist.sel);
-    } else return;
-    e.preventDefault();
-    renderHistory();
-  });
-  $("#hi-list").addEventListener("click", (e) => {
-    const item = e.target.closest(".hi-item");
-    if (item) pickHistory(Number(item.dataset.i));
-  });
-  const el = $("#history-dialog");
-  el.addEventListener("mousedown", (e) => e.target === el && closeHistory());
-  el.addEventListener("keydown", (e) => e.key === "Escape" && closeHistory());
-}
-
 // ---------- a file's changes ----------
-
-async function showDiff(path, file) {
-  const el = $("#diff-dialog");
-  el.classList.remove("hidden");
-  $("#df-file").textContent = file;
-  $("#df-stat").textContent = "";
-  $("#df-note").textContent = "loading…";
-  $("#df-body").innerHTML = "";
-  $("#df-close").focus();
-  let d;
-  try {
-    d = await Go().Diff(path, file);
-  } catch (e) {
-    $("#df-note").textContent = String(e).replace(/^Error: /, "");
-    return;
-  }
-  $("#df-title").textContent = d.file.split("/").pop().toUpperCase();
-  $("#df-note").textContent = d.note || "";
-  $("#df-note").classList.toggle("hidden", !d.note);
-  let add = 0, del = 0;
-  const lines = (d.diff || "").replace(/\n$/, "").split("\n");
-  const html = lines
-    .map((l) => {
-      if (d.added) {
-        add++;
-        return `<span class="dl add">+${esc(l)}</span>`;
-      }
-      if (/^(diff --git|index |--- |\+\+\+ |new file mode|deleted file mode|similarity|rename )/.test(l)) return "";
-      if (l.startsWith("@@")) return `<span class="dl hunk">${esc(l)}</span>`;
-      if (l.startsWith("+")) return add++, `<span class="dl add">${esc(l)}</span>`;
-      if (l.startsWith("-")) return del++, `<span class="dl del">${esc(l)}</span>`;
-      return `<span class="dl">${esc(l)}</span>`;
-    })
-    .filter(Boolean)
-    .join("");
-  $("#df-body").innerHTML = d.diff ? html : "";
-  $("#df-stat").innerHTML = d.diff ? `<span class="green">+${add}</span> <span class="red">−${del}</span>` : "";
-}
-
-function closeDiff() {
-  $("#diff-dialog").classList.add("hidden");
-}
-
-function wireDiff() {
-  const el = $("#diff-dialog");
-  $("#df-close").addEventListener("click", closeDiff);
-  el.addEventListener("mousedown", (e) => e.target === el && closeDiff());
-  el.addEventListener("keydown", (e) => e.key === "Escape" && closeDiff());
-}
 
 // ---------- dev server links, skills and MCP servers (stats panel) ----------
 
@@ -3842,10 +3368,73 @@ function wireStatsExtras() {
     if (d) showDiff(state.statsPath, d.dataset.diff);
     if (l) openLink(l.dataset.link);
   });
-  el.addEventListener("toggle", (e) => {
-    const sec = e.target.dataset?.sec;
-    if (sec) state.openSec[sec] = e.target.open;
-  }, true);
+  // a section's header folds it (its buttons and switches do their own thing)
+  el.addEventListener("click", (e) => {
+    const ps = e.target.closest(".ps");
+    const head = ps && ps.querySelector(".sec-row");
+    if (!head || !head.contains(e.target) || e.target.closest("button, input, label, a, select, .seg")) return;
+    foldSection(ps.dataset.ps, !ps.classList.contains("folded"));
+  });
+  $("#ps-nav").addEventListener("click", (e) => {
+    const b = e.target.closest("button");
+    if (!b) return;
+    if (b.dataset.foldAll !== undefined) {
+      const keys = [...document.querySelectorAll("#stats .ps")].map((x) => x.dataset.ps);
+      const fold = keys.some((k) => !folds[k]);
+      for (const k of keys) foldSection(k, fold);
+      return;
+    }
+    foldSection(b.dataset.jump, false);
+    const target = $(`#stats .ps[data-ps="${b.dataset.jump}"]`);
+    const box = $("#stats");
+    if (target) box.scrollTo({ top: target.offsetTop - box.offsetTop - 8, behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+  });
+}
+
+// ---------- side panel sections: each folds to its header ----------
+
+// Which sections are folded is remembered on each device (a phone's
+// drawer may want less than the Mac).
+const FOLDS_KEY = "quarters.folded";
+const FOLD_DEFAULTS = { skills: true };
+const SECTION_NAMES = {
+  plan: "Plan", agent: "Agent", automations: "Automations", session: "Session", queue: "Queue", tokens: "Tokens", usage: "Usage",
+  git: "Git", changed: "Changed", servers: "Servers", tools: "Tools", instructions: "Instructions", mcp: "MCP", skills: "Skills",
+};
+const folds = (() => {
+  try {
+    return { ...FOLD_DEFAULTS, ...JSON.parse(localStorage.getItem(FOLDS_KEY) || "{}") };
+  } catch {
+    return { ...FOLD_DEFAULTS };
+  }
+})();
+
+// sec wraps a section's HTML (its header row first); dividers between
+// sections come from the stylesheet.
+function sec(key, html) {
+  if (!html) return "";
+  return `<section class="ps${folds[key] ? " folded" : ""}" data-ps="${key}">${html.replaceAll('<div class="divider"></div>', "")}</section>`;
+}
+
+function foldSection(key, fold) {
+  folds[key] = fold;
+  try {
+    localStorage.setItem(FOLDS_KEY, JSON.stringify(folds));
+  } catch {}
+  $(`#stats .ps[data-ps="${key}"]`)?.classList.toggle("folded", fold);
+  $("#stats").dataset.html = ""; // the next redraw writes the new state
+  renderPanelNav();
+}
+
+// The bar above the panel jumps to a section (unfolding it), or folds them all.
+function renderPanelNav() {
+  const keys = [...document.querySelectorAll("#stats .ps")].map((x) => x.dataset.ps).filter((k) => SECTION_NAMES[k]);
+  const open = keys.some((k) => !folds[k]);
+  const html = keys.length < 4 ? "" :
+    `<div class="ps-chips">${keys.map((k) => `<button type="button" class="${folds[k] ? "folded" : ""}" data-jump="${k}" title="${folds[k] ? "Unfold and show" : "Show"} ${SECTION_NAMES[k]}">${SECTION_NAMES[k]}</button>`).join("")}</div>` +
+    `<button type="button" class="ps-all" data-fold-all title="${open ? "Fold every section to its header" : "Unfold every section"}">${open ? "fold all" : "open all"}</button>`;
+  setHTML($("#ps-nav"), html);
+  $("#ps-nav").classList.toggle("hidden", !html);
 }
 
 // ---------- which session you are looking at (no phone alert for it) ----------
@@ -3865,6 +3454,40 @@ async function syncPush() {
   if (!REMOTE || !("Notification" in window) || Notification.permission !== "granted") return;
   if (on("web_push")) await remoteMod.enablePush().catch(() => {});
   else await remoteMod.disablePush().catch(() => {});
+}
+
+// ---------- timers ----------
+
+// Everything that runs on a timer goes through every(). Nothing runs while
+// the window is hidden (minimized, on another Space, a phone's browser in
+// the background) unless it has to, and most things run less often while
+// Quarters isn't the app in front. Coming back runs whatever is due at once.
+const timers = [];
+
+function every(ms, fn, { hidden = false, behind = 3 } = {}) {
+  timers.push({ ms, fn, hidden, behind, last: Date.now() });
+}
+
+function runTimers() {
+  const now = Date.now();
+  const away = document.visibilityState !== "visible";
+  const front = document.hasFocus();
+  for (const t of timers) {
+    if (away && !t.hidden) continue;
+    if (now - t.last < (front || away ? t.ms : t.ms * t.behind)) continue;
+    t.last = now;
+    try {
+      t.fn();
+    } catch (e) {
+      console.error(e);
+    }
+  }
+}
+
+function wireTimers() {
+  setInterval(runTimers, 250);
+  document.addEventListener("visibilitychange", runTimers);
+  window.addEventListener("focus", runTimers);
 }
 
 // ---------- polling ----------
@@ -3892,6 +3515,8 @@ async function refreshStats() {
   statsBusy = true;
   try {
     refreshTools();
+    refreshUsage();
+    refreshInstructions(path);
     const s = await Go().Stats(path);
     if ((state.current || state.selected) === path) {
       state.stats = s;
@@ -3935,22 +3560,19 @@ async function main() {
   wireEndTab();
   wirePanelAutomations();
   wirePanelAgent();
-  setInterval(pollRemoteControl, 3000);
+  wirePanelExtras();
+  every(3000, pollRemoteControl);
   pollRemoteControl();
   wireProjects();
   wireTabs();
   wirePalette();
   wireDoubleShift();
   wireStart();
-  wireProjectDialog();
   wireAutomations();
   wireFileDrop();
   wireProjectDrag();
   wireMobile();
-  wireSettings();
   wireMenus();
-  wireHistory();
-  wireDiff();
   wireStatsExtras();
   $("#restore").addEventListener("click", (e) => {
     const b = e.target.closest("[data-restore]");
@@ -3964,13 +3586,18 @@ async function main() {
   for (const ev of ["focus", "blur"]) window.addEventListener(ev, () => setTimeout(reportViewing, 50));
   document.addEventListener("visibilitychange", reportViewing);
   if (REMOTE) wireRemoteUI();
-  else wireRemoteDialog();
+  else wireRemotePill();
   window.addEventListener("focus", claimActive);
   preloadMascot();
   $("#mascot").addEventListener("click", () => {
     cheerUntil = Date.now() + 2500;
     renderMascot();
   });
+  for (const el of [$("#mascot"), $(".welcome-mascot")])
+    el?.addEventListener("pointerenter", () => {
+      wakeMascot();
+      renderMascot();
+    });
   setFocus("projects");
 
   state.me = REMOTE ? remoteMod.remote.client : await Go().ClientID();
@@ -3987,20 +3614,24 @@ async function main() {
   }
 
   renderMascot();
-  setInterval(renderMascot, 500);
-  setInterval(checkAttention, 500);
-  setInterval(() => {
+  every(500, renderMascot);
+  // Mac notifications and the prompt queue matter most when you're elsewhere
+  every(500, checkAttention, { hidden: true, behind: 1 });
+  every(1000, runQueues, { hidden: true, behind: 1 });
+  every(1000, () => {
     renderTitle();
     renderProjects();
     if (Object.keys(state.tabs).length) renderTabs();
     renderActiveList();
-  }, 1000);
-  setInterval(refreshStats, 2000);
-  setInterval(refreshLinks, 4000);
-  setInterval(reportViewing, 10000);
+  });
+  every(2000, refreshStats);
+  every(4000, refreshLinks);
+  every(10000, reportViewing, { hidden: true, behind: 1 });
   refreshAccount();
-  setInterval(refreshAccount, 30000);
-  setInterval(loadProjects, 3000);
+  every(30000, refreshAccount, { behind: 2 });
+  // Go says when the list changes ("projects"); this only catches a missed event
+  every(30000, loadProjects, { behind: 1 });
+  wireTimers();
 }
 
 main();
@@ -4261,66 +3892,13 @@ function wireChat() {
     applySessionView();
     pollChat();
   });
-  setInterval(() => {
+  every(1000, () => {
     updateSend();
     pollChat();
-  }, 1000);
+  }, { behind: 1 });
 }
-
 
 // ---------- keyboard shortcuts (Help → Keyboard Shortcuts, ⌘/) ----------
-
-function shortcutGroups() {
-  const hotkey = (state.settings?.hotkey || "ctrl+alt+space").split("+").map((k) => ({ ctrl: "⌃", alt: "⌥", option: "⌥", cmd: "⌘", shift: "⇧", space: "Space" })[k] || k.toUpperCase()).join("");
-  return [
-    ["Projects", [
-      ["⇧ ⇧  or  ⌘P", "Jump to a project or automation"],
-      ["C", "Start Claude in the open project"],
-      ["⇧C", "Continue the last conversation"],
-      ["S", "Open a shell"],
-      ["⌘O", "Add a project"],
-      ["⇧⌘R", "Show the project in Finder"],
-    ]],
-    ["Tabs", [
-      ["⌘T", "New Claude tab"],
-      ["⇧⌘T", "Continue the last conversation in a new tab"],
-      ["⌥⌘T", "New shell tab"],
-      ["⌘W", "Close the tab"],
-      ["⌘1 … ⌘9", "Go to tab 1–9"],
-      ["⇧⌘[  ⇧⌘]", "Previous / next tab"],
-      ["Double-click", "Rename a tab"],
-    ]],
-    ["In a terminal", [
-      ["⇧↵", "New line in Claude's prompt (without sending)"],
-      ["⌘K", "Clear the scrollback"],
-      ["⌘=  ⌘-  ⌘0", "Bigger / smaller / normal text"],
-      ["Drop files", "Type their paths"],
-    ]],
-    ["Panels and tools", [
-      ["⌘B", "Show or hide the projects panel"],
-      ["⌘I", "Show or hide the side panel"],
-      ["⇧⌘F", "Search past conversations"],
-      ["⇧⌘G", "Worktrees"],
-      ["⌘,", "Settings"],
-      ["⌥⌘,", "Edit config.json"],
-      ["⌥⌘R", "Start or stop the remote-access server"],
-      [hotkey, "From any app: bring Quarters forward or hide it"],
-      ["⌘/", "This list"],
-    ]],
-  ];
-}
-
-function openShortcuts() {
-  $("#keys-list").innerHTML = shortcutGroups()
-    .map(([title, rows]) => `<div class="keys-group"><div class="field-label">${esc(title)}</div>${rows.map(([k, what]) => `<div class="keys-row"><span class="keys-k">${k.split(/\s{2,}/).map((part) => (part === "or" ? '<span class="muted">or</span>' : `<kbd>${esc(part)}</kbd>`)).join(" ")}</span><span class="keys-what">${esc(what)}</span></div>`).join("")}</div>`)
-    .join("");
-  $("#keys-dialog").classList.remove("hidden");
-  $("#keys-close").focus();
-}
-
-function closeShortcuts() {
-  $("#keys-dialog").classList.add("hidden");
-}
 
 function wireShortcuts() {
   $("#keys-close").addEventListener("click", closeShortcuts);
@@ -4328,3 +3906,304 @@ function wireShortcuts() {
   $("#keys-dialog").addEventListener("keydown", (e) => e.key === "Escape" && closeShortcuts());
   document.addEventListener("click", (e) => e.target.closest("[data-shortcuts]") && openShortcuts());
 }
+
+// ---------- who's waiting for you (⌘J) ----------
+
+// waitingTabs are the agent tabs that finished while you weren't looking
+// (see checkAttention), the one waiting longest first.
+function waitingTabs() {
+  const out = [];
+  for (const list of Object.values(state.tabs)) for (const t of list) if (t.unseen && !t.exited) out.push(t);
+  return out.sort((a, b) => (a.doneAt || 0) - (b.doneAt || 0));
+}
+
+// waitingIn is a project's tab that has waited for you longest, if any.
+const waitingIn = (path) => waitingTabs().find((t) => t.path === path) || null;
+
+// activeProjects are the projects with open sessions: those waiting for
+// you first (longest first), then the working ones, then the rest.
+function activeProjects(list) {
+  const rank = (p) => (waitingIn(p.path) ? 0 : projectStatus(p.path) === "busy" ? 1 : 2);
+  return list
+    .filter((p) => projectStatus(p.path) !== "idle")
+    .map((p, i) => ({ p, i, r: rank(p), at: waitingIn(p.path)?.doneAt || 0 }))
+    .sort((a, b) => a.r - b.r || a.at - b.at || a.i - b.i)
+    .map((x) => x.p);
+}
+
+// asking: the agent shows a question or a permission prompt (Claude Code's
+// menus; other agents' aren't recognised yet).
+const asking = (tab) => isClaude(tab) && !!tab.term && !!chatMenu(tab.term);
+
+const waitLabel = (t) => `${asking(t) ? "asks you" : "done"}${fmtAgo(t.doneAt) === "now" ? "" : ` · ${fmtAgo(t.doneAt)}`}`;
+
+function nextWaiting() {
+  const t = waitingTabs()[0];
+  if (!t) return flash("Nobody is waiting for you");
+  closeDrawers();
+  openProject(t.path);
+  selectTab(tabsOf(t.path).indexOf(t));
+}
+
+// ---------- the prompt queue: sent one by one as the agent finishes ----------
+
+async function loadQueues() {
+  try {
+    const list = (await Go().Queues()) || [];
+    state.queues = Object.fromEntries(list.map((q) => [q.id, q.items]));
+  } catch {}
+}
+
+// readyForPrompt: the agent shows its own input box, empty: not a
+// question, a permission prompt, or something you started typing.
+function readyForPrompt(t) {
+  if (!isClaude(t)) return true; // other agents: Quarters goes by their being quiet (QueueNext)
+  const top = claudeBoxTop(t.term);
+  if (top < 0) return false;
+  const buf = t.term.buffer.active, line = buf.getLine(buf.baseY + top + 1);
+  if (!line) return false;
+  const cell = buf.getNullCell();
+  let mark = false;
+  for (let x = 0; x < line.length; x++) {
+    line.getCell(x, cell);
+    const ch = cell.getChars();
+    if (!mark) mark = ch === "❯" || ch === ">";
+    else if (ch.trim() && !cell.isDim()) return false; // your draft (the hint in an empty box is dim)
+  }
+  return mark;
+}
+
+// runQueues asks Quarters to send a session's next prompt when its agent
+// is quiet and ready for it. Every window does this; Quarters sends each
+// prompt once. A window that isn't drawing the session (in use on another
+// device) can't see its screen, so it leaves it to that one.
+const queueAsked = {};
+function runQueues() {
+  if (!on("prompt_queue") || !canType()) return;
+  const now = Date.now();
+  for (const [id, items] of Object.entries(state.queues)) {
+    const t = state.byId[id];
+    if (!t || !items.length || t.exited || !t.synced || isPaused(t)) continue;
+    if (now - t.lastData < QUIET_MS || now - (t.lastInput || 0) < QUIET_MS || now - (queueAsked[id] || 0) < 1500) continue;
+    if (!readyForPrompt(t)) continue;
+    queueAsked[id] = now;
+    Promise.resolve(Go().QueueNext(t.id)).catch(() => {});
+  }
+}
+
+function renderPanelQueue(cur) {
+  if (!on("prompt_queue") || mirrors(cur) || cur.exited || !cur.id) return "";
+  const items = state.queues[cur.id] || [];
+  const name = esc(shortAgent(cur.harness));
+  const rows = items
+    .map((p, i) => `<div class="pq-row" data-pq="${i}"><span class="pq-n muted">${i + 1}</span><span class="pq-text" title="${esc(p)}">${esc(p)}</span>
+      <button class="pa-btn" type="button" data-pq-up title="Move up"${i ? "" : " disabled"}>↑</button><button class="pa-btn pa-del" type="button" data-pq-del title="Remove">×</button></div>`)
+    .join("");
+  const note = !items.length ? "" : tabStatus(cur) === "busy" ? `The next one goes in when ${name} finishes.` : isPaused(cur) ? "Goes on on the device using this session." : readyForPrompt(cur) ? "The next one goes in a moment." : `${name} is waiting for you: answer it, and the queue goes on.`;
+  return `<div class="pq-box"><div class="sec-row"><span class="sec">QUEUE${items.length ? ` · ${items.length}` : ""}</span><button class="pa-add" type="button" data-pq-add title="A prompt to send when ${name} finishes">＋ add prompt</button></div>${rows ? `<div class="pa-list">${rows}</div>` : ""}${note ? `<div class="muted pq-note">${note}</div>` : ""}</div>`;
+}
+
+// ---------- usage by project (⇧⌘U) ----------
+
+let usageAt = 0;
+async function refreshUsage(force) {
+  if (!on("usage") || (!force && Date.now() - usageAt < 60000)) return;
+  usageAt = Date.now();
+  try {
+    state.usage = await Go().Usage();
+    renderStats();
+    if (!$("#usage-dialog").classList.contains("hidden")) renderUsage();
+  } catch {}
+}
+
+function bars(days, n, height) {
+  const list = days.slice(-n), peak = Math.max(1, ...list);
+  return `<div class="chart us-chart" style="height:${height}px">${list
+    .map((v, i) => `<div class="${!v ? "zero" : i === list.length - 1 ? "now" : ""}" style="height:${v ? Math.max(3, Math.round((height * v) / peak)) : 2}px" title="${esc(state.usage.days[state.usage.days.length - list.length + i])}: ${fmtTokens(v)} tokens"></div>`)
+    .join("")}</div>`;
+}
+
+function renderPanelUsage(path) {
+  const u = on("usage") && state.usage;
+  const me = u && u.projects.find((p) => p.path === path);
+  const p = project(path);
+  if (!me || (!me.month && p && p.agent !== "claude")) return "";
+  const ranked = u.projects.filter((x) => x.week > 0);
+  const rank = ranked.indexOf(me) + 1;
+  const share = u.total.week ? Math.round((100 * me.week) / u.total.week) : 0;
+  return `<div class="divider"></div>
+    <div class="sec-row"><span class="sec">USAGE</span><button class="pa-add" type="button" data-usage title="Every project's tokens (⇧⌘U)">all projects ›</button></div>
+    <div class="tiles us-tiles">
+      <div class="tile"><div class="t-label">today</div><div class="t-value">${fmtTokens(me.today)}</div></div>
+      <div class="tile"><div class="t-label">7 days</div><div class="t-value">${fmtTokens(me.week)}</div></div>
+      <div class="tile"><div class="t-label">30 days</div><div class="t-value">${fmtTokens(me.month)}</div></div>
+    </div>
+    <div class="kv" style="gap:6px"><div class="row" style="font-size:12px"><span class="muted">tokens / day</span><span class="muted">${me.week ? `${share}% of this week's · #${rank} of ${ranked.length}` : "none this week"}</span></div>${bars(me.daily, 14, 36)}</div>`;
+}
+
+// ---------- agent instructions (CLAUDE.md, AGENTS.md…) and notes ----------
+
+async function refreshInstructions(path, force) {
+  if (!path || !on("instructions")) return;
+  const cur = state.instructions[path];
+  if (cur && !force && Date.now() - cur.at < 15000) return;
+  state.instructions[path] = { files: [], notes: "", ...cur, at: Date.now() };
+  try {
+    const v = await Go().Instructions(path);
+    state.instructions[path] = { ...v, at: Date.now() };
+    renderStats();
+  } catch {}
+}
+
+function renderPanelInstructions(path) {
+  const v = on("instructions") && state.instructions[path];
+  if (!v || !v.at) return "";
+  const own = project(path)?.agent;
+  const rows = (v.files || [])
+    .map((f) => `<button type="button" class="row file-row in-row" data-instr="${esc(f.name)}" title="${esc(f.name)}: read by ${esc(f.agents.join(", "))}">
+      <span class="path"><span class="violet st">${f.exists ? "§" : "+"}</span>${esc(f.name)} <span class="muted">${esc(f.agents.length > 2 ? `${f.agents.length} agents` : f.agents.map((a) => a.replace(/ (Code|CLI)$/, "")).join(", "))}</span></span>
+      <span class="muted">${f.exists ? `${f.lines} line${f.lines === 1 ? "" : "s"}` : `create`}</span></button>`)
+    .join("");
+  return `<div class="divider"></div><div class="sec-row"><span class="sec">INSTRUCTIONS</span><span class="muted note">${own ? `${esc(shortAgent(own))} reads ${esc((state.settings?.harnesses || []).find((h) => h.id === own)?.instructions || "")}` : ""}</span></div>
+    <div class="files">${rows}
+      <button type="button" class="row file-row in-row" data-notes title="Your notes on this project: kept by Quarters, not in the project folder">
+        <span class="path"><span class="yellow st">✎</span>Notes <span class="muted">${esc(v.notes || "only yours, not the agent's")}</span></span><span class="muted">${v.notes ? "" : "write"}</span></button>
+    </div>`;
+}
+
+// ---------- the editor: a queued prompt, an instructions file, notes ----------
+
+function wirePanelExtras() {
+  $("#stats").addEventListener("click", (e) => {
+    const path = state.statsPath, cur = activeTab();
+    if (e.target.closest("[data-usage]")) return openUsage();
+    const instr = e.target.closest("[data-instr]");
+    if (instr) return openEditor({ kind: "instructions", path, name: instr.dataset.instr });
+    if (e.target.closest("[data-notes]")) return openEditor({ kind: "notes", path });
+    if (!cur || cur.path !== path) return;
+    if (e.target.closest("[data-pq-add]")) {
+      if (!canType()) return watchOnly();
+      return openEditor({ kind: "queue", path, tabId: cur.id, agent: shortAgent(cur.harness) });
+    }
+    const row = e.target.closest("[data-pq]");
+    if (!row) return;
+    if (!canType()) return watchOnly();
+    const i = Number(row.dataset.pq);
+    const done = (p) => Promise.resolve(p).catch((err) => flash(String(err).replace(/^Error: /, "")));
+    if (e.target.closest("[data-pq-del]")) done(Go().QueueRemove(cur.id, i));
+    else if (e.target.closest("[data-pq-up]")) done(Go().QueueMove(cur.id, i, -1));
+  });
+  $("#tb-waiting").addEventListener("click", nextWaiting);
+}
+
+// ---------- parts loaded when first used (ui/*.js) ----------
+
+// Dialogs most visits never open live in their own files, so a phone
+// doesn't download them up front. They import what they need from here.
+const uiLoads = {};
+function ui(file) {
+  return (uiLoads[file] ||= import(`./ui/${file}`).catch((e) => {
+    delete uiLoads[file];
+    flash(`couldn't load ${file}: ${e.message || e}`);
+    throw e;
+  }));
+}
+
+function openShortcuts(...args) {
+  return ui("shortcuts.js").then((m) => m.openShortcuts(...args));
+}
+
+function closeShortcuts(...args) {
+  return ui("shortcuts.js").then((m) => m.closeShortcuts(...args));
+}
+
+function openHistory(...args) {
+  return ui("history.js").then((m) => m.openHistory(...args));
+}
+
+function showDiff(...args) {
+  return ui("diff.js").then((m) => m.showDiff(...args));
+}
+
+function openUsage(...args) {
+  return ui("usage.js").then((m) => m.openUsage(...args));
+}
+
+function renderUsage(...args) {
+  return ui("usage.js").then((m) => m.renderUsage(...args));
+}
+
+function openEditor(...args) {
+  return ui("editor.js").then((m) => m.openEditor(...args));
+}
+
+function openSettings(...args) {
+  return ui("settings.js").then((m) => m.openSettings(...args));
+}
+
+function renderSettings(...args) {
+  return ui("settings.js").then((m) => m.renderSettings(...args));
+}
+
+function openProjectDialog(...args) {
+  return ui("project-dialog.js").then((m) => m.openProjectDialog(...args));
+}
+
+function toggleRemote(...args) {
+  return ui("remote-dialog.js").then((m) => m.toggleRemote(...args));
+}
+
+function openRemoteDialog(...args) {
+  return ui("remote-dialog.js").then((m) => m.openRemoteDialog(...args));
+}
+
+export {
+  $,
+  Go,
+  PROJECT_COLORS,
+  REMOTE,
+  activeTab,
+  agentName,
+  autosForDialog,
+  autosToSave,
+  bars,
+  baseName,
+  canChange,
+  closeDrawers,
+  closeTab,
+  dlg,
+  esc,
+  flash,
+  fmtAgo,
+  fmtTokens,
+  harnessOptions,
+  iconData,
+  iconHTML,
+  isTouch,
+  loadIcon,
+  loadProjects,
+  loadSettings,
+  mark,
+  monogram,
+  newTab,
+  on,
+  onMenu,
+  openLink,
+  openProject,
+  openRemoteDialog,
+  project,
+  projectColor,
+  refreshInstructions,
+  refreshUsage,
+  render,
+  renderRemotePill,
+  rmd,
+  selectTab,
+  set,
+  setTheme,
+  showActive,
+  state,
+  tabsOf,
+  theme,
+  watchOnly,
+};

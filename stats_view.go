@@ -101,7 +101,7 @@ func (a *App) Stats(path string) StatsView {
 			v.MCP = append(v.MCP, MCPView{Name: name})
 		}
 	}
-	v.Git = stats.GitStatus(path)
+	v.Git = a.gitNow(path)
 
 	// Today's totals scan every project's logs: refresh at most every 30 s,
 	// in the background.

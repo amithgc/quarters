@@ -5,19 +5,22 @@
 package remote
 
 import (
+	"bytes"
 	"compress/gzip"
+	"crypto/sha256"
 	"embed"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"io/fs"
 	"net"
 	"net/http"
 	"net/url"
 	"path"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -65,6 +68,9 @@ type Server struct {
 	log     *auditLog
 	web     fs.FS
 
+	filesMu sync.Mutex
+	files   map[string]*servedFile // "app:index.html" → the file, read once
+
 	mu      sync.Mutex
 	srv     *http.Server
 	running bool
@@ -111,7 +117,7 @@ func New(opts Options, b Backend) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
-	s := &Server{opts: opts, backend: b, origin: u.Scheme + "://" + u.Host, secure: u.Scheme == "https", local: isLoopbackName(host), site: strings.ToLower(u.Host), log: log,
+	s := &Server{opts: opts, backend: b, files: map[string]*servedFile{}, origin: u.Scheme + "://" + u.Host, secure: u.Scheme == "https", local: isLoopbackName(host), site: strings.ToLower(u.Host), log: log,
 		hosts: map[string]bool{strings.ToLower(u.Host): true}}
 	// The tunnel may pass the local address as Host. Only exact loopback
 	// names are accepted, which still stops DNS-rebinding attacks.
@@ -436,23 +442,23 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case p == "/login" || p == "/pair":
 		h.Set("Cache-Control", "no-store")
-		s.serveFile(w, r, s.web, strings.TrimPrefix(p, "/")+".html")
+		s.serveFile(w, r, "web", strings.TrimPrefix(p, "/")+".html")
 	case strings.HasPrefix(p, "/auth-ui/"):
 		h.Set("Cache-Control", "no-cache")
-		s.serveFile(w, r, s.web, strings.TrimPrefix(p, "/auth-ui/"))
+		s.serveFile(w, r, "web", strings.TrimPrefix(p, "/auth-ui/"))
 	case p == "/" || p == "/index.html":
 		h.Set("Cache-Control", "no-store")
-		s.serveFile(w, r, s.opts.App, "index.html")
+		s.serveFile(w, r, "app", "index.html")
 	case p == "/sw.js":
 		h.Set("Cache-Control", "no-cache")
-		s.serveFile(w, r, s.opts.App, "sw.js")
+		s.serveFile(w, r, "app", "sw.js")
 	default:
 		if strings.HasPrefix(p, "/vendor/") || strings.HasPrefix(p, "/mascot/") || strings.HasPrefix(p, "/icons/") {
 			h.Set("Cache-Control", "private, max-age=86400")
 		} else {
 			h.Set("Cache-Control", "no-cache")
 		}
-		s.serveFile(w, r, s.opts.App, strings.TrimPrefix(p, "/"))
+		s.serveFile(w, r, "app", strings.TrimPrefix(p, "/"))
 	}
 }
 
@@ -528,43 +534,84 @@ func (s *Server) serveAuth(w http.ResponseWriter, r *http.Request, p string) {
 
 var compressible = map[string]bool{".js": true, ".css": true, ".html": true, ".json": true, ".svg": true, ".webmanifest": true}
 
-// serveFile serves name from fsys, gzipped when the browser accepts it.
-func (s *Server) serveFile(w http.ResponseWriter, r *http.Request, fsys fs.FS, name string) {
-	f, err := fsys.Open(name)
+// servedFile is one of the app's files, read and compressed once: they are
+// built into Quarters, so they never change while it runs. The ETag lets a
+// phone ask "still the same?" and get a 304 instead of the whole file on
+// every visit.
+type servedFile struct {
+	body, gz []byte
+	etag     string
+}
+
+// loadFile reads name from the app's files (which: "app") or the sign-in
+// pages ("web").
+func (s *Server) loadFile(which, name string) (*servedFile, error) {
+	key := which + ":" + name
+	s.filesMu.Lock()
+	f := s.files[key]
+	s.filesMu.Unlock()
+	if f != nil {
+		return f, nil
+	}
+	fsys := s.opts.App
+	if which == "web" {
+		fsys = s.web
+	}
+	if st, err := fs.Stat(fsys, name); err != nil || st.IsDir() {
+		return nil, fs.ErrNotExist
+	}
+	b, err := fs.ReadFile(fsys, name)
+	if err != nil {
+		return nil, err
+	}
+	sum := sha256.Sum256(b)
+	f = &servedFile{body: b, etag: hex.EncodeToString(sum[:10])}
+	if compressible[path.Ext(name)] {
+		var buf bytes.Buffer
+		gz, _ := gzip.NewWriterLevel(&buf, gzip.BestCompression)
+		_, _ = gz.Write(b)
+		_ = gz.Close()
+		f.gz = buf.Bytes()
+	}
+	s.filesMu.Lock()
+	s.files[key] = f
+	s.filesMu.Unlock()
+	return f, nil
+}
+
+// serveFile serves one of the app's files, gzipped when the browser
+// accepts it.
+func (s *Server) serveFile(w http.ResponseWriter, r *http.Request, which, name string) {
+	f, err := s.loadFile(which, name)
 	if err != nil {
 		http.NotFound(w, r)
 		return
 	}
-	defer f.Close()
-	st, err := f.Stat()
-	if err != nil || st.IsDir() {
-		http.NotFound(w, r)
-		return
-	}
+	h := w.Header()
 	ext := path.Ext(name)
 	if ext == ".webmanifest" {
-		w.Header().Set("Content-Type", "application/manifest+json")
+		h.Set("Content-Type", "application/manifest+json")
 	}
-	if compressible[ext] && strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
-		w.Header().Set("Content-Encoding", "gzip")
-		w.Header().Set("Vary", "Accept-Encoding")
-		if w.Header().Get("Content-Type") == "" {
-			w.Header().Set("Content-Type", mimeOf(ext))
-		}
-		if r.Method == http.MethodHead {
+	if f.gz != nil && strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
+		etag := `"` + f.etag + `-gz"`
+		h.Set("ETag", etag)
+		h.Set("Vary", "Accept-Encoding")
+		if strings.Contains(r.Header.Get("If-None-Match"), etag) {
+			w.WriteHeader(http.StatusNotModified)
 			return
 		}
-		gz := gzip.NewWriter(w)
-		defer gz.Close()
-		_, _ = io.Copy(gz, f)
+		h.Set("Content-Encoding", "gzip")
+		if h.Get("Content-Type") == "" {
+			h.Set("Content-Type", mimeOf(ext))
+		}
+		h.Set("Content-Length", strconv.Itoa(len(f.gz)))
+		if r.Method != http.MethodHead {
+			_, _ = w.Write(f.gz)
+		}
 		return
 	}
-	rs, ok := f.(io.ReadSeeker)
-	if !ok {
-		http.Error(w, "unreadable", http.StatusInternalServerError)
-		return
-	}
-	http.ServeContent(w, r, name, time.Time{}, rs)
+	h.Set("ETag", `"`+f.etag+`"`) // ServeContent answers If-None-Match with it
+	http.ServeContent(w, r, name, time.Time{}, bytes.NewReader(f.body))
 }
 
 func mimeOf(ext string) string {
