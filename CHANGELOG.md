@@ -1,5 +1,69 @@
 # Changelog
 
+## 0.8.0
+
+Everyday developer tools, around the agent's work:
+
+- **Commit, push and pull requests from the side panel, with CI status**
+  (#7). **Commit…** under the GIT section's changed files opens a dialog;
+  **✨ Draft it** asks Claude Code (`claude -p`) for a message from the diff,
+  in the style of the repository's recent commits. **Commit & push**,
+  **Push ↑n** (setting the upstream the first time) and **Open a pull
+  request** (`gh pr create --fill`). The branch's pull request shows with
+  its checks: passed, running, failed (which). Files that look like they
+  hold secrets are never committed.
+- **Scripts** (#8): a project's `package.json` scripts (run with pnpm,
+  yarn, bun or npm, from its lockfile), `Makefile` targets, `justfile`
+  recipes, `deno.json` tasks, and Cargo and Go commands, in the side panel;
+  a click runs one in a tab of its own, or goes to the tab it runs in.
+  `run <name>` in ⇧⌘P too.
+- **Ports** (#9): what the project's tabs listen on, with the process and
+  the tab, and other processes of yours working in its folder; open it,
+  go to its tab, or stop it (SIGTERM, then SIGKILL). macOS and Linux.
+- **Checkpoints before every prompt** (#10): a snapshot of the project's
+  files (everything git doesn't ignore, committed or not) each time an
+  agent gets a prompt, kept as commits under `refs/quarters/checkpoints/`
+  (the last 50) without touching the branch, the index or the stash. See
+  what changed since one, file by file, and restore it; a restore takes a
+  checkpoint first, so it can be undone. A Settings switch turns it off.
+- **Clickable `file:line`, and Send to agent** (#11): `path:line(:col)`,
+  `path(line,col)` and Python's `File "x", line n` in a terminal are links
+  when the file is in the project; ⌘-click opens the editor at that line.
+  **⇧⌘L** (or the button that appears) types the selection, from a terminal
+  or the editor (with the file and lines), into the project's agent tab,
+  not sent.
+- **Search every project** (#12, ⇧⌘K): ripgrep (or git grep) across all
+  projects, with match case, whole words, regular expressions and a file
+  filter; results by project and file, Enter opens the line. Secret-looking
+  files are never searched.
+- **Today's work** (#13): on Home, per project, your commits since
+  midnight, the agent conversations and their prompts, and what isn't
+  committed yet; **Copy** (or ⇧⌘P → Copy today's summary) puts it on the
+  clipboard as Markdown.
+
+And:
+
+- **Home** (the house left of the title): a new home page in the middle,
+  with the name, one of 50 taglines (a different one each time), tiles to
+  jump to a project, add one, search conversations and open Settings, a
+  **Today** card (sessions, tokens and cache hits across every project, with
+  the last two hours as an animated chart: bars rise in, the current five
+  minutes glow, hover one for its time and tokens), today's work, every
+  active session at a glance, and the keys worth knowing. Tabs keep
+  running; opening a project shows them again.
+- Emoji project icons: **Emoji…** in the project dialog opens every emoji,
+  by group, with a search by name. config.json keeps it as `"icon": "🚀"`.
+  Favicons and app icons found in the folder are still suggested.
+- The agent and permission choices in Settings and the project dialog are
+  the app's own menus, like the side panel's: what each agent runs, and
+  which aren't installed.
+- **＋ add** in the PROJECTS header, and a GitHub button in the title bar.
+- Sign out and alerts no longer show in the Mac app (they're for a browser).
+- Adding a project no longer opens the folder picker by itself: type the
+  path, or click Browse… when you want it.
+- The update dialog says `brew update && brew upgrade …`, so Homebrew sees
+  the new version, and Quarters looks for one every hour (was six).
+
 ## 0.7.1
 
 - Edit config.json in a browser (#6). A browser can't open the file in an
