@@ -1073,4 +1073,19 @@ body.focus-mode #statusbar { display: none; }
 }
 @keyframes q-fade { from { opacity: 0; } }
 @keyframes q-rise { from { opacity: 0; transform: translateY(6px) scale(.985); } }
+/* about Quarters: a popup above the version */
+.about-pop { position: fixed; z-index: 60; width: 380px; max-width: calc(100vw - 16px); background: var(--pop); border: 1px solid var(--border-strong); border-radius: var(--r-lg); box-shadow: 0 16px 40px rgba(0,0,0,.5); padding: 14px 16px 12px; display: flex; flex-direction: column; gap: 12px; }
+.ab-head { display: flex; align-items: center; gap: 12px; }
+.ab-head img { width: 60px; height: 60px; margin: -6px -4px; flex-shrink: 0; }
+.ab-name { display: flex; flex-direction: column; min-width: 0; }
+.ab-name b { color: var(--accent); font-size: 15px; }
+.ab-name .muted { font-size: var(--fs-sm); }
+.ab-rows { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 6px 14px; margin: 0; padding: 10px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); font-size: var(--fs-sm); }
+.ab-rows dt { color: var(--muted); }
+.ab-rows dd { margin: 0; color: var(--text); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ab-link { color: var(--accent); font: inherit; padding: 0; text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: 1px; }
+.ab-link:hover { color: var(--text); }
+.ab-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.ab-actions .btn { flex: 1; white-space: nowrap; }
+.ab-foot { font-size: var(--fs-xs); text-align: center; }
 @media (max-width: 760px) { #version { display: none; } } /* the phone's status bar is only for messages */

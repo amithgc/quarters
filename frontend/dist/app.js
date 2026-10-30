@@ -3475,15 +3475,71 @@ async function syncPush() {
 
 // ---------- the version (bottom right) ----------
 
-// Which Quarters this is; a click opens what changed in it.
+const REPO = "https://github.com/amithgc/quarters";
+const ABOUT_LINKS = {
+  website: "https://quarters.amithgc.com",
+  github: REPO,
+  issues: `${REPO}/issues/new/choose`,
+  developer: "https://github.com/amithgc",
+  license: `${REPO}/blob/main/LICENSE`,
+};
+
+// Which Quarters this is; a click shows the about popup above it.
 async function showVersion() {
   const v = await Promise.resolve(Go().Version()).catch(() => "");
   const el = $("#version");
   if (!v) return;
   el.textContent = v === "dev" ? "dev build" : `v${v}`;
-  el.title = v === "dev" ? "Built from source" : `Quarters ${v} · what's new`;
+  el.title = "About Quarters";
   el.hidden = false;
-  if (v !== "dev") el.onclick = () => rt().BrowserOpenURL(`https://github.com/amithgc/quarters/releases/tag/v${v}`);
+  el.onclick = () => ($("#about-pop").classList.contains("hidden") ? showAbout(v) : hideAbout());
+}
+
+// showAbout: the version, who makes Quarters and where to find it.
+function showAbout(v) {
+  const pop = $("#about-pop");
+  const dev = v === "dev";
+  const link = (key, text) => `<button type="button" class="ab-link" data-url="${key}">${text}</button>`;
+  pop.innerHTML = `
+    <div class="ab-head">
+      <img src="mascot/happy.svg" alt="" draggable="false">
+      <div class="ab-name"><b>Quarters</b><span class="muted">A home for terminal coding agents</span></div>
+    </div>
+    <dl class="ab-rows">
+      <dt>Version</dt><dd>${dev ? "dev build, from source" : `${esc(v)} · ${link("release", "what's new")}`}</dd>
+      <dt>Running</dt><dd>${REMOTE ? "in this browser, from the Mac" : "Mac app"}</dd>
+      <dt>Developer</dt><dd>Amith · ${link("developer", "@amithgc")}</dd>
+      <dt>Licence</dt><dd>MIT, open source · ${link("license", "read")}</dd>
+    </dl>
+    <div class="ab-actions">
+      <button type="button" class="btn" data-url="website">◆ Website</button>
+      <button type="button" class="btn" data-url="github">GitHub</button>
+      <button type="button" class="btn" data-url="issues">Report an issue</button>
+    </div>
+    <div class="ab-foot muted">© 2026 Amith · quarters.amithgc.com</div>`;
+  pop.classList.remove("hidden");
+  const r = $("#version").getBoundingClientRect();
+  pop.style.left = Math.max(8, r.right - pop.offsetWidth) + "px";
+  pop.style.top = Math.max(8, r.top - pop.offsetHeight - 8) + "px";
+}
+
+function hideAbout() {
+  $("#about-pop").classList.add("hidden");
+}
+
+function wireAbout() {
+  const pop = $("#about-pop");
+  pop.addEventListener("click", (e) => {
+    const b = e.target.closest("[data-url]");
+    if (!b) return;
+    const v = $("#version").textContent.replace(/^v/, "");
+    rt().BrowserOpenURL(b.dataset.url === "release" ? `${REPO}/releases/tag/v${v}` : ABOUT_LINKS[b.dataset.url]);
+    hideAbout();
+  });
+  window.addEventListener("mousedown", (e) => {
+    if (!e.target.closest("#about-pop, #version")) hideAbout();
+  }, true);
+  window.addEventListener("keydown", (e) => e.key === "Escape" && hideAbout(), true);
 }
 
 // ---------- timers ----------
@@ -3637,6 +3693,7 @@ async function main() {
 
   state.me = REMOTE ? remoteMod.remote.client : await Go().ClientID();
   showVersion();
+  wireAbout();
   await loadSettings();
   await loadProjects();
   render();
