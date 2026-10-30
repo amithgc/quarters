@@ -3,3 +3,9 @@ contact_links:
   - name: Report a security problem
     url: https://github.com/amithgc/quarters/security/advisories/new
     about: Please report vulnerabilities privately, not as a public issue.
+  - name: Ask a question
+    url: https://github.com/amithgc/quarters/discussions/categories/q-a
+    about: How do I…? Questions and help go to Discussions.
+  - name: Share an idea
+    url: https://github.com/amithgc/quarters/discussions/categories/ideas
+    about: Not sure it's a feature request yet? Talk it through in Discussions.

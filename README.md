@@ -2,10 +2,26 @@
 
 <h1 align="center">Quarters</h1>
 
+<p align="center">
+  <a href="https://github.com/amithgc/quarters/releases/latest"><img src="https://img.shields.io/github/v/release/amithgc/quarters?color=E08A6A" alt="Latest release"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/amithgc/quarters?color=B59CFF" alt="MIT licence"></a>
+  <a href="https://github.com/amithgc/quarters/actions/workflows/ci.yml"><img src="https://github.com/amithgc/quarters/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <img src="https://img.shields.io/badge/macOS-11%2B-24232A?logo=apple" alt="macOS 11 or later">
+  <a href="#install"><img src="https://img.shields.io/badge/homebrew-amithgc%2Ftap%2Fquarters-FBB040?logo=homebrew&logoColor=white" alt="Install with Homebrew"></a>
+</p>
+
 <p align="center"><b>A minimalist home for terminal coding agents, for developers who work on many projects at once.</b><br>
 Claude Code, Codex, Gemini CLI, Antigravity, OpenCode, Copilot CLI, Devin or Aider: switch projects in a click,<br>
 run your agents in several of them side by side, see what they're doing,<br>
 start your dev servers with one action — and do it all from your phone, too.</p>
+
+<p align="center"><img src="docs/demo.gif" alt="Quarters at work: Claude runs in three projects; api-gateway finishes and is marked as waiting, ⌘J jumps to it, a reply goes in, and the project's backend and frontend start side by side" width="900"></p>
+
+```sh
+brew install --cask amithgc/tap/quarters
+```
+
+<p align="center"><sub>Free and open source · <a href="https://quarters.amithgc.com">quarters.amithgc.com</a> · If Quarters saves you some tab-hunting, a ⭐ helps other developers find it.</sub></p>
 
 <p align="center">
   <a href="#install">Install</a> ·
@@ -13,6 +29,7 @@ start your dev servers with one action — and do it all from your phone, too.</
   <a href="#coding-agents">Coding agents</a> ·
   <a href="#remote-access-work-from-anywhere">Remote access</a> ·
   <a href="#configuration">Configuration</a> ·
+  <a href="#faq">FAQ</a> ·
   <a href="CONTRIBUTING.md">Contributing</a>
 </p>
 
@@ -533,6 +550,50 @@ internal/remote        remote access: passkeys, sessions, WebSocket, push
 frontend/dist          the frontend (plain ES modules, no bundler; ui/ holds the dialogs, loaded when first opened)
 tools/mascot           draws the mascot
 ```
+
+## FAQ
+
+**How is this different from tmux?**
+tmux can hold all the sessions, and with enough scripts it can do much of
+the rest. Quarters is what those scripts would add up to, without writing
+them: a list of your projects with their git status, an agent started in one
+key, a mark on the session that finished and is waiting for you (⌘J goes to
+it), a side panel with the session's model, context, tokens, plan usage and
+the files the agent changed, automations that start the dev servers with
+the project, and the same live sessions in a phone's browser, signed in with
+a passkey. If you live in tmux and like it there, keep it; Quarters is for
+people who'd rather click a project than remember a session name.
+
+**Why not tabs in iTerm2, Ghostty, Warp or the Terminal?**
+A terminal knows about shells, not projects or agents. Tabs don't tell you
+which agent is done, can't start a project's backend and frontend together,
+and can't be picked up from your phone. Quarters keeps one place per project
+(its agent tabs, shells and servers) and leaves the general terminal work
+to your terminal.
+
+**What about apps that run many agents on one repository?**
+Several tools run a team of agents in parallel worktrees of a single
+repository. Quarters starts from the other end: many projects, each with
+the agent and the dev stack it needs, and quick switching between them. It
+does worktrees too (⎇), when you want several agents on one repository.
+
+**Does my code or my prompts go anywhere?**
+No. Quarters has no AI of its own, no accounts and no analytics. It starts
+the agents you installed, with their own logins, and they talk to their
+providers as they always do. Remote access is off until you start it, and
+then it only listens on this Mac (see [SECURITY.md](SECURITY.md)).
+
+**Does it work with my Claude subscription or API key?**
+Yes: it runs `claude` (or another agent) exactly as you would in a
+terminal, signed in however you signed it in.
+
+**Do sessions keep running when I quit Quarters?**
+No, the agents run inside Quarters. When it starts again, it offers to
+reopen the conversations and automations that were open, and Claude Code
+picks each conversation up where it left off. To keep agents running while
+you're away, leave Quarters running on that machine (or run the
+[server](#linux-the-server-used-from-a-browser) on a Linux box) and use it
+from a browser.
 
 ## Contributing
 
