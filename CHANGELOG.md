@@ -1,5 +1,39 @@
 # Changelog
 
+## 0.7.0
+
+- Four more coding agents (#1): Amp, Goose, Qwen Code and Cursor CLI, twelve
+  in all. Each starts, continues the last conversation (⇧C) and, where it
+  has a switch, skips its permission prompts.
+- `quarters --version` (#4): which Quarters this is, e.g. `Quarters 0.7.0
+  (linux/amd64, server)`, for the server with no window and for bug reports.
+- The light theme reads better (#3): muted text, yellow, green, the accent
+  and red are darker, to WCAG AA contrast (4.5:1) on every light surface.
+- Keyboard shortcuts work in a browser too (#5). A browser has no menus,
+  so the page listens for the same keys. On Linux and Windows, Alt stands
+  in for ⌘ (Alt+P, Alt+Shift+P, Ctrl+Alt+T) and every label says so. On a
+  Mac, Chrome keeps ⌘T, ⌘W and ⇧⌘[ ] for its own tabs: add ⌃ (⌃⌘T).
+- The status bar shows the keys for what's in front of you: splitting in a
+  shell, moving between panes in a split, ⌘S in a file, moving and opening
+  in the projects list.
+- Keep awake, from the cup in the title bar: keep the Mac (or the server)
+  awake for 30 minutes to 24 hours or until you stop it, whatever it's
+  doing. The same menu switches the Keep awake setting (only while agents
+  work).
+- A pill beside the version: red "update available" when a newer release
+  is out, grey "up to date" when not. A click says how to update: Homebrew
+  or the download, for the Mac app or the server. Quarters asks GitHub at
+  most every six hours.
+- Add project, Settings, the theme (system, light, dark) and, in a
+  browser, alerts and sign out moved to the title bar beside the panel
+  buttons. On a phone they stay at the foot of the projects drawer.
+- Tips are always there: one line at the bottom right, the next one every
+  two minutes (› shows it now), the keys you haven't used first. They no
+  longer stop after a week or three a day, and there's no switch to turn
+  them off.
+- In a browser, Add project asks for the folder's path instead of offering
+  a Browse… button that can't open the machine's folder picker.
+
 ## 0.6.0
 
 - Split panes, as in iTerm: ⌘D opens a shell beside the tab you're in, ⇧⌘D
