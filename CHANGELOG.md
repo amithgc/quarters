@@ -1,5 +1,28 @@
 # Changelog
 
+## Unreleased
+
+- Split panes, as in iTerm: ⌘D opens a shell beside the tab you're in, ⇧⌘D
+  one below it, and splits nest. ⌘[ and ⌘] move between panes, ⌘W closes
+  just the pane (and a pane whose shell exits closes by itself), and drag
+  the line between two panes to resize them (double-click to make them
+  equal). A reloaded window, or another device, shows the panes the same
+  way.
+- A files panel (⇧⌘E, or the folder button in the title bar, which glows
+  while it's open): the project's folders and files, with git's marks
+  (changed, new, ignored) and a filter that finds any file. Click a file
+  to open it in an editor tab beside the terminals: syntax colours,
+  search, ⌘S to save. An agent's edit shows up by itself, and a save never
+  overwrites one made since you opened the file: you choose to reload or
+  keep yours. Right-click a file to copy its path, type it in the terminal
+  or show it in Finder. Files that may hold keys or passwords (.env,
+  *.pem…) are never opened.
+- Tips for the first week: now and then, one quiet line at the bottom
+  right about a key or a panel you haven't used yet (one you have never
+  shows). At most three a day; › shows another, × turns them off, and
+  Settings turns them back on.
+- The fold arrows in the side panel line up with their headings.
+
 ## 0.5.2
 
 - Hide and show the side panels from the title bar: a button at each end

@@ -8,6 +8,7 @@ authors.
 | | license |
 | --- | --- |
 | [xterm.js](https://github.com/xtermjs/xterm.js) and its fit, webgl, web-links and unicode11 addons | MIT, © The xterm.js authors (`LICENSE-xterm.txt`) |
+| [CodeMirror 6](https://codemirror.net) (the file editor) with its language packages, Lezer parsers, style-mod, crelt and w3c-keyname | MIT, © Marijn Haverbeke and others (`LICENSE-codemirror.txt`) |
 | [JetBrains Mono](https://github.com/JetBrains/JetBrainsMono) font, via [Fontsource](https://fontsource.org) | SIL Open Font License 1.1, © The JetBrains Mono Project Authors (`fonts/LICENSE-JetBrainsMono.txt`) |
 
 ## Go modules compiled into the app

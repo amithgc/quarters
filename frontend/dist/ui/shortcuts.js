@@ -23,11 +23,17 @@ function shortcutGroups() {
       ["⌘T", "New Claude tab"],
       ["⇧⌘T", "Continue the last conversation in a new tab"],
       ["⌥⌘T", "New shell tab"],
-      ["⌘W", "Close the tab"],
+      ["⌘W", "Close the tab (in a split: the pane)"],
       ["⌘1 … ⌘9", "Go to tab 1–9"],
       ["⇧⌘[  ⇧⌘]", "Previous / next tab"],
       ["⌘J", "Go to the session waiting for you longest"],
       ["Double-click", "Rename a tab"],
+    ]],
+    ["Split panes", [
+      ["⌘D", "Split: a shell beside this one"],
+      ["⇧⌘D", "Split: a shell below this one"],
+      ["⌘[  ⌘]", "Previous / next pane"],
+      ["Drag a line", "Resize (double-click: make them equal)"],
     ]],
     ["In a terminal", [
       ["⇧↵", "New line in Claude's prompt (without sending)"],
@@ -38,6 +44,8 @@ function shortcutGroups() {
     ["Panels and tools", [
       ["⌘B", "Show or hide the projects panel"],
       ["⌘I", "Show or hide the side panel"],
+      ["⇧⌘E", "Show or hide the files panel (click a file to edit it)"],
+      ["⌘S", "Save the file in view"],
       ["⇧⌘↵", "Focus mode: only the terminal (again to come back)"],
       ["⇧⌘F", "Search past conversations"],
       ["⇧⌘G", "Worktrees"],

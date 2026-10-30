@@ -147,5 +147,27 @@ func (a *App) Claim(id, cols, rows int) { a.sessions.Claim(macClient, id, cols, 
 // ClientID is this window's name among the windows sharing sessions.
 func (a *App) ClientID() string { return macClient }
 
+// SetSessionGroup records the split a tab is shown in (nil: none), so a
+// window that joins late, or reloads, shows its panes together again.
+func (a *App) SetSessionGroup(id int, group map[string]any) error {
+	info, ok := a.sessions.Info(id)
+	if !ok {
+		return nil
+	}
+	meta := map[string]any{}
+	_ = json.Unmarshal(info.Meta, &meta)
+	if group == nil {
+		delete(meta, "group")
+	} else {
+		meta["group"] = group
+	}
+	m, err := metaJSON(meta)
+	if err != nil {
+		return err
+	}
+	a.sessions.SetMeta(id, m)
+	return nil
+}
+
 // CloseSession ends a session.
 func (a *App) CloseSession(id int) { a.sessions.Close(id) }

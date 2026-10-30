@@ -14,6 +14,9 @@ func openWith(target string, edit bool) *exec.Cmd {
 	return exec.Command("open", "--", target)
 }
 
+// revealCmd shows a file in Finder.
+func revealCmd(target string) *exec.Cmd { return exec.Command("open", "-R", "--", target) }
+
 // awakeCmd keeps the machine from sleeping until it is stopped (or
 // Quarters, pid, ends).
 func awakeCmd(pid int) *exec.Cmd {

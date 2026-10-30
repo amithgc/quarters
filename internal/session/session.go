@@ -356,6 +356,17 @@ func (m *Manager) Info(id int) (Info, bool) {
 	return s.info(), true
 }
 
+// SetMeta replaces what a session tells the windows that join late.
+func (m *Manager) SetMeta(id int, meta json.RawMessage) {
+	s := m.get(id)
+	if s == nil {
+		return
+	}
+	s.mu.Lock()
+	s.meta = meta
+	s.mu.Unlock()
+}
+
 // Resize changes a session's terminal size, if client owns the session.
 // Windows of different sizes share a session; the one in use sets the size.
 func (m *Manager) Resize(client string, id, cols, rows int) {

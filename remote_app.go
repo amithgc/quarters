@@ -22,12 +22,13 @@ var remoteMethods = map[string]bool{
 	"Projects": true, "ConfigError": true, "Version": true, "Layout": true, "Stats": true, "Account": true, "AgentAccount": true,
 	"IconData": true, "FindIcons": true, "SetCollapsed": true, "SaveProject": true, "MoveProject": true,
 	"SaveAutomationSizes": true, "RemoveProject": true, "ConfigPath": true, "PastedImage": true,
-	"CloseSession": true, "Sessions": true, "Snapshot": true,
+	"CloseSession": true, "SetSessionGroup": true, "Sessions": true, "Snapshot": true,
 	"Settings": true, "SetFeature": true, "SetClaudeRemote": true, "Chat": true, "TabImage": true, "RemoteControlled": true, "SavePrompts": true, "SetUsageAlertAt": true,
 	"Conversations": true, "Diff": true, "DevLinks": true, "OpenOnMac": true, "ProjectTools": true,
 	"Worktrees": true, "CreateWorktree": true, "RemoveWorktree": true, "RestoreInfo": true, "DismissRestore": true,
 	"Queues": true, "QueueAdd": true, "QueueRemove": true, "QueueMove": true, "QueueNext": true,
 	"Usage": true, "Instructions": true, "ReadInstructions": true, "SaveInstructions": true, "Notes": true, "SaveNotes": true,
+	"ListDir": true, "ListFiles": true, "FileStatus": true, "ReadFile": true, "FileStamp": true, "SaveFile": true,
 }
 
 // What a device with less than full access may call ("view": watch only;
@@ -40,6 +41,7 @@ var (
 		"ProjectTools": true, "Worktrees": true, "RestoreInfo": true, "SetViewing": true, "Chat": true, "TabImage": true, "RemoteControlled": true,
 		"PushKey": true, "PushSubscribe": true, "PushUnsubscribe": true,
 		"Queues": true, "Usage": true, "Instructions": true, "ReadInstructions": true, "Notes": true,
+		"ListDir": true, "ListFiles": true, "FileStatus": true, "ReadFile": true, "FileStamp": true,
 	}
 	// queued prompts are typed in later: the same as typing them now
 	typeMethods = map[string]bool{"Write": true, "Resize": true, "Claim": true,

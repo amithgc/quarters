@@ -5,11 +5,15 @@ package main
 import (
 	"errors"
 	"os/exec"
+	"path/filepath"
 )
 
 // openWith opens a link, a file in its editor (edit) or a folder with the
 // desktop's default application.
 func openWith(target string, _ bool) *exec.Cmd { return exec.Command("xdg-open", target) }
+
+// revealCmd opens the folder a file is in.
+func revealCmd(target string) *exec.Cmd { return exec.Command("xdg-open", filepath.Dir(target)) }
 
 // awakeCmd keeps the machine from sleeping until it is stopped, where
 // systemd can (systemd-inhibit holds a sleep lock while its command runs).

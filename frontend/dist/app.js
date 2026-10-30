@@ -16,6 +16,8 @@ const $ = (s) => document.querySelector(s);
 const BUSY_MS = 1500;
 const DEFAULT_LEFT = 290;
 const DEFAULT_RIGHT = 330;
+const DEFAULT_FILES = 260;
+const FILES_KEY = "quarters.filesWidth";
 const FONT_KEY = "quarters.fontSize";
 // Which side panels show is remembered on each device.
 const PANELS_KEY = "quarters.panels";
@@ -35,6 +37,10 @@ const state = {
   showLeft: true,
   beforeFocus: null, // focus mode: which panels were showing
   showRight: true,
+  showFiles: true, // the files panel (⇧⌘E)
+  files: Number(localStorage.getItem(FILES_KEY)) || DEFAULT_FILES, // its width
+  fileTabs: {}, // path -> [file open in an editor tab] (this window only)
+  fileOn: {}, // path -> key of the file tab in view ("" = the terminals)
   stats: null,
   statsPath: null,
   account: null,
@@ -434,6 +440,7 @@ async function newTab(path, kind = "claude", opts = {}) {
   if (!adopt) {
     state.current = path;
     state.selected = path;
+    state.fileOn[path] = ""; // the new tab, not a file
   }
 
   const el = document.createElement("div");
@@ -485,6 +492,8 @@ async function newTab(path, kind = "claude", opts = {}) {
   state.byKey[tab.key] = tab;
   const list = (state.tabs[path] = tabsOf(path).concat(tab));
   if (!adopt) state.active[path] = list.length - 1;
+  if (opts.splitOf) splitTree(tab.group, opts.splitOf, tab.key, opts.splitDir);
+  if (opts.takeOver) tab.group.tree = renameLeaf(tab.group.tree, opts.takeOver, tab.key);
   showActive();
 
   term.open(body);
@@ -570,11 +579,13 @@ async function newTab(path, kind = "claude", opts = {}) {
 const newKey = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 
 // What other windows need to rebuild a split automation's group.
-const groupMeta = (g) => g && { id: g.id, name: g.name, autoName: g.autoName, path: g.path, layout: g.layout, cols: g.cols || null, rows: g.rows || null };
+const groupMeta = (g) => g && { id: g.id, name: g.name, autoName: g.autoName, path: g.path, layout: g.layout, cols: g.cols || null, rows: g.rows || null, tree: g.tree || null };
 
 function groupFor(g) {
   if (!g || !g.id) return null;
-  return (state.groups[g.id] ||= { ...g, focus: null });
+  const have = state.groups[g.id];
+  if (have && g.tree) have.tree = g.tree; // a split's newest pane knows the latest tree
+  return have || (state.groups[g.id] = { ...g, focus: null });
 }
 
 // syncOutput fills a tab's terminal with what its session has written so
@@ -806,7 +817,10 @@ function claimActive() {
 async function adoptSession(info) {
   const m = info && info.meta;
   if (!m || !m.key || !m.path || state.byKey[m.key] || state.byId[info.id]) return;
-  await newTab(m.path, m.kind || "claude", { adopt: info, title: m.title, dir: m.dir, command: m.command, autoKey: m.autoKey, group: groupFor(m.group), resume: m.resume, cwd: m.cwd, background: true });
+  const group = groupFor(m.group);
+  // a tab split after this window showed it joins the split
+  if (isTree(group)) for (const k of leaves(group.tree)) if (state.byKey[k] && !state.byKey[k].group) state.byKey[k].group = group;
+  await newTab(m.path, m.kind || "claude", { adopt: info, title: m.title, dir: m.dir, command: m.command, autoKey: m.autoKey, group, resume: m.resume, cwd: m.cwd, background: true });
 }
 
 // syncSessions matches the tabs to the sessions running in quarters: on
@@ -846,6 +860,7 @@ function closeTab(tab, silent, gone) {
   const list = tabsOf(tab.path);
   const i = list.indexOf(tab);
   if (i < 0) return;
+  const shown = list[Math.min(state.active[tab.path] || 0, list.length - 1)];
   if (tab.id && !gone) Go().CloseSession(tab.id);
   delete state.byId[tab.id];
   delete state.byKey[tab.key];
@@ -853,18 +868,25 @@ function closeTab(tab, silent, gone) {
   tab.term.dispose();
   tab.el.remove();
   list.splice(i, 1);
+  const near = isTree(tab.group) ? leaveTree(tab) : null;
   if (!list.length) delete state.tabs[tab.path];
   state.active[tab.path] = Math.max(0, Math.min(state.active[tab.path] || 0, list.length - 1));
+  // a pane of a split hands the focus to the pane beside it; closing another tab doesn't move it
+  const keep = shown === tab ? near : shown;
+  if (keep && list.includes(keep)) state.active[tab.path] = list.indexOf(keep);
   if (!silent) showActive();
   render();
 }
 
 async function requestCloseEntry(k) {
+  const n = entries(state.current).length;
+  if (k >= n) return closeFileTab(fileTabsOf(state.current)[k - n]);
   const e = entries(state.current)[k];
   if (!e) return;
   if (!e.group) return requestCloseTab(e.tabs[0]);
   const live = e.tabs.filter((t) => !t.exited).length;
-  if (live && !(await Go().Confirm(`Close “${e.group.name}”?`, `This ends its ${live} running shell(s).`, "Close all"))) return;
+  const ask = isTree(e.group) ? ["Close all panes?", `This ends the ${live} session(s) running in them.`] : [`Close “${e.group.name}”?`, `This ends its ${live} running shell(s).`];
+  if (live && !(await Go().Confirm(...ask, "Close all"))) return;
   for (const t of e.tabs) closeTab(t, true);
   showActive();
   render();
@@ -878,6 +900,14 @@ async function requestCloseTab(tab) {
 
 async function restartTab(tab) {
   const { path, kind } = tab;
+  if (isTree(tab.group)) {
+    const fresh = await newTab(path, kind === "claude" || kind === "resume" ? "continue" : kind, { cwd: tab.startOpts.cwd, title: tab.startOpts.title, group: tab.group, takeOver: tab.key });
+    if (fresh) {
+      tab.group.focus = fresh;
+      closeTab(tab);
+    }
+    return;
+  }
   const i = tabsOf(path).indexOf(tab);
   closeTab(tab, true);
   // a resumed conversation restarts where it left off, not from the beginning
@@ -959,17 +989,20 @@ function showActive() {
   const panes = isSplit(cur) ? tabsOf(cur.path).filter((t) => t.group === cur.group) : cur ? [cur] : [];
   const terms = $("#terms");
   const split = panes.length > 1;
+  const tree = split && isTree(cur.group) && !isNarrow();
   terms.classList.toggle("split", split);
+  terms.classList.toggle("tree", tree);
   if (split) applySplitSizes(cur.group, panes.length);
-  else terms.style.gridTemplateColumns = terms.style.gridTemplateRows = "";
+  if (!split || tree) terms.style.gridTemplateColumns = terms.style.gridTemplateRows = "";
   document.querySelectorAll(".term").forEach((el) => {
     const i = panes.findIndex((t) => t.el === el);
+    if (!tree || i < 0) el.style.left = el.style.top = el.style.width = el.style.height = "";
     el.classList.toggle("active", i >= 0);
     el.classList.toggle("focused-pane", split && !!cur && el === cur.el);
     el.style.order = i >= 0 ? String(i) : "";
   });
-  const start = !cur && state.current ? project(state.current) : null;
-  $("#welcome").classList.toggle("hidden", !!cur || !!start);
+  const start = !cur && !shownFile() && state.current ? project(state.current) : null;
+  $("#welcome").classList.toggle("hidden", !!cur || !!start || !!shownFile());
   renderStart(start);
   for (const t of panes) useGL(t);
   if (cur) {
@@ -979,15 +1012,16 @@ function showActive() {
           fitTab(t);
         } catch {}
       }
-      if (state.focus === "terminal" && !$("#tab-list .tab-rename") && !isTouch()) cur.term.focus();
+      if (state.focus === "terminal" && !$("#tab-list .tab-rename") && !isTouch() && !shownFile()) cur.term.focus();
       if (document.hasFocus()) claimTab(cur);
       placeSplitHandles();
     });
   } else placeSplitHandles();
   reportViewing();
-  document.body.classList.toggle("has-tab", !!cur);
-  document.body.classList.toggle("one-tab", tabsOf(state.current).length <= 1); // phones: the title says which
+  document.body.classList.toggle("has-tab", !!cur || fileTabsOf(state.current).length > 0);
+  document.body.classList.toggle("one-tab", tabsOf(state.current).length + fileTabsOf(state.current).length <= 1); // phones: the title says which
   applySessionView();
+  applyFileView();
   pollChat();
   renderTabs();
 }
@@ -1000,6 +1034,7 @@ const MIN_PANE = 140; // px
 const tracks = (saved, n) => (saved && saved.length === n ? saved : Array(n).fill(1));
 
 function applySplitSizes(group, n) {
+  if (isTree(group)) return void placeTree(group);
   const [cols, rows] = gridFor(group.layout, n);
   const tpl = (sizes) => sizes.map((f) => `minmax(0, ${f}fr)`).join(" ");
   $("#terms").style.gridTemplateColumns = tpl(tracks(group.cols, cols));
@@ -1012,6 +1047,7 @@ function placeSplitHandles() {
   terms.querySelectorAll(".split-handle").forEach((h) => h.remove());
   const cur = activeTab();
   if (!isSplit(cur) || !terms.classList.contains("split")) return;
+  if (isTree(cur.group)) return placeTreeHandles(cur.group);
   const panes = tabsOf(cur.path).filter((t) => t.group === cur.group);
   if (panes.length < 2) return;
   const [cols, rows] = gridFor(cur.group.layout, panes.length);
@@ -1037,12 +1073,22 @@ function placeSplitHandles() {
 }
 
 function dragSplit(e, group, panes, axis, k) {
-  e.preventDefault();
   const [cols, rows] = gridFor(group.layout, panes.length);
   // current track sizes in px, read from the panes
   const px = axis === "col"
     ? Array.from({ length: cols }, (_, i) => panes[i].el.getBoundingClientRect().width)
     : Array.from({ length: rows }, (_, i) => panes[Math.min(i * cols, panes.length - 1)].el.getBoundingClientRect().height);
+  dragLine(e, axis, px, k, (fr) => {
+    if (axis === "col") group.cols = fr;
+    else group.rows = fr;
+    applySplitSizes(group, panes.length);
+  }, () => saveSplitSizes(group));
+}
+
+// dragLine moves the line after track k (px: the tracks' sizes) with the
+// mouse, handing set the new sizes (fr) as it goes and calling done at the end.
+function dragLine(e, axis, px, k, set, done) {
+  e.preventDefault();
   const start = axis === "col" ? e.clientX : e.clientY;
   document.body.classList.add("dragging", axis === "col" ? "drag-col" : "drag-row");
   const move = (ev) => {
@@ -1052,10 +1098,7 @@ function dragSplit(e, group, panes, axis, k) {
     sizes[k] = a;
     sizes[k + 1] = pair - a;
     const total = sizes.reduce((x, y) => x + y, 0);
-    const fr = sizes.map((v) => Math.round((v / total) * sizes.length * 1000) / 1000);
-    if (axis === "col") group.cols = fr;
-    else group.rows = fr;
-    applySplitSizes(group, panes.length);
+    set(sizes.map((v) => Math.round((v / total) * sizes.length * 1000) / 1000));
     fitActive();
   };
   const up = () => {
@@ -1063,13 +1106,14 @@ function dragSplit(e, group, panes, axis, k) {
     window.removeEventListener("mouseup", up);
     document.body.classList.remove("dragging", "drag-col", "drag-row");
     placeSplitHandles();
-    saveSplitSizes(group);
+    done();
   };
   window.addEventListener("mousemove", move);
   window.addEventListener("mouseup", up);
 }
 
 function saveSplitSizes(group) {
+  if (isTree(group)) return saveTree(group);
   if (!group.autoName) return;
   Go().SaveAutomationSizes(group.path, group.autoName, group.cols || [], group.rows || []).catch((err) => flash(String(err)));
   // keep the project's copy current, so the next run starts with these sizes
@@ -1080,10 +1124,177 @@ function saveSplitSizes(group) {
   }
 }
 
+// ---------- splitting a tab by hand (⌘D, ⇧⌘D), as in iTerm ----------
+//
+// A split made by hand is a tree, kept in its group (layout "tree"): a pane
+// is { key } (its tab's key), a split is { dir, kids, sizes } with dir "col"
+// (side by side) or "row" (stacked). Every pane's session carries the tree,
+// so a reloaded window puts the panes back where they were.
+
+const GAP = 8; // px between panes and around them (#terms.split's padding)
+const isTree = (g) => !!(g && g.layout === "tree");
+const leaves = (n) => (!n ? [] : n.kids ? n.kids.flatMap(leaves) : [n.key]);
+
+// splitPane opens a shell beside the tab in view (dir "col") or below it ("row").
+async function splitPane(dir) {
+  const cur = activeTab();
+  if (!cur) return;
+  if (cur.group && !isTree(cur.group)) return flash("an automation's panes are set in its settings");
+  let g = cur.group;
+  if (!g) {
+    g = cur.group = { id: newKey(), name: "split", path: cur.path, layout: "tree", tree: { key: cur.key }, focus: cur };
+    state.groups[g.id] = g;
+  }
+  const tab = await newTab(cur.path, "shell", { cwd: cur.startOpts.cwd, group: g, splitOf: cur.key, splitDir: dir });
+  if (tab) g.focus = tab;
+  saveTree(g);
+}
+
+// splitTree puts pane key next to pane of, in a split along dir: a new one,
+// or the split of already shares that direction (of gives up half its room).
+function splitTree(g, of, key, dir) {
+  const visit = (n) => {
+    if (!n.kids) return n.key === of ? { dir, kids: [n, { key }], sizes: null } : n;
+    const i = n.kids.findIndex((k) => k.key === of);
+    if (i >= 0 && n.dir === dir) {
+      const sizes = tracks(n.sizes, n.kids.length).slice();
+      sizes.splice(i, 1, sizes[i] / 2, sizes[i] / 2);
+      n.kids.splice(i + 1, 0, { key });
+      n.sizes = sizes;
+      return n;
+    }
+    n.kids = n.kids.map(visit);
+    return n;
+  };
+  g.tree = visit(g.tree || { key: of });
+}
+
+const renameLeaf = (n, from, to) => (!n ? n : n.kids ? { ...n, kids: n.kids.map((k) => renameLeaf(k, from, to)) } : n.key === from ? { key: to } : n);
+
+// pruneTree keeps the panes in keys where they are, folding a split left
+// with one part into that part. Untouched, it is the same tree.
+function pruneTree(n, keys) {
+  if (!n) return null;
+  if (!n.kids) return keys.has(n.key) ? n : null;
+  const sizes = tracks(n.sizes, n.kids.length);
+  const kept = n.kids.map((k, i) => [pruneTree(k, keys), sizes[i]]).filter(([k]) => k);
+  if (!kept.length) return null;
+  if (kept.length === 1) return kept[0][0];
+  if (kept.length === n.kids.length && kept.every(([k], i) => k === n.kids[i])) return n;
+  return { dir: n.dir, kids: kept.map(([k]) => k), sizes: kept.map(([, f]) => f) };
+}
+
+// neighbour is the pane next to key in its split (the one before it, if any).
+function neighbour(n, key) {
+  if (!n || !n.kids) return null;
+  const i = n.kids.findIndex((k) => k.key === key);
+  if (i >= 0) return i > 0 ? leaves(n.kids[i - 1]).at(-1) : leaves(n.kids[1])[0];
+  for (const k of n.kids) {
+    const near = neighbour(k, key);
+    if (near) return near;
+  }
+  return null;
+}
+
+// leaveTree takes a closed pane out of its split and returns the pane to
+// show instead. With one pane left the split ends: it's a plain tab again.
+function leaveTree(tab) {
+  const g = tab.group;
+  const rest = tabsOf(tab.path).filter((t) => t.group === g && t !== tab);
+  const near = state.byKey[neighbour(g.tree, tab.key)] || rest[0] || null;
+  g.tree = pruneTree(g.tree, new Set(rest.map((t) => t.key)));
+  if (rest.length === 1) {
+    rest[0].group = null;
+    delete state.groups[g.id];
+    if (rest[0].id) Go().SetSessionGroup(rest[0].id, null).catch(() => {});
+  } else saveTree(g);
+  return near;
+}
+
+// saveTree hands the split's tree to each of its panes' sessions.
+function saveTree(g) {
+  for (const t of tabsOf(g.path)) if (t.group === g && t.id) Go().SetSessionGroup(t.id, groupMeta(g)).catch(() => {});
+}
+
+// treePanes is the tree of the split's panes here, and the panes in its
+// order. A pane the tree has not heard of yet goes at the right.
+function treePanes(g) {
+  const panes = tabsOf(g.path).filter((t) => t.group === g);
+  let tree = pruneTree(g.tree, new Set(panes.map((t) => t.key)));
+  const known = new Set(leaves(tree));
+  const more = panes.filter((t) => !known.has(t.key)).map((t) => ({ key: t.key }));
+  if (more.length) tree = !tree && more.length === 1 ? more[0] : { dir: "col", kids: (tree ? [tree] : []).concat(more), sizes: null };
+  return { tree, panes: leaves(tree).map((k) => state.byKey[k]) };
+}
+
+// layoutTree gives each pane its box in #terms (px) and lists the lines
+// between the parts of each split, for the handles.
+function layoutTree(n, box, out) {
+  if (!n.kids) return void out.boxes.set(n.key, box);
+  const col = n.dir === "col";
+  const sizes = tracks(n.sizes, n.kids.length), total = sizes.reduce((a, b) => a + b, 0);
+  const room = (col ? box.w : box.h) - GAP * (n.kids.length - 1);
+  const lens = sizes.map((f) => (room * f) / total);
+  let at = col ? box.x : box.y;
+  n.kids.forEach((kid, i) => {
+    layoutTree(kid, col ? { x: at, y: box.y, w: lens[i], h: box.h } : { x: box.x, y: at, w: box.w, h: lens[i] }, out);
+    at += lens[i];
+    if (i < n.kids.length - 1) out.lines.push({ node: n, k: i, lens, box, at: at + GAP / 2 });
+    at += GAP;
+  });
+}
+
+function placeTree(g) {
+  const terms = $("#terms");
+  const { tree, panes } = treePanes(g);
+  const out = { boxes: new Map(), lines: [] };
+  if (tree) layoutTree(tree, { x: GAP, y: GAP, w: terms.clientWidth - 2 * GAP, h: terms.clientHeight - 2 * GAP }, out);
+  if (!terms.classList.contains("tree")) return out; // a phone shows one pane at a time
+  for (const t of panes) {
+    const b = out.boxes.get(t.key);
+    if (b) Object.assign(t.el.style, { left: `${b.x}px`, top: `${b.y}px`, width: `${b.w}px`, height: `${b.h}px` });
+  }
+  return out;
+}
+
+function placeTreeHandles(g) {
+  const terms = $("#terms");
+  if (!terms.classList.contains("tree")) return;
+  for (const line of placeTree(g).lines) {
+    const axis = line.node.dir, { box } = line;
+    const h = document.createElement("div");
+    h.className = `split-handle ${axis}`;
+    h.title = "Drag to resize · double-click to make these equal";
+    if (axis === "col") Object.assign(h.style, { left: `${line.at}px`, top: `${box.y}px`, height: `${box.h}px`, bottom: "auto" });
+    else Object.assign(h.style, { top: `${line.at}px`, left: `${box.x}px`, width: `${box.w}px`, right: "auto" });
+    h.addEventListener("mousedown", (e) => dragLine(e, axis, line.lens, line.k, (fr) => {
+      line.node.sizes = fr;
+      placeTree(g);
+    }, () => saveTree(g)));
+    h.addEventListener("dblclick", () => {
+      line.node.sizes = null;
+      placeTree(g);
+      saveTree(g);
+      fitActive();
+    });
+    terms.appendChild(h);
+  }
+}
+
+// cyclePane goes to the next (d = 1) or previous (-1) pane of a split.
+function cyclePane(d) {
+  const cur = activeTab();
+  if (!isSplit(cur)) return;
+  const panes = isTree(cur.group) ? treePanes(cur.group).panes : tabsOf(cur.path).filter((t) => t.group === cur.group);
+  const next = panes[(panes.indexOf(cur) + d + panes.length) % panes.length];
+  if (next) selectTab(tabsOf(cur.path).indexOf(next));
+}
+
 function selectTab(i) {
   const list = tabsOf(state.current);
   if (i < 0 || i >= list.length) return;
   state.active[state.current] = i;
+  state.fileOn[state.current] = "";
   if (list[i].group) list[i].group.focus = list[i];
   setFocus("terminal");
   showActive();
@@ -1091,6 +1302,8 @@ function selectTab(i) {
 
 // selectEntry picks the k-th entry of the tab bar (a split group returns to the pane last used).
 function selectEntry(k) {
+  const n = entries(state.current).length;
+  if (k >= n) return showFileTab(fileTabsOf(state.current)[k - n]);
   const e = entries(state.current)[k];
   if (!e) return;
   const t = e.group && e.tabs.includes(e.group.focus) ? e.group.focus : e.tabs[0];
@@ -1098,12 +1311,13 @@ function selectEntry(k) {
 }
 
 function currentEntry() {
-  const cur = activeTab();
+  const cur = activeTab(), f = shownFile();
+  if (f) return entries(state.current).length + fileTabsOf(state.current).indexOf(f);
   return entries(state.current).findIndex((e) => e.tabs.includes(cur));
 }
 
 function cycleTab(d) {
-  const n = entries(state.current).length;
+  const n = entries(state.current).length + fileTabsOf(state.current).length;
   if (!n) return;
   selectEntry((Math.max(0, currentEntry()) + d + n) % n);
 }
@@ -1180,7 +1394,7 @@ function wireStart() {
   window.addEventListener("keydown", (e) => {
     if (e.defaultPrevented || $("#start").classList.contains("hidden")) return;
     if (state.palette.open || dlg.open || e.metaKey || e.ctrlKey || e.altKey) return;
-    if (e.target.closest?.("input, textarea, .overlay, .xterm")) return;
+    if (e.target.closest?.("input, textarea, .overlay, .xterm, .cm-editor")) return;
     const k = e.key.toLowerCase();
     if (k === "c") startHere(e.shiftKey ? "continue" : "claude");
     else if (k === "s") startHere("shell");
@@ -1267,7 +1481,10 @@ function wireEvents() {
   });
   rt().EventsOn("pty:exit", ({ id, code }) => {
     const tab = state.byId[id];
-    if (tab) markExited(tab, code);
+    if (!tab) return;
+    // a pane of a split that ended cleanly closes, as in iTerm; a failure stays to be read
+    if (!code && isTree(tab.group)) closeTab(tab);
+    else markExited(tab, code);
   });
   rt().EventsOn("session:open", adoptSession);
   rt().EventsOn("session:close", ({ id }) => {
@@ -1312,6 +1529,7 @@ function markExited(tab, code) {
 }
 
 function onMenu(action) {
+  learned(action);
   const cur = activeTab();
   const target = state.focus === "projects" || !state.current ? state.selected || state.current : state.current;
   switch (action) {
@@ -1325,8 +1543,21 @@ function onMenu(action) {
       if (target) newTab(target, "shell");
       break;
     case "close-tab":
-      if (isSplit(cur)) requestCloseEntry(currentEntry());
+      if (shownFile()) closeFileTab(shownFile());
+      else if (isSplit(cur) && !isTree(cur.group)) requestCloseEntry(currentEntry());
       else requestCloseTab(cur);
+      break;
+    case "split-right":
+      splitPane("col");
+      break;
+    case "split-down":
+      splitPane("row");
+      break;
+    case "next-pane":
+      cyclePane(1);
+      break;
+    case "prev-pane":
+      cyclePane(-1);
       break;
     case "next-tab":
       cycleTab(1);
@@ -1370,6 +1601,13 @@ function onMenu(action) {
     case "toggle-right":
       togglePanel("right");
       break;
+    case "toggle-files":
+      if (isNarrow()) openDrawer("files");
+      else togglePanel("files");
+      break;
+    case "save-file":
+      if (shownFile()) fileView().then((m) => m.saveFile(shownFile()));
+      break;
     case "font-up":
       setFontSize(state.fontSize + 1);
       break;
@@ -1412,6 +1650,8 @@ function setFontSize(n) {
   state.fontSize = Math.max(9, Math.min(24, n));
   localStorage.setItem(FONT_KEY, String(state.fontSize));
   for (const list of Object.values(state.tabs)) for (const t of list) t.term.options.fontSize = state.fontSize;
+  document.documentElement.style.setProperty("--ed-fs", state.fontSize + "px");
+  for (const list of Object.values(state.fileTabs)) for (const f of list) f.view.requestMeasure();
   fitActive();
 }
 
@@ -1541,25 +1781,37 @@ function applyLayout() {
   const r = document.documentElement.style;
   r.setProperty("--left", state.left + "px");
   r.setProperty("--right", state.right + "px");
+  r.setProperty("--files", state.files + "px");
+  // a hidden panel and its handle leave the grid, so their columns go too
+  r.setProperty("--cols", [
+    state.showLeft && "var(--left) 10px",
+    "minmax(0, 1fr)",
+    state.showFiles && "10px var(--files)",
+    state.showRight && "10px var(--right)",
+  ].filter(Boolean).join(" "));
   main.classList.toggle("no-left", !state.showLeft);
   main.classList.toggle("no-right", !state.showRight);
+  main.classList.toggle("no-files", !state.showFiles);
   document.body.classList.toggle("focus-mode", !!state.beforeFocus);
-  for (const [side, shown, name, key] of [["left", state.showLeft, "projects", "⌘B"], ["right", state.showRight, "side", "⌘I"]]) {
+  for (const [side, shown, name, key] of [["left", state.showLeft, "projects", "⌘B"], ["right", state.showRight, "side", "⌘I"], ["files", state.showFiles, "files", "⇧⌘E"]]) {
     const b = $(`#btn-${side}`);
     b.classList.toggle("on", shown);
     b.setAttribute("aria-pressed", String(shown));
     b.title = `${shown ? "Hide" : "Show"} the ${name} panel (${key})`;
   }
   fitActive();
+  if (state.showFiles) refreshFiles();
 }
 
-// Show or hide one side panel (⌘B, ⌘I, or its title bar button).
+// Show or hide one side panel (⌘B, ⌘I, ⇧⌘E, or its title bar button).
 function togglePanel(side) {
+  learned(`toggle-${side}`);
   if (side === "left") state.showLeft = !state.showLeft;
+  else if (side === "files") state.showFiles = !state.showFiles;
   else state.showRight = !state.showRight;
   state.beforeFocus = null;
   try {
-    localStorage.setItem(PANELS_KEY, JSON.stringify({ left: state.showLeft, right: state.showRight }));
+    localStorage.setItem(PANELS_KEY, JSON.stringify({ left: state.showLeft, right: state.showRight, files: state.showFiles }));
   } catch {}
   applyLayout();
 }
@@ -1568,11 +1820,11 @@ function togglePanel(side) {
 // same key brings back what was showing.
 function toggleFocusMode() {
   if (state.beforeFocus) {
-    ({ left: state.showLeft, right: state.showRight } = state.beforeFocus);
+    ({ left: state.showLeft, right: state.showRight, files: state.showFiles } = state.beforeFocus);
     state.beforeFocus = null;
   } else {
-    state.beforeFocus = { left: state.showLeft, right: state.showRight };
-    state.showLeft = state.showRight = false;
+    state.beforeFocus = { left: state.showLeft, right: state.showRight, files: state.showFiles };
+    state.showLeft = state.showRight = state.showFiles = false;
     flash("focus mode · ⇧⌘↵ to bring the panels back");
   }
   applyLayout();
@@ -1584,6 +1836,8 @@ function fitActive() {
   fitPending = true;
   requestAnimationFrame(() => {
     fitPending = false;
+    const cur = activeTab();
+    if (isSplit(cur) && isTree(cur.group)) placeTree(cur.group);
     for (const el of document.querySelectorAll(".term.active")) {
       const t = Object.values(state.byId).find((x) => x.el === el) || activeTab();
       try {
@@ -1595,8 +1849,15 @@ function fitActive() {
 }
 
 function wireResize() {
-  const limits = { left: [200, 560], right: [260, 600] };
-  for (const side of ["left", "right"]) {
+  const limits = { left: [200, 560], right: [260, 600], files: [180, 560] };
+  const defaults = { left: DEFAULT_LEFT, right: DEFAULT_RIGHT, files: DEFAULT_FILES };
+  const save = (side) => {
+    if (side !== "files") return Go().SaveLayout(state.left, state.right);
+    try {
+      localStorage.setItem(FILES_KEY, String(state.files));
+    } catch {}
+  };
+  for (const side of ["left", "right", "files"]) {
     const handle = $(`#handle-${side}`);
     handle.addEventListener("mousedown", (e) => {
       e.preventDefault();
@@ -1615,15 +1876,15 @@ function wireResize() {
         window.removeEventListener("mouseup", up);
         document.body.classList.remove("dragging");
         handle.classList.remove("active");
-        Go().SaveLayout(state.left, state.right);
+        save(side);
       };
       window.addEventListener("mousemove", move);
       window.addEventListener("mouseup", up);
     });
     handle.addEventListener("dblclick", () => {
-      state[side] = side === "left" ? DEFAULT_LEFT : DEFAULT_RIGHT;
+      state[side] = defaults[side];
       applyLayout();
-      Go().SaveLayout(state.left, state.right);
+      save(side);
     });
   }
   new ResizeObserver(fitActive).observe($("#terms"));
@@ -1635,6 +1896,7 @@ function render() {
   renderTitle();
   renderProjects();
   renderTabs();
+  if (state.showFiles || document.body.classList.contains("drawer-files")) refreshFiles();
   renderActiveList();
   renderStats(); // automations started or stopped (redrawn only when it changed)
 }
@@ -1782,9 +2044,9 @@ let shownColor = "";
 function renderTabs() {
   const pc = projectColor(project(state.current)) || "var(--accent)";
   if (pc !== shownColor) $("#center").style.setProperty("--pc", (shownColor = pc));
-  document.body.classList.toggle("one-tab", tabsOf(state.current).length <= 1);
+  document.body.classList.toggle("one-tab", tabsOf(state.current).length + fileTabsOf(state.current).length <= 1);
   if ($("#tab-list .tab-rename")) return; // don't wipe a rename in progress
-  const cur = activeTab();
+  const cur = shownFile() ? null : activeTab();
   const label = (t) => (t.wt ? `⎇ ${t.wt} · ` : "") + (t.customTitle || t.fixedTitle || (t.kind === "shell" ? t.title || "shell" : t.title || (t.kind === "continue" || t.kind === "resume" ? `${t.harness} ↻` : t.harness)));
   const html = entries(state.current)
     .map((e, k) => {
@@ -1792,7 +2054,7 @@ function renderTabs() {
       if (e.group) {
         const st = e.tabs.some((t) => tabStatus(t) === "busy") ? "busy" : e.tabs.some((t) => !t.exited) ? "waiting" : "ended";
         return `<div class="tab${on ? " active" : ""}${e.tabs.some((t) => t.unseen) ? " attn" : ""}" data-e="${k}" role="button" title="${esc(e.group.name)}: ${esc(e.tabs.map(label).join(", "))}">
-          <span class="muted">${k + 1}</span><span class="green">▦</span><span class="label">${esc(e.group.label || e.group.name)}</span><span class="muted">${e.tabs.length}</span>${STATUS_ICON[st]}
+          <span class="muted">${k + 1}</span><span class="green">▦</span><span class="label">${esc(e.group.label || (isTree(e.group) ? label(treePanes(e.group).panes[0]) : e.group.name))}</span><span class="muted">${e.tabs.length}</span>${STATUS_ICON[st]}
           <button class="close" type="button" data-close="${k}" aria-label="Close all panes">×</button></div>`;
       }
       const t = e.tabs[0];
@@ -1800,14 +2062,18 @@ function renderTabs() {
         <span class="muted">${k + 1}</span><span class="label">${esc(label(t))}</span>${STATUS_ICON[tabStatus(t)]}
         <button class="close" type="button" data-close="${k}" aria-label="Close tab">×</button></div>`;
     })
-    .join("");
+    .join("") + fileTabsHTML(entries(state.current).length);
   // Only touch the DOM when something changed, so double-clicks land on the same element.
   if (html !== $("#tab-list").dataset.html) {
     $("#tab-list").innerHTML = html;
     $("#tab-list").dataset.html = html;
   }
   // pane headers of split automations show each shell's status
-  for (const t of tabsOf(state.current)) if (t.head) setHTML(t.head.querySelector(".pane-status"), STATUS_ICON[tabStatus(t)]);
+  for (const t of tabsOf(state.current)) {
+    if (!t.head) continue;
+    setHTML(t.head.querySelector(".pane-status"), STATUS_ICON[tabStatus(t)]);
+    if (isTree(t.group)) setText(t.head.querySelector(".pane-name"), label(t));
+  }
   // on a phone a split automation shows one pane at a time; these switch between them
   const panes = isSplit(cur) ? tabsOf(cur.path).filter((t) => t.group === cur.group) : [];
   const pb = panes.length > 1
@@ -2181,6 +2447,7 @@ function wireDoubleShift() {
 // ---------- palette ----------
 
 function openPalette(query = "") {
+  learned("palette");
   state.palette.open = true;
   state.palette.sel = 0;
   $("#pal-query").value = query;
@@ -2192,7 +2459,8 @@ function openPalette(query = "") {
 function closePalette() {
   state.palette.open = false;
   $("#palette").classList.add("hidden");
-  if (state.focus === "terminal") activeTab()?.term.focus();
+  if (shownFile()) shownFile().view.focus();
+  else if (state.focus === "terminal") activeTab()?.term.focus();
 }
 
 // Every command, for the palette's ">" mode (⇧⌘P). mac: only in the Mac app.
@@ -2200,7 +2468,11 @@ const COMMANDS = [
   ["new-claude", "New agent tab", "⌘T"],
   ["continue", "Continue the last conversation", "⇧⌘T"],
   ["new-shell", "New shell tab", "⌥⌘T"],
-  ["close-tab", "Close the tab", "⌘W"],
+  ["close-tab", "Close the tab (or the pane, in a split)", "⌘W"],
+  ["split-right", "Split: a shell beside this one", "⌘D"],
+  ["split-down", "Split: a shell below this one", "⇧⌘D"],
+  ["next-pane", "Next pane of the split", "⌘]"],
+  ["prev-pane", "Previous pane of the split", "⌘["],
   ["next-tab", "Next tab", "⇧⌘]"],
   ["prev-tab", "Previous tab", "⇧⌘["],
   ["next-waiting", "Go to the session waiting for you", "⌘J"],
@@ -2211,6 +2483,8 @@ const COMMANDS = [
   ["usage", "Usage by project…", "⇧⌘U"],
   ["toggle-left", "Show or hide the projects panel", "⌘B"],
   ["toggle-right", "Show or hide the side panel", "⌘I"],
+  ["toggle-files", "Show or hide the files panel", "⇧⌘E"],
+  ["save-file", "Save the file", "⌘S"],
   ["focus-mode", "Focus mode: only the terminal", "⇧⌘↵"],
   ["fold-sections", "Fold every side panel section", ""],
   ["unfold-sections", "Unfold every side panel section", ""],
@@ -2384,7 +2658,7 @@ function wireProjects() {
   // Keyboard navigation while the projects panel has focus.
   window.addEventListener("keydown", (e) => {
     if (e.defaultPrevented || state.palette.open || dlg.open || state.focus !== "projects" || e.metaKey) return;
-    if (e.target.closest?.("input, textarea, .overlay")) return;
+    if (e.target.closest?.("input, textarea, .overlay, .cm-editor, #files")) return;
     if (document.activeElement === $("#filter")) return;
     if (e.target.closest?.(".xterm")) return;
     const k = e.key;
@@ -2493,7 +2767,7 @@ function wireTabs() {
   });
   $("#tab-list").addEventListener("dblclick", (e) => {
     const tab = e.target.closest(".tab");
-    if (tab && !e.target.closest("[data-close]")) renameEntry(Number(tab.dataset.e));
+    if (tab && !tab.classList.contains("file") && !e.target.closest("[data-close]")) renameEntry(Number(tab.dataset.e));
   });
   $("#tab-list").addEventListener("auxclick", (e) => {
     const tab = e.target.closest(".tab");
@@ -2562,19 +2836,87 @@ function wireFileDrop() {
   }, true);
 }
 
+// ---------- files: the files panel and editor tabs (ui/files.js, ui/fileview.js) ----------
+//
+// A file opens in an editor tab of its project, after the terminal tabs.
+// Editor tabs belong to this window: the files themselves are the shared
+// state, and an editor notices when an agent changes the one it shows.
+
+const fileTabsOf = (path) => state.fileTabs[path] || [];
+const shownFile = (path = state.current) => fileTabsOf(path).find((f) => f.key === state.fileOn[path]) || null;
+const fileView = () => ui("fileview.js");
+
+// filesRoot is the folder the files panel shows: the project in view, or
+// the worktree its tab runs in.
+function filesRoot() {
+  const path = state.current || state.selected;
+  const p = path && project(path);
+  if (!p || p.missing) return null;
+  const t = state.current === path ? activeTab() : null;
+  return { path, dir: (t && t.startOpts && t.startOpts.cwd) || path };
+}
+
+function refreshFiles(force) {
+  ui("files.js").then((m) => m.refreshFiles(force)).catch(() => {});
+}
+
+// showFileTab puts a file tab in view (null: back to the terminals).
+function showFileTab(f) {
+  if (!f) return;
+  state.fileOn[f.project] = f.key;
+  if (state.current !== f.project) openProject(f.project);
+  showActive();
+  render();
+  fileView().then((m) => m.checkDisk(f));
+}
+
+function applyFileView() {
+  const f = shownFile();
+  $("#file-view").classList.toggle("hidden", !f);
+  document.body.classList.toggle("file-open", !!f);
+  for (const list of Object.values(state.fileTabs)) for (const x of list) x.el.classList.toggle("hidden", x !== f);
+  if (!f) return;
+  f.view.requestMeasure();
+  if (!isTouch() && !$("#tab-list .tab-rename")) requestAnimationFrame(() => f.view.focus());
+}
+
+async function closeFileTab(f) {
+  if (!f) return;
+  if (f.dirty && !(await Go().Confirm(`Close ${f.name}?`, "Your changes are not saved.", "Close without saving"))) return;
+  const list = fileTabsOf(f.project), i = list.indexOf(f);
+  if (i < 0) return;
+  list.splice(i, 1);
+  f.view.destroy();
+  f.el.remove();
+  if (state.fileOn[f.project] === f.key) state.fileOn[f.project] = (list[i - 1] || list[i] || { key: "" }).key;
+  showActive();
+  render();
+}
+
+// fileTabsHTML is the tab bar's file tabs, numbered after the n terminal ones.
+function fileTabsHTML(n) {
+  const on = shownFile();
+  return fileTabsOf(state.current).map((f, i) => {
+    const wt = f.dir !== f.project ? `⎇ ${baseName(f.dir)} · ` : "";
+    return `<div class="tab file${f === on ? " active" : ""}" data-e="${n + i}" role="button" title="${esc(wt + f.rel)}">
+      <span class="muted">${n + i + 1}</span><span class="file-ico" aria-hidden="true"></span><span class="label">${esc(wt + f.name)}</span>${f.dirty ? '<span class="accent" title="Not saved">●</span>' : ""}
+      <button class="close" type="button" data-close="${n + i}" aria-label="Close file">×</button></div>`;
+  }).join("");
+}
+
 // ---------- phones and tablets ----------
 
 const isTouch = () => matchMedia("(hover: none) and (pointer: coarse)").matches;
 const isNarrow = () => matchMedia("(max-width: 760px)").matches;
 
 function openDrawer(side) {
-  document.body.classList.toggle("drawer-left", side === "left" && !document.body.classList.contains("drawer-left"));
-  document.body.classList.toggle("drawer-right", side === "right" && !document.body.classList.contains("drawer-right"));
+  for (const s of ["left", "right", "files"]) document.body.classList.toggle(`drawer-${s}`, side === s && !document.body.classList.contains(`drawer-${s}`));
   if (side === "right") refreshStats();
+  if (side === "files") refreshFiles();
 }
 
 function closeDrawers() {
-  document.body.classList.remove("drawer-left", "drawer-right");
+  document.body.classList.remove("drawer-left", "drawer-right", "drawer-files");
 }
 
 // The key bar types what a phone keyboard has no key for.
@@ -3048,8 +3390,10 @@ function wirePinch() {
 function wireMobile() {
   $("#btn-drawer").addEventListener("click", () => openDrawer("left"));
   $("#btn-stats").addEventListener("click", () => openDrawer("right"));
+  $("#btn-files-m").addEventListener("click", () => openDrawer("files"));
   $("#btn-left").addEventListener("click", () => togglePanel("left"));
   $("#btn-right").addEventListener("click", () => togglePanel("right"));
+  $("#btn-files").addEventListener("click", () => togglePanel("files"));
   $("#scrim").addEventListener("click", closeDrawers);
   $("#pane-bar").addEventListener("click", (e) => {
     const b = e.target.closest("[data-pane]");
@@ -3067,7 +3411,7 @@ function wireMobile() {
   document.addEventListener("focusout", () => setTimeout(typing, 0));
   matchMedia("(max-width: 760px)").addEventListener("change", () => {
     closeDrawers();
-    fitActive();
+    showActive(); // a split lays out its panes again (phones show one at a time)
   });
 }
 
@@ -3640,7 +3984,9 @@ async function main() {
     const shown = JSON.parse(localStorage.getItem(PANELS_KEY) || "{}");
     state.showLeft = shown.left !== false;
     state.showRight = shown.right !== false;
+    state.showFiles = shown.files !== false;
   } catch {}
+  document.documentElement.style.setProperty("--ed-fs", state.fontSize + "px");
   applyLayout();
 
   wireEvents();
@@ -3708,6 +4054,7 @@ async function main() {
 
   renderMascot();
   every(500, renderMascot);
+  if (tipsDue()) setTimeout(() => startTips().catch(() => {}), 20000);
   // Mac notifications and the prompt queue matter most when you're elsewhere
   every(500, checkAttention, { hidden: true, behind: 1 });
   every(1000, runQueues, { hidden: true, behind: 1 });
@@ -4250,6 +4597,45 @@ function openRemoteDialog(...args) {
   return ui("remote-dialog.js").then((m) => m.openRemoteDialog(...args));
 }
 
+// ---------- tips: the first week, now and then (ui/tips.js) ----------
+
+const TIPS_KEY = "quarters.tips";
+const TIPS_DAYS = 7;
+
+function tipsState() {
+  try {
+    return JSON.parse(localStorage.getItem(TIPS_KEY) || "{}");
+  } catch {
+    return {};
+  }
+}
+
+function saveTips(t) {
+  try {
+    localStorage.setItem(TIPS_KEY, JSON.stringify(t));
+  } catch {}
+}
+
+// learned notes a key or a button you've used, so its tip never shows
+function learned(id) {
+  const t = tipsState();
+  if (t.off || t.used?.includes(id)) return;
+  (t.used ||= []).push(id);
+  saveTips(t);
+  document.dispatchEvent(new CustomEvent("tips:learned", { detail: id }));
+}
+
+// tipsDue: tips are on, it's the first week, and the screen has keys
+function tipsDue() {
+  const t = tipsState();
+  if (!t.first) saveTips({ ...t, first: (t.first = Date.now()) });
+  return !t.off && !isTouch() && Date.now() - t.first < TIPS_DAYS * 864e5;
+}
+
+function startTips(...args) {
+  return ui("tips.js").then((m) => m.startTips(...args));
+}
+
 export {
   $,
   Go,
@@ -4262,25 +4648,35 @@ export {
   bars,
   baseName,
   canChange,
+  canType,
+  claimTab,
   closeDrawers,
+  closeFileTab,
   closeTab,
   dlg,
   esc,
+  fileTabsOf,
+  filesRoot,
   flash,
   fmtAgo,
   fmtTokens,
+  fuzzy,
   harnessOptions,
   iconData,
   iconHTML,
+  isNarrow,
   isTouch,
+  learned,
   loadIcon,
   loadProjects,
   loadSettings,
   mark,
   monogram,
+  newKey,
   newTab,
   on,
   onMenu,
+  openDrawer,
   openLink,
   openProject,
   openRemoteDialog,
@@ -4290,13 +4686,22 @@ export {
   refreshUsage,
   render,
   renderRemotePill,
+  renderTabs,
   rmd,
+  saveTips,
   selectTab,
   set,
+  setFocus,
   setTheme,
+  shellQuote,
   showActive,
+  showFileTab,
+  showImageView,
+  shownFile,
   state,
   tabsOf,
   theme,
+  tipsDue,
+  tipsState,
   watchOnly,
 };

@@ -106,11 +106,39 @@ services. Your projects, your logins and your machine stay yours.
 - **Every command by name:** **⇧⌘P** (or `>` in the jump list).
 - **Focus mode:** **⇧⌘↵** leaves only the terminal; again brings the
   panels back.
+- **Tips for the first week:** now and then, one quiet line at the bottom
+  about a key or a panel you haven't used yet (never one you have). At most
+  three a day; × turns them off, and Settings → Appearance turns them back
+  on.
 - **Saved prompts** (⚡): type a common instruction with one click.
 - **The project's automations in the side panel:** run, restart or stop
   each one, edit it, delete it, or add a new one, right where you work.
 - **Any of eight coding agents,** chosen for all projects or per project
   (see [Coding agents](#coding-agents)).
+
+### Split panes and a files panel
+
+<img src="docs/splits.png" alt="One tab split three ways: the backend, the frontend and a shell, side by side and stacked" width="900">
+
+- **Split panes, as in iTerm:** **⌘D** opens a shell beside the one you're
+  in, **⇧⌘D** one below it, and splits nest. **⌘[** and **⌘]** move between
+  panes, **⌘W** closes just the pane, and a pane whose shell exits cleanly
+  closes by itself. Drag the line between two panes to resize them
+  (double-click to make them equal). Another window or device shows the
+  same panes.
+- **A files panel** (**⇧⌘E**, or the folder in the title bar, which glows
+  while it's open): the project's folders and files with git's marks
+  (changed, new, ignored), and a box that finds any file in the project.
+  Right-click a file to copy its path, type it in the terminal, open it
+  with its app or show it in Finder.
+- **A small editor for quick fixes:** click a file to open it in a tab
+  beside the terminals, with syntax colours for about 30 languages, search
+  (⌘F) and **⌘S** to save. When an agent edits the same file, the editor
+  follows it; a save never overwrites a change made since you opened the
+  file (you choose to reload or keep yours). Files that may hold keys or
+  passwords (`.env`, `*.pem`…) are never opened.
+
+<img src="docs/files.png" alt="The files panel with git marks, and a file open in an editor tab beside the terminals" width="900">
 
 ### Coding agents
 
@@ -377,10 +405,12 @@ step.
 | ⌘P or ⇧⇧ (tap Shift twice) | jump to a project or automation |
 | ⇧⌘P | every command, by name |
 | ⌘T / ⇧⌘T / ⌥⌘T | new Claude tab / continue last conversation / shell tab |
-| ⌘W | close tab |
+| ⌘W | close tab (in a split: the pane) |
 | ⌘1–9, ⇧⌘[ ⇧⌘] | switch tabs |
+| ⌘D / ⇧⌘D | split: a shell beside / below this one (⌘[ ⌘] switch panes) |
 | ⌘J | go to the session waiting for you longest |
 | ⌘B / ⌘I | show or hide projects / side panel |
+| ⇧⌘E | show or hide the files panel; a click opens a file in an editor tab, ⌘S saves |
 | ⇧⌘↵ | focus mode: only the terminal |
 | ⌘O | add a project |
 | ⌘, / ⌥⌘, | Settings / edit config.json |
@@ -576,6 +606,12 @@ Several tools run a team of agents in parallel worktrees of a single
 repository. Quarters starts from the other end: many projects, each with
 the agent and the dev stack it needs, and quick switching between them. It
 does worktrees too (⎇), when you want several agents on one repository.
+
+**Is it an editor?**
+No. The files panel and its editor are for a look or a quick fix (a
+config value, a line the agent got wrong) without leaving the project.
+Keep your editor for real work; Quarters follows its changes on the disk
+the same way it follows the agent's.
 
 **Does my code or my prompts go anywhere?**
 No. Quarters has no AI of its own, no accounts and no analytics. It starts

@@ -46,6 +46,8 @@ type App struct {
 	fmu   sync.Mutex // the optional features' state below
 	f     featureState
 	convs map[int]string // session id → Claude conversation id
+
+	worktrees sync.Map // folders the file browser found to be worktrees: dir → time.Time
 }
 
 // macClient is the Mac window's name among the windows sharing sessions

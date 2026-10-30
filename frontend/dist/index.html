@@ -36,7 +36,9 @@
       <span id="tb-clock" class="soft"></span>
       <button id="btn-remote" class="tb-remote hidden" type="button" title="Remote access"></button>
       <span class="offline-badge">offline · reconnecting…</span>
+      <button id="btn-files-m" class="tb-btn mobile-only" type="button" aria-label="Files"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M1.5 4.5a1 1 0 0 1 1-1h3.6l1.4 1.5h6a1 1 0 0 1 1 1v6.5a1 1 0 0 1-1 1h-11a1 1 0 0 1-1-1z"/></svg></button>
       <button id="btn-stats" class="tb-btn mobile-only" type="button" aria-label="Session, plan and tools">⋯</button>
+      <button id="btn-files" class="tb-btn panel-toggle" type="button" title="Show the files panel (⇧⌘E)" aria-label="Files panel" aria-pressed="false"><svg viewBox="0 0 16 16" aria-hidden="true"><path class="side" d="M1.5 4.5a1 1 0 0 1 1-1h3.6l1.4 1.5h6a1 1 0 0 1 1 1v6.5a1 1 0 0 1-1 1h-11a1 1 0 0 1-1-1z"/><path d="M1.5 4.5a1 1 0 0 1 1-1h3.6l1.4 1.5h6a1 1 0 0 1 1 1v6.5a1 1 0 0 1-1 1h-11a1 1 0 0 1-1-1z"/></svg></button>
       <button id="btn-right" class="tb-btn panel-toggle on" type="button" title="Hide the side panel (⌘I)" aria-label="Side panel" aria-pressed="true"><svg viewBox="0 0 16 16" aria-hidden="true"><rect class="side" x="10" y="2.5" width="4.5" height="11"/><rect x="1.5" y="2.5" width="13" height="11" rx="2"/><path d="M10 2.5v11"/></svg></button>
     </div>
   </header>
@@ -84,6 +86,7 @@
       <div id="terms">
         <div id="chat" class="chat hidden"><div id="chat-list"></div></div>
         <div id="start" class="hidden"></div>
+        <div id="file-view" class="hidden"></div>
         <div id="welcome">
           <div id="restore" class="restore hidden"></div>
           <img class="welcome-mascot" src="mascot/excited.svg" alt="" draggable="false">
@@ -130,6 +133,21 @@
       </div>
     </section>
 
+    <div class="handle" id="handle-files" title="Drag to resize · double-click to reset"></div>
+
+    <!-- FILES: the project's files; a click opens one in an editor tab -->
+    <section id="files" class="panel">
+      <div class="panel-head">
+        <span class="panel-title">FILES</span>
+        <span class="fl-head-right"><span id="files-root" class="muted"></span><button id="files-refresh" class="link-btn" type="button" title="Refresh">↻</button></span>
+      </div>
+      <label class="filter">
+        <span class="accent">/</span>
+        <input id="files-filter" type="text" placeholder="find a file…" spellcheck="false" autocomplete="off">
+      </label>
+      <div id="file-tree" class="scroll" role="tree"></div>
+    </section>
+
     <div class="handle" id="handle-right" title="Drag to resize · double-click to reset"></div>
 
     <!-- RIGHT: stats -->
@@ -155,7 +173,7 @@
       <span><b>⌘I</b> stats</span>
       <span><b>⌘,</b> settings</span>
     </div>
-    <span class="sb-right"><span id="flash"></span><button type="button" id="version" class="hint-btn" hidden></button></span>
+    <span class="sb-right"><span id="tip" hidden></span><span id="flash"></span><button type="button" id="version" class="hint-btn" hidden></button></span>
   </footer>
 </div>
 
@@ -274,6 +292,7 @@ cloudflared tunnel run --url http://127.0.0.1:8421 quarters</pre>
         <span class="field-label">Appearance <span class="soft-note">— this device only</span></span>
         <div class="set-list">
           <div class="set-row"><span class="set-text"><b>Theme</b><span class="muted">The window and its terminals. System follows macOS (or the phone).</span></span><span class="seg" id="set-theme"><button type="button" data-theme="system">System</button><button type="button" data-theme="light">Light</button><button type="button" data-theme="dark">Dark</button></span></div>
+          <label class="set-row keys-only"><span class="set-text"><b>Tips</b><span class="muted">For the first week, now and then, a line at the bottom about a key or a panel you haven't used yet.</span></span><input type="checkbox" class="switch" id="set-tips"></label>
         </div>
       </div>
       <div class="field">
@@ -368,6 +387,7 @@ cloudflared tunnel run --url http://127.0.0.1:8421 quarters</pre>
 <!-- Saved prompts / worktrees menus -->
 <div id="prompt-menu" class="auto-menu hidden" role="menu"></div>
 <div id="wt-menu" class="auto-menu hidden" role="menu"></div>
+<div id="file-menu" class="auto-menu hidden" role="menu"></div>
 
 <!-- About Quarters (a click on the version) -->
 <div id="about-pop" class="about-pop hidden" role="dialog" aria-label="About Quarters"></div>
