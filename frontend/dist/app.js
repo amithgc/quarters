@@ -17,6 +17,8 @@ const BUSY_MS = 1500;
 const DEFAULT_LEFT = 290;
 const DEFAULT_RIGHT = 330;
 const FONT_KEY = "quarters.fontSize";
+// Which side panels show is remembered on each device.
+const PANELS_KEY = "quarters.panels";
 // Phones read like a chat app; pinch the terminal to change it.
 const defaultFontSize = () => (matchMedia("(max-width: 760px)").matches ? 15 : 13);
 
@@ -1363,14 +1365,10 @@ function onMenu(action) {
       if (target && on("worktrees")) showWorktreeMenu(target, $("#btn-wt").classList.contains("hidden") ? $("#tab-path") : $("#btn-wt"));
       break;
     case "toggle-left":
-      state.showLeft = !state.showLeft;
-      state.beforeFocus = null;
-      applyLayout();
+      togglePanel("left");
       break;
     case "toggle-right":
-      state.showRight = !state.showRight;
-      state.beforeFocus = null;
-      applyLayout();
+      togglePanel("right");
       break;
     case "font-up":
       setFontSize(state.fontSize + 1);
@@ -1546,7 +1544,24 @@ function applyLayout() {
   main.classList.toggle("no-left", !state.showLeft);
   main.classList.toggle("no-right", !state.showRight);
   document.body.classList.toggle("focus-mode", !!state.beforeFocus);
+  for (const [side, shown, name, key] of [["left", state.showLeft, "projects", "⌘B"], ["right", state.showRight, "side", "⌘I"]]) {
+    const b = $(`#btn-${side}`);
+    b.classList.toggle("on", shown);
+    b.setAttribute("aria-pressed", String(shown));
+    b.title = `${shown ? "Hide" : "Show"} the ${name} panel (${key})`;
+  }
   fitActive();
+}
+
+// Show or hide one side panel (⌘B, ⌘I, or its title bar button).
+function togglePanel(side) {
+  if (side === "left") state.showLeft = !state.showLeft;
+  else state.showRight = !state.showRight;
+  state.beforeFocus = null;
+  try {
+    localStorage.setItem(PANELS_KEY, JSON.stringify({ left: state.showLeft, right: state.showRight }));
+  } catch {}
+  applyLayout();
 }
 
 // Focus mode: only the terminal, both panels and the hints bar hidden; the
@@ -3033,6 +3048,8 @@ function wirePinch() {
 function wireMobile() {
   $("#btn-drawer").addEventListener("click", () => openDrawer("left"));
   $("#btn-stats").addEventListener("click", () => openDrawer("right"));
+  $("#btn-left").addEventListener("click", () => togglePanel("left"));
+  $("#btn-right").addEventListener("click", () => togglePanel("right"));
   $("#scrim").addEventListener("click", closeDrawers);
   $("#pane-bar").addEventListener("click", (e) => {
     const b = e.target.closest("[data-pane]");
@@ -3563,6 +3580,11 @@ async function main() {
   state.collapsed = new Set(layout.collapsed || []);
   state.left = layout.left_width || DEFAULT_LEFT;
   state.right = layout.right_width || DEFAULT_RIGHT;
+  try {
+    const shown = JSON.parse(localStorage.getItem(PANELS_KEY) || "{}");
+    state.showLeft = shown.left !== false;
+    state.showRight = shown.right !== false;
+  } catch {}
   applyLayout();
 
   wireEvents();
