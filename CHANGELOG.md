@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.7.1
+
+- Edit config.json in a browser (#6). A browser can't open the file in an
+  app on the computer Quarters runs on, so ⌥⌘, (Settings → Edit
+  config.json…, or the palette) opens it in the editor. Add Project has the
+  button too, and says why you'd use it: to add several projects at once,
+  or to give a project's agent a command of its own, which the form
+  doesn't have. A save with a
+  mistake in it is refused, with the line it's on, and so is one that
+  changes remote access, which could lock the browser out. Quarters uses
+  the new settings at once.
+
 ## 0.7.0
 
 - Four more coding agents (#1): Amp, Goose, Qwen Code and Cursor CLI, twelve
