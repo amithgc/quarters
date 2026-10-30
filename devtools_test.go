@@ -154,6 +154,26 @@ func TestCheckpoints(t *testing.T) {
 	}
 }
 
+// A file staged, then edited to the same size in the same second: git's
+// index can't tell from the file's size and time, so the snapshot must look.
+func TestCheckpointSeesSameSizeEdit(t *testing.T) {
+	_, dir := testApp(t)
+	f := filepath.Join(dir, "a.txt")
+	then := time.Now().Add(-10 * time.Second).Truncate(time.Second)
+	write(t, f, "staged\n")
+	os.Chtimes(f, then, then)
+	gitOut(t, dir, "add", "a.txt")
+	write(t, f, "before\n")
+	os.Chtimes(f, then, then)
+	os.Chtimes(filepath.Join(dir, ".git", "index"), then, then)
+	if _, err := checkpoint(dir, "x"); err != nil {
+		t.Fatal(err)
+	}
+	if got := gitOut(t, dir, "show", checkpointRefs+checkpointList(context.Background(), dir)[0].id+":a.txt"); got != "before" {
+		t.Errorf("snapshotted a.txt as %q", got)
+	}
+}
+
 func TestCheckpointOnEnter(t *testing.T) {
 	a, dir := testApp(t)
 	write(t, filepath.Join(dir, "a.txt"), "changed\n")

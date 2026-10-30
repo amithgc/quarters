@@ -548,7 +548,13 @@ func (a *App) SaveConfig(text, hash string) (Text, error) {
 	}
 	t, err := writeText(config.Path(), text, hash, "config.json changed since you opened it (Quarters or another editor saved it)")
 	if err == nil {
-		a.config() // in use from now on, not at the next refresh
+		// in use from now on: loaded here, as a save within the file
+		// system's clock tick leaves the modification time as it was
+		if cfg, err := config.Load(nil); err == nil {
+			a.mu.Lock()
+			a.cfg, a.cfgErr = cfg, ""
+			a.mu.Unlock()
+		}
 	}
 	return t, err
 }

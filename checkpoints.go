@@ -74,6 +74,13 @@ func newSnapEnv(ctx context.Context, root string) (*snapEnv, error) {
 		src.Close()
 	}
 	f.Close()
+	// The copy keeps the index's time: git trusts a file whose size and time
+	// match its index entry unless it changed in the index's own second, and
+	// a newer copy would hide that (a file staged, then edited to the same
+	// size within the second, would be snapshotted as staged).
+	if st, err := os.Stat(real); err == nil {
+		_ = os.Chtimes(f.Name(), st.ModTime(), st.ModTime())
+	}
 	return &snapEnv{root: root, index: f.Name()}, nil
 }
 
