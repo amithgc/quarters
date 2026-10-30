@@ -299,6 +299,16 @@ func Load(seed []Project) (*Config, error) {
 	return c, nil
 }
 
+// Parse reads the text of a settings file as Load would, for a check before
+// it is saved: the first mistake comes back with its line.
+func Parse(data []byte) (*Config, error) {
+	var c Config
+	if err := json.Unmarshal(stripTrailingCommas(data), &c); err != nil {
+		return nil, describe(data, err)
+	}
+	return &c, nil
+}
+
 // stripTrailingCommas drops a comma that comes right before a closing ] or }
 // (outside strings): an easy slip when editing the list by hand.
 func stripTrailingCommas(data []byte) []byte {

@@ -406,6 +406,10 @@ body.remote .legend { display: none; }
 .pd-note { color: var(--muted); font-size: var(--fs-sm); line-height: 1.5; }
 .pd-note code { color: var(--soft); }
 body.remote .pd-note.remote-only { display: block; }
+.pd-config { display: flex; align-items: center; gap: 14px; padding: 10px 12px; border: 1px dashed var(--border-strong); border-radius: var(--r-md); }
+.pd-config .pd-note { flex: 1; min-width: 0; }
+.pd-config .btn { flex-shrink: 0; }
+@media (max-width: 560px) { .pd-config { flex-direction: column; align-items: stretch; } }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .chip { padding: 1px 10px; border-radius: 11px; border: 1px solid var(--border-strong); color: var(--soft); font-size: var(--fs-sm); line-height: 20px; }
 .chip:hover, .chip.on { border-color: var(--accent); color: var(--accent); }
@@ -712,7 +716,8 @@ body.access-type .st-press, body.access-type .st-more, body.access-type .st-auto
 body.access-view #btn-new-tab, body.access-view #btn-new-shell, body.access-view #btn-auto, body.access-view #btn-wt,
 body.access-type #btn-new-tab, body.access-type #btn-new-shell, body.access-type #btn-auto, body.access-type #btn-wt,
 body.access-view [data-act="add"], body.access-type [data-act="add"], body.access-view .tab .close, body.access-type .tab .close,
-body.access-view .ended .btn, body.access-type .ended .btn { display: none !important; }
+body.access-view .ended .btn, body.access-type .ended .btn,
+body.access-view .can-change, body.access-type .can-change { display: none !important; }
 
 /* ---------- touch screens: phones, tablets ---------- */
 @media (hover: none) and (pointer: coarse) {
@@ -1129,6 +1134,9 @@ button.tb-count:hover { background: var(--hover-strong); }
   .ed-text.mono { font-size: 14px; }
   #compose-later { width: 34px; height: 34px; font-size: 14px; }
 }
+#cfg-editor { flex: 1; min-height: 120px; margin: 10px 14px 12px; border: 1px solid var(--border-strong); border-radius: var(--r-md); overflow: hidden; }
+#cfg-editor:focus-within { border-color: var(--accent); }
+#cfg-editor .cm-editor .cm-content { padding-bottom: 6px; }
 .ed-reload { color: var(--text); text-decoration: underline; text-underline-offset: 3px; }
 
 /* the palette's command mode (⇧⌘P, or ">") */
@@ -1199,29 +1207,29 @@ body.file-open #compose, body.file-open #keybar, body.file-open #pane-bar { disp
 .fp-changed { display: flex; align-items: center; gap: 8px; padding: 8px 14px; border-bottom: 1px solid var(--line); background: color-mix(in srgb, var(--yellow) 12%, var(--panel)); font-size: var(--fs-sm); }
 .fp-changed .grow { flex: 1; min-width: 0; }
 .fp-editor { flex: 1; min-height: 0; }
-#file-view .cm-editor { height: 100%; font-size: var(--ed-fs, 13px); background: var(--term); color: var(--text); }
-#file-view .cm-editor.cm-focused { outline: none; }
-#file-view .cm-scroller { font-family: var(--mono); line-height: 1.55; }
-#file-view .cm-content { caret-color: var(--accent); padding: 6px 0 40vh; }
-#file-view .cm-cursor, #file-view .cm-dropCursor { border-left: 2px solid var(--accent); }
-#file-view .cm-gutters { background: var(--term); color: var(--muted); border: 0; }
-#file-view .cm-lineNumbers .cm-gutterElement { padding: 0 10px 0 14px; opacity: .7; }
-#file-view .cm-foldGutter .cm-gutterElement { padding: 0 4px; color: var(--muted); }
-#file-view .cm-activeLine, #file-view .cm-activeLineGutter { background: var(--hover); }
-#file-view .cm-activeLineGutter { color: var(--soft); }
-#file-view .cm-selectionBackground { background: var(--sel); }
-#file-view .cm-focused .cm-selectionBackground, #file-view .cm-content ::selection { background: color-mix(in srgb, var(--accent) 26%, transparent); }
-#file-view .cm-selectionMatch { background: color-mix(in srgb, var(--violet) 18%, transparent); }
-#file-view .cm-matchingBracket { background: color-mix(in srgb, var(--accent) 22%, transparent); color: inherit; outline: none; }
-#file-view .cm-nonmatchingBracket { color: var(--red); }
-#file-view .cm-searchMatch { background: color-mix(in srgb, var(--yellow) 26%, transparent); outline: 0; }
-#file-view .cm-searchMatch-selected { background: color-mix(in srgb, var(--yellow) 50%, transparent); }
-#file-view .cm-foldPlaceholder { background: var(--tile); border: 1px solid var(--border); color: var(--muted); border-radius: 4px; padding: 0 6px; }
-#file-view .cm-panels { background: var(--panel); color: var(--text); border-color: var(--line); font-family: var(--mono); font-size: var(--fs-sm); }
-#file-view .cm-panel.cm-search { padding: 8px 12px; }
-#file-view .cm-panel.cm-search label { color: var(--soft); font-size: var(--fs-sm); }
-#file-view .cm-textfield { background: var(--bg); border: 1px solid var(--border); border-radius: var(--r-sm); color: var(--text); padding: 3px 8px; font: inherit; }
-#file-view .cm-textfield:focus { border-color: var(--accent); outline: none; }
-#file-view .cm-button { background: var(--tile); background-image: none; border: 1px solid var(--border); border-radius: var(--r-sm); color: var(--text); padding: 3px 10px; font: inherit; }
-#file-view .cm-panel.cm-search [name=close] { color: var(--muted); font-size: 18px; right: 8px; }
-#file-view .cm-tooltip { background: var(--pop); border: 1px solid var(--border-strong); color: var(--text); border-radius: var(--r-sm); }
+:is(#file-view, #cfg-editor) .cm-editor { height: 100%; font-size: var(--ed-fs, 13px); background: var(--term); color: var(--text); }
+:is(#file-view, #cfg-editor) .cm-editor.cm-focused { outline: none; }
+:is(#file-view, #cfg-editor) .cm-scroller { font-family: var(--mono); line-height: 1.55; }
+:is(#file-view, #cfg-editor) .cm-content { caret-color: var(--accent); padding: 6px 0 40vh; }
+:is(#file-view, #cfg-editor) .cm-cursor, :is(#file-view, #cfg-editor) .cm-dropCursor { border-left: 2px solid var(--accent); }
+:is(#file-view, #cfg-editor) .cm-gutters { background: var(--term); color: var(--muted); border: 0; }
+:is(#file-view, #cfg-editor) .cm-lineNumbers .cm-gutterElement { padding: 0 10px 0 14px; opacity: .7; }
+:is(#file-view, #cfg-editor) .cm-foldGutter .cm-gutterElement { padding: 0 4px; color: var(--muted); }
+:is(#file-view, #cfg-editor) .cm-activeLine, :is(#file-view, #cfg-editor) .cm-activeLineGutter { background: var(--hover); }
+:is(#file-view, #cfg-editor) .cm-activeLineGutter { color: var(--soft); }
+:is(#file-view, #cfg-editor) .cm-selectionBackground { background: var(--sel); }
+:is(#file-view, #cfg-editor) .cm-focused .cm-selectionBackground, :is(#file-view, #cfg-editor) .cm-content ::selection { background: color-mix(in srgb, var(--accent) 26%, transparent); }
+:is(#file-view, #cfg-editor) .cm-selectionMatch { background: color-mix(in srgb, var(--violet) 18%, transparent); }
+:is(#file-view, #cfg-editor) .cm-matchingBracket { background: color-mix(in srgb, var(--accent) 22%, transparent); color: inherit; outline: none; }
+:is(#file-view, #cfg-editor) .cm-nonmatchingBracket { color: var(--red); }
+:is(#file-view, #cfg-editor) .cm-searchMatch { background: color-mix(in srgb, var(--yellow) 26%, transparent); outline: 0; }
+:is(#file-view, #cfg-editor) .cm-searchMatch-selected { background: color-mix(in srgb, var(--yellow) 50%, transparent); }
+:is(#file-view, #cfg-editor) .cm-foldPlaceholder { background: var(--tile); border: 1px solid var(--border); color: var(--muted); border-radius: 4px; padding: 0 6px; }
+:is(#file-view, #cfg-editor) .cm-panels { background: var(--panel); color: var(--text); border-color: var(--line); font-family: var(--mono); font-size: var(--fs-sm); }
+:is(#file-view, #cfg-editor) .cm-panel.cm-search { padding: 8px 12px; }
+:is(#file-view, #cfg-editor) .cm-panel.cm-search label { color: var(--soft); font-size: var(--fs-sm); }
+:is(#file-view, #cfg-editor) .cm-textfield { background: var(--bg); border: 1px solid var(--border); border-radius: var(--r-sm); color: var(--text); padding: 3px 8px; font: inherit; }
+:is(#file-view, #cfg-editor) .cm-textfield:focus { border-color: var(--accent); outline: none; }
+:is(#file-view, #cfg-editor) .cm-button { background: var(--tile); background-image: none; border: 1px solid var(--border); border-radius: var(--r-sm); color: var(--text); padding: 3px 10px; font: inherit; }
+:is(#file-view, #cfg-editor) .cm-panel.cm-search [name=close] { color: var(--muted); font-size: 18px; right: 8px; }
+:is(#file-view, #cfg-editor) .cm-tooltip { background: var(--pop); border: 1px solid var(--border-strong); color: var(--text); border-radius: var(--r-sm); }

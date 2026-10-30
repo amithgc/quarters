@@ -1610,7 +1610,9 @@ function onMenu(action) {
       addProject();
       break;
     case "edit-config":
-      Go().OpenConfig().catch((e) => flash(String(e)));
+      if (!REMOTE) Go().OpenConfig().catch((e) => flash(String(e)));
+      else if (canChange()) ui("config.js").then((m) => m.openConfig());
+      else flash("this device can't change settings");
       break;
     case "reveal":
       if (target) Go().RevealProject(target).catch((e) => flash(String(e)));
@@ -2533,7 +2535,7 @@ const COMMANDS = [
   ["settings", "Settings…", "⌘,"],
   ["shortcuts", "Keyboard shortcuts", "⌘/"],
   ["reveal", "Show the project in Finder", "⇧⌘R", "mac"],
-  ["edit-config", "Edit config.json…", "⌥⌘,", "mac"],
+  ["edit-config", "Edit config.json…", "⌥⌘,"],
   ["remote", "Remote access…", "", "mac"],
   ["remote-toggle", "Start or stop the remote-access server", "⌥⌘R", "mac"],
 ].filter(([, , , mac]) => !mac || !REMOTE).map(([action, title, keys]) => ({ action, title, keys }));

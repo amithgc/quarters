@@ -524,6 +524,35 @@ func (a *App) OpenConfig() error {
 	return openWith(config.Path(), true).Run()
 }
 
+// ReadConfig returns the settings file for the editor in a browser, which
+// can't open it in an app on this computer.
+func (a *App) ReadConfig() (Text, error) { return loadText(config.Path()) }
+
+// SaveConfig writes the settings file from the editor. hash is the text it
+// opened (or last saved): when the file changed since, nothing is written.
+// Neither is text with a mistake in it, so a save never breaks the file,
+// nor a change to remote access, which a browser could lock itself out with.
+func (a *App) SaveConfig(text, hash string) (Text, error) {
+	next, err := config.Parse([]byte(text))
+	if err != nil {
+		return Text{}, err
+	}
+	if old, err := os.ReadFile(config.Path()); err == nil {
+		if cur, err := config.Parse(old); err == nil && cur.Remote != next.Remote {
+			where := "on the Mac (Settings → Remote access)"
+			if serverBuild {
+				where = "with the command line (quarters --help)"
+			}
+			return Text{}, fmt.Errorf("remote access changes %s, not here: leave \"remote\" as it was", where)
+		}
+	}
+	t, err := writeText(config.Path(), text, hash, "config.json changed since you opened it (Quarters or another editor saved it)")
+	if err == nil {
+		a.config() // in use from now on, not at the next refresh
+	}
+	return t, err
+}
+
 // RevealProject shows a project folder in Finder.
 func (a *App) RevealProject(path string) error {
 	if _, ok := a.project(path); !ok {

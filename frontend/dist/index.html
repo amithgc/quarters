@@ -201,7 +201,7 @@
     <button class="pal-action" type="button" data-action="add-project"><span class="violet">＋</span><span>Add project…</span><span class="muted">⌘O</span></button>
     <button class="pal-action" type="button" data-action="settings"><span class="violet">⚙</span><span>Settings…</span><span class="muted">⌘,</span></button>
     <button class="pal-action" type="button" data-action="history"><span class="violet">🕘</span><span>Search conversations…</span><span class="muted">⇧⌘F</span></button>
-    <button class="pal-action mac-only" type="button" data-action="edit-config"><span class="violet">{ }</span><span>Edit config.json…</span><span class="muted">⌥⌘,</span></button>
+    <button class="pal-action can-change" type="button" data-action="edit-config"><span class="violet">{ }</span><span>Edit config.json…</span><span class="muted">⌥⌘,</span></button>
     <button class="pal-action mac-only" type="button" data-action="remote"><span class="violet">⦿</span><span>Remote access…</span><span class="muted"></span></button>
     <div class="pal-foot">
       <span><b>↵</b> open &amp; resume</span>
@@ -331,7 +331,7 @@ cloudflared tunnel run --url http://127.0.0.1:8421 quarters</pre>
       </div>
     </div>
     <div class="dialog-actions">
-      <button id="set-config" class="btn mac-only" type="button">Edit config.json…</button>
+      <button id="set-config" class="btn can-change" type="button">Edit config.json…</button>
       <button id="set-remote" class="btn mac-only" type="button">Remote access…</button>
       <span class="push"></span>
       <button id="set-close" class="btn" type="button">Close</button>
@@ -467,6 +467,10 @@ cloudflared tunnel run --url http://127.0.0.1:8421 quarters</pre>
         <div id="pd-autos" class="autos"></div>
         <button id="pd-auto-add" class="btn add-auto" type="button">＋ Add automation</button>
       </div>
+      <div class="pd-config can-change">
+        <span class="pd-note">Everything here is saved to config.json. Edit the file itself to add several projects at once, or to start a project's agent with a command of its own (e.g. <code>claude --model sonnet</code>), which this form doesn't have.</span>
+        <button id="pd-config" class="btn" type="button">Edit config.json…</button>
+      </div>
       <div id="pd-error" class="pd-error"></div>
     </div>
     <div class="dialog-actions">
@@ -476,6 +480,22 @@ cloudflared tunnel run --url http://127.0.0.1:8421 quarters</pre>
       <button id="pd-save" class="btn primary" type="submit">Add project</button>
     </div>
   </form>
+</div>
+
+<!-- config.json in a browser (the Mac app opens it in a text editor); after
+     the dialogs it opens from, so it shows over them -->
+<div id="config-dialog" class="overlay hidden">
+  <div class="dialog-box edit-box" role="dialog" aria-labelledby="cf-title">
+    <div class="pal-head"><span id="cf-title" class="panel-title accent">CONFIG.JSON</span><span id="cf-path" class="muted"></span></div>
+    <div id="cf-note" class="ed-note hidden"></div>
+    <div id="cfg-editor"></div>
+    <div class="dialog-actions">
+      <span id="cf-status" class="muted ed-status"></span>
+      <span class="push"></span>
+      <button id="cf-cancel" class="btn" type="button">Cancel</button>
+      <button id="cf-save" class="btn primary" type="button">Save</button>
+    </div>
+  </div>
 </div>
 
 <script type="module" src="app.js"></script>

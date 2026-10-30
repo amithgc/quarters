@@ -56,12 +56,12 @@ function shortcutGroups() {
       ["⇧⌘G", "Worktrees"],
       ["⇧⌘U", "Usage by project"],
       ["⌘,", "Settings"],
-      ["⌥⌘,", "Edit config.json", "mac"],
+      ["⌥⌘,", "Edit config.json"],
       ["⌥⌘R", "Start or stop the remote-access server", "mac"],
       [hotkey, "From any app: bring Quarters forward or hide it", "mac"],
       ["⌘/", "This list"],
     ]],
-  ].map(([title, rows]) => [title, rows.filter(([, , mac]) => !mac || !REMOTE)]); // a browser can't reach the Mac's Finder or config
+  ].map(([title, rows]) => [title, rows.filter(([, , mac]) => !mac || !REMOTE)]); // a browser can't reach the Mac's Finder
 }
 
 function openShortcuts() {

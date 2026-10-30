@@ -21,7 +21,7 @@ import {
 } from "../app.js";
 
 let cmLoad = null;
-const loadCM = () => (cmLoad ||= import("../vendor/codemirror.js").catch((e) => {
+export const loadCM = () => (cmLoad ||= import("../vendor/codemirror.js").catch((e) => {
   cmLoad = null;
   throw e;
 }));
@@ -53,7 +53,8 @@ export async function openFile(path, dir, rel) {
   $("#file-view").appendChild(el);
   const f = { key: newKey(), project: path, dir, rel, name, el, hash: r.hash, stamp: r.stamp, saved: r.text, dirty: false, view: null, readOnly: !canChange(), conflict: false, gone: false };
   el.querySelector(".fp-path").innerHTML = rel.split("/").map((p, i, all) => (i === all.length - 1 ? `<b>${esc(p)}</b>` : `${esc(p)}<span class="muted"> / </span>`)).join("");
-  f.view = new CM.EditorView({ parent: el.querySelector(".fp-editor"), state: CM.EditorState.create({ doc: r.text, extensions: extensions(CM, f) }) });
+  const ext = extensions(CM, f.name, f.readOnly, () => saveFile(f), () => changed(f));
+  f.view = new CM.EditorView({ parent: el.querySelector(".fp-editor"), state: CM.EditorState.create({ doc: r.text, extensions: ext }) });
   f.view.contentDOM.addEventListener("focus", () => setFocus("terminal"));
   el.querySelector(".fp-save").addEventListener("click", () => saveFile(f));
   el.querySelector(".fp-changed").addEventListener("click", (e) => {
@@ -66,9 +67,11 @@ export async function openFile(path, dir, rel) {
   showFileTab(f);
 }
 
-function extensions(CM, f) {
-  const lang = CM.languageFor(f.name);
-  const wrap = /\.(md|markdown|mdx|txt|rst)$/i.test(f.name) || !f.name.includes(".");
+// extensions sets up an editor for a file called name: save runs on ⌘S,
+// changed after every edit. The config.json editor uses it too.
+export function extensions(CM, name, readOnly, save, changed) {
+  const lang = CM.languageFor(name);
+  const wrap = /\.(md|markdown|mdx|txt|rst)$/i.test(name) || !name.includes(".");
   return [
     CM.lineNumbers(),
     CM.highlightActiveLineGutter(),
@@ -86,7 +89,7 @@ function extensions(CM, f) {
     CM.highlightSelectionMatches(),
     CM.syntaxHighlighting(highlightStyle(CM)),
     CM.keymap.of([
-      { key: "Mod-s", run: () => (saveFile(f), true), preventDefault: true },
+      { key: "Mod-s", run: () => (save(), true), preventDefault: true },
       ...CM.closeBracketsKeymap,
       ...CM.defaultKeymap,
       ...CM.searchKeymap,
@@ -96,9 +99,9 @@ function extensions(CM, f) {
     ]),
     lang || [],
     wrap ? CM.EditorView.lineWrapping : [],
-    CM.EditorState.readOnly.of(f.readOnly),
+    CM.EditorState.readOnly.of(readOnly),
     CM.EditorView.contentAttributes.of({ spellcheck: "false", autocorrect: "off", autocapitalize: "off" }),
-    CM.EditorView.updateListener.of((u) => u.docChanged && changed(f)),
+    CM.EditorView.updateListener.of((u) => u.docChanged && changed()),
   ];
 }
 

@@ -21,7 +21,7 @@ import (
 var remoteMethods = map[string]bool{
 	"Projects": true, "ConfigError": true, "Version": true, "CheckUpdate": true, "Layout": true, "Stats": true, "Account": true, "AgentAccount": true, "Awake": true, "SetAwake": true,
 	"IconData": true, "FindIcons": true, "SetCollapsed": true, "SaveProject": true, "MoveProject": true,
-	"SaveAutomationSizes": true, "RemoveProject": true, "ConfigPath": true, "PastedImage": true,
+	"SaveAutomationSizes": true, "RemoveProject": true, "ConfigPath": true, "ReadConfig": true, "SaveConfig": true, "PastedImage": true,
 	"CloseSession": true, "SetSessionGroup": true, "Sessions": true, "Snapshot": true,
 	"Settings": true, "SetFeature": true, "SetClaudeRemote": true, "Chat": true, "TabImage": true, "RemoteControlled": true, "SavePrompts": true, "SetUsageAlertAt": true,
 	"Conversations": true, "Diff": true, "DevLinks": true, "OpenOnMac": true, "ProjectTools": true,

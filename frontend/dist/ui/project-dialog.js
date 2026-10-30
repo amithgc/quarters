@@ -21,6 +21,7 @@ import {
   loadProjects,
   monogram,
   on,
+  onMenu,
   project,
   projectColor,
   render,
@@ -248,6 +249,7 @@ function wireProjectDialog() {
   });
   $("#pd-browse").addEventListener("click", browseFolder);
   $("#pd-cancel").addEventListener("click", closeProjectDialog);
+  $("#pd-config").addEventListener("click", () => onMenu("edit-config"));
   $("#pd-remove").addEventListener("click", removeProjectDialog);
   $("#pd-name").addEventListener("input", () => {
     dlg.autoName = !$("#pd-name").value.trim();

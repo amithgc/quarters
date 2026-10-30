@@ -482,9 +482,11 @@ the commands in [Linux](#linux-the-server-used-from-a-browser) (`--set-password`
 ## Configuration
 
 Settings and projects live in `~/.config/quarters/config.json`. Most of it is
-edited from the app, but you can also edit the file (⌥⌘,). Quarters picks up
-changes within seconds, and tells you if the file has a mistake without ever
-overwriting it.
+edited from the app, but you can also edit the file (⌥⌘,): on the Mac in
+your text editor, in a browser in Quarters' own editor, which won't save a
+mistake or a change to remote access. Quarters picks up changes within
+seconds, and tells you if the file has a mistake without ever overwriting
+it.
 
 ```json
 {

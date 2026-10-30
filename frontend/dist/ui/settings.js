@@ -161,7 +161,10 @@ function wireSettings() {
   });
   $("#set-save").addEventListener("click", saveSettings);
   $("#set-close").addEventListener("click", closeSettings);
-  $("#set-config").addEventListener("click", () => onMenu("edit-config"));
+  $("#set-config").addEventListener("click", () => {
+    if (REMOTE) closeSettings(); // a dialog of its own; Settings reads the file again next time
+    onMenu("edit-config");
+  });
   $("#set-remote").addEventListener("click", () => {
     closeSettings();
     openRemoteDialog();

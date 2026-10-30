@@ -118,3 +118,33 @@ func TestFileStatusAndList(t *testing.T) {
 		t.Errorf("worktree: %+v, %v", v, err)
 	}
 }
+
+func TestReadAndSaveConfig(t *testing.T) {
+	a, _ := testApp(t)
+	c, err := a.ReadConfig()
+	if err != nil || !strings.Contains(c.Text, `"projects"`) {
+		t.Fatalf("read: %+v, %v", c, err)
+	}
+	// a mistake is never saved: the error names its line
+	if _, err := a.SaveConfig("{\n  \"projects\": [\n    {\"path\": 1}\n  ]\n}\n", c.Hash); err == nil || !strings.Contains(err.Error(), "line 3") {
+		t.Errorf("saved a mistake: %v", err)
+	}
+	// nor a change to remote access
+	if _, err := a.SaveConfig(`{"projects": [], "remote": {"enabled": true, "lan": true}}`, c.Hash); err == nil || !strings.Contains(err.Error(), "remote access") {
+		t.Errorf("changed remote access: %v", err)
+	}
+	saved, err := a.SaveConfig(`{"projects": [], "harness": "codex",}`, c.Hash)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if a.current().Harness != "codex" || len(a.current().Projects) != 0 {
+		t.Errorf("not in use: %+v", a.current())
+	}
+	// saved since by Quarters itself: the old hash no longer saves
+	if err := a.SetHarness("claude"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := a.SaveConfig(`{"projects": []}`, saved.Hash); err == nil || !strings.Contains(err.Error(), "changed since") {
+		t.Errorf("saved over a newer file: %v", err)
+	}
+}
