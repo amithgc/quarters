@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.8.1
 
 Fixes for agents that run full-screen (recent Claude Code versions), and
 the server in Docker:
