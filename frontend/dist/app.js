@@ -7,6 +7,8 @@ import { layoutFor, screenClass } from "./layout.js";
 
 // In a browser (remote access) the Mac app's bridge comes over a WebSocket.
 const REMOTE = !window.go && location.protocol.startsWith("http");
+// APPLE: a Mac, iPhone or iPad keyboard, with ⌘ (see wireBrowserKeys)
+const APPLE = /mac|iphone|ipad|ipod/i.test(navigator.userAgentData?.platform || navigator.platform || navigator.userAgent);
 const remoteMod = REMOTE ? await import("./remote.js") : null;
 
 const Go = () => window.go.main.App;
@@ -94,6 +96,14 @@ try {
 const isLight = () => theme === "light" || (theme === "system" && lightMode.matches);
 const termTheme = () => (isLight() ? lightTheme : darkTheme);
 
+// the top bar's theme button goes round: system → light → dark
+const THEME_NEXT = { system: "light", light: "dark", dark: "system" };
+const THEME_ICONS = {
+  system: '<svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="5.5"/><path d="M8 2.5a5.5 5.5 0 0 1 0 11z" fill="currentColor" stroke="none"/></svg>',
+  light: '<svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="2.8"/><path d="M8 1.5v1.6M8 12.9v1.6M1.5 8h1.6M12.9 8h1.6M3.4 3.4l1.1 1.1M11.5 11.5l1.1 1.1M3.4 12.6l1.1-1.1M11.5 4.5l1.1-1.1"/></svg>',
+  dark: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M13.5 9.8A5.5 5.5 0 0 1 6.2 2.5a5.5 5.5 0 1 0 7.3 7.3z"/></svg>',
+};
+
 function applyTheme() {
   const root = document.documentElement;
   if (theme === "system") delete root.dataset.theme;
@@ -106,7 +116,13 @@ function applyTheme() {
   }
   for (const list of Object.values(state.tabs)) for (const t of list) t.term.options.theme = termTheme();
   if (state.projects.length) renderTabs(); // project colours are lighter or darker
+  const b = document.getElementById("btn-theme");
+  if (b) {
+    b.innerHTML = THEME_ICONS[theme];
+    b.title = `Theme: ${theme === "system" ? "follows the system" : theme} · click for ${THEME_NEXT[theme] === "system" ? "the system's" : THEME_NEXT[theme]}`;
+  }
 }
+
 
 function setTheme(v) {
   theme = ["light", "dark"].includes(v) ? v : "system";
@@ -1024,6 +1040,7 @@ function showActive() {
   applyFileView();
   pollChat();
   renderTabs();
+  renderHints();
 }
 
 // ---------- split panes: drag the lines between them ----------
@@ -1344,7 +1361,7 @@ async function autoStart(path) {
   autoStarted.add(path);
   const autos = (p.automations || []).filter((a) => a.auto && !autoRunning(path, a));
   for (const a of autos) await runAutomation(path, a);
-  if (autos.length) flash(`▶ started ${autos.map((a) => a.name).join(", ")} · ⌘T for ${shortAgent(p.agent)}`);
+  if (autos.length) flash(`▶ started ${autos.map((a) => a.name).join(", ")} · ${keyText("⌘T")} for ${shortAgent(p.agent)}`);
 }
 
 // renderStart fills the start screen for p (a project with no tabs), or hides it.
@@ -1407,6 +1424,24 @@ function setFocus(f) {
   state.focus = f;
   $("#left").classList.toggle("focused", f === "projects");
   $("#center").classList.toggle("focused", f === "terminal");
+  renderHints();
+}
+
+// renderHints: the status bar's keys, the ones that fit what's in front of
+// you (a shell: splitting it; a split: moving between its panes; a file:
+// saving it).
+function renderHints() {
+  const tab = activeTab(), f = shownFile();
+  // a browser on a Mac: Chrome keeps ⌘T and ⌘W, so ⌃ is added
+  const k = (keys, what) => `<span><b>${keyText(REMOTE && APPLE ? keys.replace(/^(⇧?)⌘([TW])$/, "⌃$1⌘$2") : keys)}</b> ${what}</span>`;
+  let list;
+  if (state.focus === "projects" && state.selected) list = [k("↑↓", "move"), k("↵", "open"), k("/", "filter"), k("⇥", "back to the terminal"), k("⌘T", "new tab"), k("⌘B", "sidebar")];
+  else if (f) list = [k("⌘S", "save"), k("⌘W", "close the file"), k("⇧⌘E", "files panel"), k("⌘1-9", "tabs"), k("⌘B", "sidebar")];
+  else if (tab && isTree(tab.group)) list = [k("⌘[ ⌘]", "panes"), k("⌘D", "split right"), k("⇧⌘D", "split down"), k("⌘W", "close the pane"), k("⌘K", "clear"), k("⇧⌘↵", "focus mode")];
+  else if (tab?.kind === "shell") list = [k("⌘D", "split right"), k("⇧⌘D", "split down"), k("⌘K", "clear"), k("⌘T", "new tab"), k("⌘W", "close tab"), k("⌘1-9", "tabs")];
+  else if (tab) list = [k("⇧↵", "new line"), k("⌘D", "split"), k("⌘J", "who's waiting"), k("⌘T", "new tab"), k("⌘W", "close tab"), k("⌘1-9", "tabs"), k("⌘B", "sidebar"), k("⌘I", "stats")];
+  else list = [k("⇧⇧ / ⌘P", "projects"), k("⌘T", "new tab"), k("⇧⌘T", "continue"), k("⌘B", "sidebar"), k("⌘I", "stats"), k("⌘,", "settings")];
+  setHTML($("#hints"), `<button type="button" class="hint-btn" data-shortcuts title="All keyboard shortcuts (${keyText("⌘/")})"><b>${keyText("⌘/")}</b> shortcuts</button>${list.join("")}`);
 }
 
 // ---------- "Claude is waiting" notifications ----------
@@ -1825,7 +1860,7 @@ function toggleFocusMode() {
   } else {
     state.beforeFocus = { left: state.showLeft, right: state.showRight, files: state.showFiles };
     state.showLeft = state.showRight = state.showFiles = false;
-    flash("focus mode · ⇧⌘↵ to bring the panels back");
+    flash(keyText("focus mode · ⇧⌘↵ to bring the panels back"));
   }
   applyLayout();
 }
@@ -1894,6 +1929,7 @@ function wireResize() {
 
 function render() {
   renderTitle();
+  renderHints();
   renderProjects();
   renderTabs();
   if (state.showFiles || document.body.classList.contains("drawer-files")) refreshFiles();
@@ -2552,7 +2588,7 @@ function renderCommands(q) {
     matches
       .map(({ c, m }, i) => `<button class="pal-item${i === state.palette.sel ? " sel" : ""}" type="button" data-i="${i}">
         <span class="marker">${i === state.palette.sel ? "▸" : ""}</span><span class="grow"><span class="nm">${highlight(c.title, m.pos || [])}</span></span>
-        <span class="meta">${esc(c.keys)}</span></button>`)
+        <span class="meta">${esc(keyText(c.keys))}</span></button>`)
       .join("") || `<div class="empty">No matching command.</div>`;
   $("#pal-list .sel")?.scrollIntoView({ block: "nearest" });
 }
@@ -2674,8 +2710,14 @@ function wireProjects() {
     } else return;
     e.preventDefault();
   });
-  $("#btn-add").addEventListener("click", addProject);
-  $("#btn-config").addEventListener("click", () => onMenu("settings"));
+  // add and settings sit in the top bar (and at the foot of the drawer on a phone), with the theme
+  document.addEventListener("click", (e) => {
+    const act = e.target.closest?.("[data-act]")?.dataset.act;
+    if (act === "add") addProject();
+    else if (act === "settings") onMenu("settings");
+    else if (act === "theme") onMenu(`theme-${THEME_NEXT[theme]}`);
+    else if (act === "awake") $("#awake-menu").classList.contains("hidden") ? showAwakeMenu() : hideMenus();
+  });
   $("#config-error").addEventListener("click", () => onMenu("edit-config"));
 }
 
@@ -3420,12 +3462,14 @@ function wireMobile() {
 // In a browser: sign out, and ask to be notified when Claude needs you.
 function wireRemoteUI() {
   document.body.classList.add("remote");
-  $("#btn-signout").addEventListener("click", async () => {
+  document.addEventListener("click", async (e) => {
+    if (!e.target.closest?.('[data-act="signout"]')) return;
     if (await Go().Confirm("Sign out?", "You will need your passkey to sign in again.", "Sign out")) remoteMod.signOut();
   });
-  const bell = $("#btn-notify");
-  const showBell = () => bell.classList.toggle("hidden", !("Notification" in window) || Notification.permission !== "default");
-  bell.addEventListener("click", async () => {
+  const bells = document.querySelectorAll('[data-act="notify"]');
+  const showBell = () => bells.forEach((b) => b.classList.toggle("hidden", !("Notification" in window) || Notification.permission !== "default"));
+  document.addEventListener("click", async (e) => {
+    if (!e.target.closest?.('[data-act="notify"]')) return;
     if (!("PushManager" in window) && /iPhone|iPad/.test(navigator.userAgent) && !navigator.standalone)
       flash("add Quarters to your Home Screen first (Share → Add to Home Screen) for alerts");
     const ok = await Notification.requestPermission();
@@ -3521,9 +3565,80 @@ function placeMenu(menu, anchor) {
   menu.style.top = (r.bottom + h + 8 > window.innerHeight ? Math.max(8, r.top - h - 4) : r.bottom + 4) + "px";
 }
 
+// ---------- keep the machine awake (the cup in the top bar) ----------
+
+// A hold keeps it awake whatever it's doing, like Amphetamine; the Keep
+// awake setting does it only while agents work or a browser is connected.
+const AWAKE_TIMES = [[30, "30m"], [60, "1h"], [120, "2h"], [180, "3h"], [240, "4h"], [360, "6h"], [480, "8h"], [600, "10h"], [720, "12h"], [1440, "24h"]];
+let awake = { on: false, until: 0, auto: false, can: true };
+let hostName = "the Mac"; // or "the server" (checkUpdate knows)
+
+const fmtLeft = (ms) => {
+  const m = Math.max(1, Math.round(ms / 60e3)), h = Math.floor(m / 60);
+  return h ? `${h}h ${String(m % 60).padStart(2, "0")}m` : `${m}m`;
+};
+
+function awakeText(v) {
+  const Host = hostName[0].toUpperCase() + hostName.slice(1);
+  if (!v.can) return `${Host} can't be kept awake: it needs systemd.`;
+  if (v.until === -1) return `Keeping ${hostName} awake until you stop it.`;
+  if (v.until > 0) return `Keeping ${hostName} awake · ${fmtLeft(v.until - Date.now())} left (until ${new Date(v.until).toLocaleTimeString([], { hour: "numeric", minute: "2-digit", hour12: true })}).`;
+  if (v.on) return `${Host} is awake while agents work.`;
+  return v.auto ? `${Host} may sleep: no agent is working.` : `${Host} sleeps as usual.`;
+}
+
+async function refreshAwake() {
+  const v = await Promise.resolve(Go().Awake()).catch(() => null);
+  if (v) renderAwake(v);
+}
+
+function renderAwake(v) {
+  awake = v;
+  const b = $("#btn-awake");
+  b.classList.toggle("on", v.on);
+  b.classList.toggle("hold", !!v.until);
+  b.title = awakeText(v);
+  if (!$("#awake-menu").classList.contains("hidden")) showAwakeMenu();
+}
+
+function showAwakeMenu() {
+  const menu = $("#awake-menu");
+  menu.innerHTML =
+    `<div class="am-head">KEEP ${esc(hostName.toUpperCase())} AWAKE</div><div class="aw-status">${esc(awakeText(awake))}</div>` +
+    (!awake.can
+      ? ""
+      : (awake.until ? `<button class="am-item" type="button" data-awake="0"><span class="red">■</span><span class="grow">Let it sleep again</span></button>` : "") +
+        `<button class="am-item" type="button" data-awake="-1"><span class="accent">∞</span><span class="grow">Until I stop it</span></button>` +
+        `<div class="aw-sub">FOR</div><div class="aw-times">${AWAKE_TIMES.map(([m, l]) => `<button class="chip" type="button" data-awake="${m}">${l}</button>`).join("")}</div>` +
+        `<label class="aw-auto"><input type="checkbox" class="switch" id="aw-auto"${awake.auto ? " checked" : ""}><span>While agents work or a browser is connected<br><span class="muted">the Keep awake setting</span></span></label>`);
+  placeMenu(menu, $("#btn-awake"));
+}
+
+function wireAwake() {
+  const menu = $("#awake-menu");
+  menu.addEventListener("click", (e) => {
+    const b = e.target.closest("[data-awake]");
+    if (!b) return;
+    if (!canChange()) return watchOnly();
+    Promise.resolve(Go().SetAwake(Number(b.dataset.awake))).then((v) => {
+      renderAwake(v);
+      hideMenus();
+      flash(v.until ? awakeText(v).replace(/ \(until .*\)/, "") : `${hostName} can sleep again`);
+    }, (err) => flash(String(err)));
+  });
+  menu.addEventListener("change", (e) => {
+    if (e.target.id !== "aw-auto") return;
+    if (!canChange()) return watchOnly();
+    Promise.resolve(Go().SetFeature("keep_awake", e.target.checked)).then(() => setTimeout(refreshAwake, 300), (err) => flash(String(err)));
+  });
+  refreshAwake();
+  every(15e3, refreshAwake);
+}
+
 function hideMenus() {
   $("#prompt-menu").classList.add("hidden");
   $("#wt-menu").classList.add("hidden");
+  $("#awake-menu").classList.add("hidden");
 }
 
 function showPromptMenu(anchor) {
@@ -3627,7 +3742,7 @@ function wireMenus() {
     }
   });
   window.addEventListener("mousedown", (e) => {
-    if (!e.target.closest("#prompt-menu, #wt-menu, #btn-prompts, #btn-wt, [data-key='prompts']")) hideMenus();
+    if (!e.target.closest("#prompt-menu, #wt-menu, #awake-menu, #btn-prompts, #btn-wt, #btn-awake, [data-key='prompts']")) hideMenus();
   }, true);
   window.addEventListener("keydown", (e) => e.key === "Escape" && hideMenus(), true);
 }
@@ -3837,6 +3952,23 @@ async function showVersion() {
   el.title = "About Quarters";
   el.hidden = false;
   el.onclick = () => ($("#about-pop").classList.contains("hidden") ? showAbout(v) : hideAbout());
+  checkUpdate();
+  every(30 * 60e3, checkUpdate);
+}
+
+// checkUpdate: a pill beside the version, red when a newer release is out,
+// grey when this is the newest; a click says how to update (Quarters asks
+// GitHub at most every six hours). No answer from GitHub yet: no pill.
+async function checkUpdate() {
+  const u = await Promise.resolve(Go().CheckUpdate()).catch(() => null);
+  if (u) hostName = u.server ? "the server" : "the Mac";
+  const pill = $("#update-pill");
+  pill.hidden = !u?.latest;
+  if (!u?.latest) return;
+  pill.classList.toggle("current", !u.version);
+  pill.textContent = u.version ? "update available" : "up to date";
+  pill.title = u.version ? `Quarters ${u.version} is out · how to update` : `${u.latest} is the newest · how to update`;
+  pill.onclick = () => openUpdate(u);
 }
 
 // showAbout: the version, who makes Quarters and where to find it.
@@ -4011,6 +4143,7 @@ async function main() {
   wireMobile();
   wireMenus();
   wireStatsExtras();
+  wireAwake();
   $("#restore").addEventListener("click", (e) => {
     const b = e.target.closest("[data-restore]");
     if (!b) return;
@@ -4022,7 +4155,10 @@ async function main() {
   });
   for (const ev of ["focus", "blur"]) window.addEventListener(ev, () => setTimeout(reportViewing, 50));
   document.addEventListener("visibilitychange", reportViewing);
-  if (REMOTE) wireRemoteUI();
+  if (REMOTE) {
+    wireRemoteUI();
+    wireBrowserKeys();
+  }
   else wireRemotePill();
   window.addEventListener("focus", claimActive);
   preloadMascot();
@@ -4054,7 +4190,7 @@ async function main() {
 
   renderMascot();
   every(500, renderMascot);
-  if (tipsDue()) setTimeout(() => startTips().catch(() => {}), 20000);
+  if (tipsDue()) setTimeout(() => startTips().catch(() => {}), 3000);
   // Mac notifications and the prompt queue matter most when you're elsewhere
   every(500, checkAttention, { hidden: true, behind: 1 });
   every(1000, runQueues, { hidden: true, behind: 1 });
@@ -4347,6 +4483,51 @@ function wireShortcuts() {
   document.addEventListener("click", (e) => e.target.closest("[data-shortcuts]") && openShortcuts());
 }
 
+// ---------- the same keys in a browser ----------
+
+// The Mac app's shortcuts are its menus (main.go); a browser has no menus,
+// so the page listens for the same keys itself. A PC has no ⌘ and Ctrl
+// belongs to the terminal, so Alt stands in for ⌘: ⌘P is Alt+P, ⇧⌘P
+// Alt+Shift+P and ⌥⌘T Ctrl+Alt+T. On a Mac, Chrome keeps ⌘T, ⌘W and
+// ⇧⌘[ ⇧⌘] for its own tabs; with ⌃ added (⌃⌘T…) they reach Quarters.
+
+// keyText writes the shortcuts in s for this keyboard.
+function keyText(s) {
+  if (!REMOTE || APPLE) return s;
+  return s.replace(/([⌥⇧]?)⌘/g, (_, m) => (m === "⇧" ? "Alt+Shift+" : m === "⌥" ? "Ctrl+Alt+" : "Alt+"));
+}
+
+const KEY_CODES = { BracketLeft: "[", BracketRight: "]", Equal: "=", Minus: "-", Comma: ",", Slash: "/", Enter: "↵", NumpadEnter: "↵", NumpadAdd: "=", NumpadSubtract: "-" };
+
+// comboOf is a key press as the menus write it (⇧⌘T), or "" if it has no ⌘.
+function comboOf(e) {
+  if (APPLE ? !e.metaKey : !e.altKey || e.metaKey) return "";
+  const opt = APPLE ? e.altKey : e.ctrlKey;
+  const k = /^[a-z]$/i.test(e.key) ? e.key.toUpperCase() : KEY_CODES[e.code] || (/^(Key[A-Z]|Digit\d)$/.test(e.code) ? e.code.slice(-1) : "");
+  return k && `${opt ? "⌥" : ""}${e.shiftKey ? "⇧" : ""}⌘${k}`;
+}
+
+function wireBrowserKeys() {
+  const keys = {};
+  for (const c of COMMANDS) if (c.keys) keys[c.keys] = c.action;
+  Object.assign(keys, { "⌘P": "palette", "⇧⌘P": "commands" });
+  for (let n = 1; n <= 9; n++) keys[`⌘${n}`] = `tab-${n}`;
+  // the capture phase, so the key never reaches the terminal (Alt+P would type ESC p)
+  window.addEventListener("keydown", (e) => {
+    const action = keys[comboOf(e)];
+    if (!action) return;
+    if (action === "save-file" && e.target.closest?.(".overlay")) return; // the dialog's own ⌘S
+    e.preventDefault();
+    e.stopPropagation();
+    if (!e.repeat || action.startsWith("font-")) onMenu(action);
+  }, true);
+  // a PC: the labels say Alt, not ⌘
+  if (APPLE) return;
+  const walk = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+  for (let n = walk.nextNode(); n; n = walk.nextNode()) if (n.data.includes("⌘")) n.data = keyText(n.data);
+  for (const el of document.querySelectorAll("[title*='⌘']")) el.title = keyText(el.title);
+}
+
 // ---------- who's waiting for you (⌘J) ----------
 
 // waitingTabs are the agent tabs that finished while you weren't looking
@@ -4549,6 +4730,10 @@ function ui(file) {
   }));
 }
 
+function openUpdate(...args) {
+  return ui("update.js").then((m) => m.openUpdate(...args));
+}
+
 function openShortcuts(...args) {
   return ui("shortcuts.js").then((m) => m.openShortcuts(...args));
 }
@@ -4597,10 +4782,9 @@ function openRemoteDialog(...args) {
   return ui("remote-dialog.js").then((m) => m.openRemoteDialog(...args));
 }
 
-// ---------- tips: the first week, now and then (ui/tips.js) ----------
+// ---------- tips: always one at the bottom right (ui/tips.js) ----------
 
 const TIPS_KEY = "quarters.tips";
-const TIPS_DAYS = 7;
 
 function tipsState() {
   try {
@@ -4616,21 +4800,17 @@ function saveTips(t) {
   } catch {}
 }
 
-// learned notes a key or a button you've used, so its tip never shows
+// learned notes a key or a button you've used, so its tip comes last
 function learned(id) {
   const t = tipsState();
-  if (t.off || t.used?.includes(id)) return;
+  if (t.used?.includes(id)) return;
   (t.used ||= []).push(id);
   saveTips(t);
   document.dispatchEvent(new CustomEvent("tips:learned", { detail: id }));
 }
 
-// tipsDue: tips are on, it's the first week, and the screen has keys
-function tipsDue() {
-  const t = tipsState();
-  if (!t.first) saveTips({ ...t, first: (t.first = Date.now()) });
-  return !t.off && !isTouch() && Date.now() - t.first < TIPS_DAYS * 864e5;
-}
+// tipsDue: the screen has keys (a phone's status bar is for messages)
+const tipsDue = () => !isTouch();
 
 function startTips(...args) {
   return ui("tips.js").then((m) => m.startTips(...args));
@@ -4638,6 +4818,7 @@ function startTips(...args) {
 
 export {
   $,
+  APPLE,
   Go,
   PROJECT_COLORS,
   REMOTE,
@@ -4666,6 +4847,7 @@ export {
   iconHTML,
   isNarrow,
   isTouch,
+  keyText,
   learned,
   loadIcon,
   loadProjects,

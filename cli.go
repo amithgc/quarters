@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"syscall"
 	"time"
@@ -29,6 +30,7 @@ const usage = `Quarters: a home for your coding agents (Claude Code, Codex, Gemi
   quarters --pair                a one-time link that pairs a device (passkey)
   quarters --devices             the paired devices
   quarters --remove-device NAME  unpair a device (by name or id); it is signed out
+  quarters --version             which Quarters this is
   quarters --help
 
 Settings and projects: %s
@@ -62,6 +64,8 @@ func runCLI(app *App, args []string, serverOnly bool) bool {
 			log.Fatal("usage: quarters --remove-device NAME")
 		}
 		removeDevice(args[1])
+	case "--version", "-v", "version":
+		fmt.Println(versionLine(serverOnly))
 	case "--help", "-h", "help":
 		first := "the app"
 		if serverOnly {
@@ -75,6 +79,16 @@ func runCLI(app *App, args []string, serverOnly bool) bool {
 		log.Fatalf("unknown command %q (try --help)", args[0])
 	}
 	return true
+}
+
+// versionLine is what --version prints: "Quarters 0.7.0 (darwin/arm64)", or
+// "Quarters dev (linux/amd64, server)" for the server built from source.
+func versionLine(serverOnly bool) string {
+	where := runtime.GOOS + "/" + runtime.GOARCH
+	if serverOnly {
+		where += ", server"
+	}
+	return fmt.Sprintf("Quarters %s (%s)", version, where)
 }
 
 // setPassword sets password sign-in for remote access without a window:

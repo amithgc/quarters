@@ -16,11 +16,9 @@ import {
   onMenu,
   openRemoteDialog,
   set,
-  saveTips,
   setTheme,
   state,
   theme,
-  tipsState,
 } from "../app.js";
 
 async function openSettings() {
@@ -31,7 +29,6 @@ async function openSettings() {
   $("#set-error").textContent = "";
   renderSettings(true);
   renderThemeSeg();
-  $("#set-tips").checked = !tipsState().off;
   $("#settings-dialog").classList.remove("hidden");
   $("#set-close").focus();
 }
@@ -135,10 +132,6 @@ function wireSettings() {
       }
       await loadSettings();
       loadProjects();
-    } else if (e.target.id === "set-tips") {
-      // turned back on: another week of them
-      saveTips({ ...tipsState(), off: !e.target.checked, ...(e.target.checked && { first: Date.now() }) });
-      import("./tips.js").then((m) => (e.target.checked ? m.startTips(3000) : m.hideTip()));
     } else if (e.target.id === "set-yolo") {
       try {
         await Go().SetYolo(e.target.checked);

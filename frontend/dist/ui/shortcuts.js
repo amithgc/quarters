@@ -1,9 +1,13 @@
-// The keyboard shortcuts dialog (Help → Keyboard Shortcuts, ⌘/).
+// The keyboard shortcuts dialog (Help → Keyboard Shortcuts, ⌘/). mac: only
+// in the Mac app.
 // Loaded the first time it's needed (see ui() in app.js).
 
 import {
   $,
+  APPLE,
+  REMOTE,
   esc,
+  keyText,
   state,
 } from "../app.js";
 
@@ -17,13 +21,14 @@ function shortcutGroups() {
       ["⇧C", "Continue the last conversation"],
       ["S", "Open a shell"],
       ["⌘O", "Add a project"],
-      ["⇧⌘R", "Show the project in Finder"],
+      ["⇧⌘R", "Show the project in Finder", "mac"],
     ]],
     ["Tabs", [
       ["⌘T", "New Claude tab"],
       ["⇧⌘T", "Continue the last conversation in a new tab"],
       ["⌥⌘T", "New shell tab"],
       ["⌘W", "Close the tab (in a split: the pane)"],
+      ...(REMOTE && APPLE ? [["⌃⌘T  ⌃⌘W", "In a browser, where Chrome keeps ⌘T, ⌘W and ⇧⌘[ ] for its own tabs: add ⌃"]] : []),
       ["⌘1 … ⌘9", "Go to tab 1–9"],
       ["⇧⌘[  ⇧⌘]", "Previous / next tab"],
       ["⌘J", "Go to the session waiting for you longest"],
@@ -51,17 +56,17 @@ function shortcutGroups() {
       ["⇧⌘G", "Worktrees"],
       ["⇧⌘U", "Usage by project"],
       ["⌘,", "Settings"],
-      ["⌥⌘,", "Edit config.json"],
-      ["⌥⌘R", "Start or stop the remote-access server"],
-      [hotkey, "From any app: bring Quarters forward or hide it"],
+      ["⌥⌘,", "Edit config.json", "mac"],
+      ["⌥⌘R", "Start or stop the remote-access server", "mac"],
+      [hotkey, "From any app: bring Quarters forward or hide it", "mac"],
       ["⌘/", "This list"],
     ]],
-  ];
+  ].map(([title, rows]) => [title, rows.filter(([, , mac]) => !mac || !REMOTE)]); // a browser can't reach the Mac's Finder or config
 }
 
 function openShortcuts() {
   $("#keys-list").innerHTML = shortcutGroups()
-    .map(([title, rows]) => `<div class="keys-group"><div class="field-label">${esc(title)}</div>${rows.map(([k, what]) => `<div class="keys-row"><span class="keys-k">${k.split(/\s{2,}/).map((part) => (part === "or" ? '<span class="muted">or</span>' : `<kbd>${esc(part)}</kbd>`)).join(" ")}</span><span class="keys-what">${esc(what)}</span></div>`).join("")}</div>`)
+    .map(([title, rows]) => `<div class="keys-group"><div class="field-label">${esc(title)}</div>${rows.map(([k, what]) => `<div class="keys-row"><span class="keys-k">${k.split(/\s{2,}/).map((part) => (part === "or" ? '<span class="muted">or</span>' : `<kbd>${esc(keyText(part))}</kbd>`)).join(" ")}</span><span class="keys-what">${esc(what)}</span></div>`).join("")}</div>`)
     .join("");
   $("#keys-dialog").classList.remove("hidden");
   $("#keys-close").focus();

@@ -1,13 +1,10 @@
-// Tips for the first week: now and then, one quiet line at the bottom right
-// about a key or a panel you haven't used yet (one you have never shows).
-// It fades after a while; › shows another, × turns them off (Settings
-// turns them back on). Loaded by startTips() in app.js.
+// Tips: one quiet line at the bottom right, always, about a key or a panel.
+// The ones you haven't used come first; every two minutes the next one
+// fades in, and › shows it now. Loaded by startTips() in app.js.
 
-import { $, REMOTE, activeTab, flash, isNarrow, saveTips, state, tipsDue, tipsState } from "../app.js";
+import { $, REMOTE, activeTab, isNarrow, keyText, saveTips, state, tipsDue, tipsState } from "../app.js";
 
 const SHOW_MS = 2 * 60e3; // how long one stays
-const GAP_MS = 10 * 60e3; // the quiet between two
-const PER_DAY = 3;
 const CHECK_MS = 15e3;
 
 // done: the actions that mean you know it already (see learned() in app.js)
@@ -36,12 +33,18 @@ let hideAt = 0;
 let hovered = false;
 let ticking = null;
 
-const today = () => new Date().toDateString();
-
+// pick: a tip not seen yet whose keys you haven't used; when every one has
+// been seen, round again after the one showing (still the unused ones,
+// while there are a couple).
 function pick() {
   const t = tipsState();
   const used = new Set(t.used || []), seen = new Set(t.seen || []);
-  return TIPS.find((x) => !seen.has(x.id) && !(x.done || []).some((d) => used.has(d)) && (!x.when || x.when()));
+  const fits = TIPS.filter((x) => !x.when || x.when());
+  const unused = fits.filter((x) => !(x.done || []).some((d) => used.has(d)));
+  const fresh = unused.find((x) => !seen.has(x.id));
+  if (fresh) return fresh;
+  const pool = unused.length > 1 ? unused : fits;
+  return pool[(pool.indexOf(tip) + 1) % pool.length];
 }
 
 // quiet moments only: the window in use, nothing open over it, room for a line
@@ -50,37 +53,32 @@ function canShow() {
 }
 
 function tick() {
-  if (tip) {
-    if (!hovered && Date.now() > hideAt) hideTip();
-    return;
-  }
   if (Date.now() < nextAt || !tipsDue() || !canShow()) return;
-  const t = tipsState();
-  if (t.day === today() && t.count >= PER_DAY) return;
+  if (!tip || (!hovered && Date.now() > hideAt)) next();
+}
+
+// next fades the one showing out and the next one in
+function next() {
   const x = pick();
-  if (x) show(x);
+  if (!x) return;
+  const el = $("#tip");
+  spot(false);
+  if (!tip) return show(x);
+  el.classList.remove("on");
+  setTimeout(() => show(x), 600);
 }
 
 function show(x) {
   const t = tipsState();
-  saveTips({ ...t, seen: [...(t.seen || []), x.id], day: today(), count: t.day === today() ? (t.count || 0) + 1 : 1 });
+  if (!(t.seen || []).includes(x.id)) saveTips({ ...t, seen: [...(t.seen || []), x.id] });
   tip = x;
   hideAt = Date.now() + SHOW_MS;
   const el = $("#tip");
-  el.innerHTML = `<span class="tip-ic">✦</span><span class="tip-text">${x.text}</span><button type="button" class="tip-btn" data-tip="next" title="Another tip">›</button><button type="button" class="tip-btn" data-tip="off" title="No more tips (Settings turns them back on)">×</button>`;
+  el.innerHTML = `<span class="tip-ic">✦</span><span class="tip-text">${keyText(x.text)}</span><button type="button" class="tip-btn" data-tip="next" title="Another tip">›</button>`;
   el.hidden = false;
   el.classList.remove("done");
   requestAnimationFrame(() => el.classList.add("on"));
-}
-
-export function hideTip() {
-  const el = $("#tip");
-  spot(false);
-  el.classList.remove("on");
-  tip = null;
-  hovered = false;
-  nextAt = Date.now() + GAP_MS;
-  setTimeout(() => !tip && (el.hidden = true), 600);
+  if (hovered) spot(true);
 }
 
 function spot(on) {
@@ -98,20 +96,7 @@ export function startTips(delay = 0) {
 function wire() {
   const el = $("#tip");
   el.addEventListener("click", (e) => {
-    const act = e.target.closest("[data-tip]")?.dataset.tip;
-    if (act === "off") {
-      saveTips({ ...tipsState(), off: true });
-      hideTip();
-      flash("no more tips · Settings turns them back on");
-    } else if (act === "next") {
-      spot(false);
-      const x = pick();
-      if (x) show(x);
-      else {
-        hideTip();
-        flash("that's every tip · ⌘/ lists all the shortcuts");
-      }
-    }
+    if (e.target.closest("[data-tip]")?.dataset.tip === "next") next();
   });
   el.addEventListener("mouseenter", () => {
     hovered = true;
@@ -122,14 +107,13 @@ function wire() {
     spot(false);
     hideAt = Math.max(hideAt, Date.now() + 10e3);
   });
-  // you just did what the tip says: a tick, and it goes
+  // you just did what the tip says: a tick, and the next one
   document.addEventListener("tips:learned", (e) => {
     if (!tip?.done?.includes(e.detail)) return;
     el.classList.add("done");
     el.querySelector(".tip-ic").textContent = "✓";
-    hideAt = 0;
     hovered = false;
-    setTimeout(() => tip && el.classList.contains("done") && hideTip(), 2000);
+    setTimeout(() => el.classList.contains("done") && next(), 2000);
   });
 }
 

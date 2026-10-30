@@ -21,7 +21,7 @@ func awakeCmd(int) *exec.Cmd {
 	if _, err := exec.LookPath("systemd-inhibit"); err != nil {
 		return nil
 	}
-	return exec.Command("systemd-inhibit", "--what=sleep:idle", "--who=Quarters", "--why=Claude is working or a browser is connected", "--mode=block", "sleep", "infinity")
+	return exec.Command("systemd-inhibit", "--what=sleep:idle", "--who=Quarters", "--why=Quarters keeps it awake", "--mode=block", "sleep", "infinity")
 }
 
 // The Dock and the global hotkey are macOS features.

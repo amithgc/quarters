@@ -365,3 +365,26 @@ func TestChatImageOnlyWhatTheAgentWrote(t *testing.T) {
 		t.Error("a path nobody wrote must not be")
 	}
 }
+
+func TestAwakeHold(t *testing.T) {
+	a, _ := testApp(t)
+	defer a.stopAwake()
+	if v := a.SetAwake(60); !v.Can || !v.On || v.Until < time.Now().Add(59*time.Minute).UnixMilli() {
+		t.Fatalf("an hour's hold: %+v", v)
+	}
+	if v := a.SetAwake(-1); !v.On || v.Until != -1 {
+		t.Fatalf("a hold until stopped: %+v", v)
+	}
+	if v := a.SetAwake(0); v.On || v.Until != 0 {
+		t.Fatalf("the hold ended, nothing else keeps it awake: %+v", v)
+	}
+	// a hold that ran out ends at the next check
+	a.SetAwake(1)
+	a.fmu.Lock()
+	a.f.awakeHold = time.Now().Add(-time.Second).UnixMilli()
+	a.fmu.Unlock()
+	a.keepAwake()
+	if v := a.Awake(); v.On || v.Until != 0 {
+		t.Fatalf("an ended hold: %+v", v)
+	}
+}

@@ -47,6 +47,9 @@ func TestAgentCommand(t *testing.T) {
 		// a switch of two words, added once and taken out of a project's command
 		{Project{}, HarnessByID("devin"), true, "devin --permission-mode bypass"},
 		{Project{Harness: "devin", Command: []string{"devin", "--permission-mode", "bypass", "--model", "x"}}, HarnessByID("devin"), false, "devin --model x"},
+		// Cursor CLI's program is "agent"; Goose has no switch
+		{Project{}, HarnessByID("cursor"), true, "agent --force"},
+		{Project{}, HarnessByID("goose"), true, "goose"},
 	}
 	for _, tc := range cases {
 		if got := strings.Join(c.AgentCommand(tc.p, tc.h, tc.yolo), " "); got != tc.want {
@@ -69,6 +72,9 @@ func TestHarnessAdapters(t *testing.T) {
 	}
 	if a := HarnessByID("aider"); a.Interrupt != "\x03" {
 		t.Errorf("aider interrupt = %q", a.Interrupt)
+	}
+	if g := HarnessByID("goose"); g.Interrupt != "\x03" || len(g.Yolo) != 0 {
+		t.Errorf("goose stops with ^C and has no yolo switch: %+v", g)
 	}
 	if o := HarnessByID("opencode"); o.Interrupt != "\x1b" || o.MenuMarker != "" || o.Reader != "" {
 		t.Errorf("opencode should have the defaults: %+v", o)

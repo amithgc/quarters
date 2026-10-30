@@ -106,14 +106,13 @@ services. Your projects, your logins and your machine stay yours.
 - **Every command by name:** **⇧⌘P** (or `>` in the jump list).
 - **Focus mode:** **⇧⌘↵** leaves only the terminal; again brings the
   panels back.
-- **Tips for the first week:** now and then, one quiet line at the bottom
-  about a key or a panel you haven't used yet (never one you have). At most
-  three a day; × turns them off, and Settings → Appearance turns them back
-  on.
+- **Tips:** one quiet line at the bottom right about a key or a panel, the
+  ones you haven't used first. The next one fades in every two minutes;
+  › shows it now.
 - **Saved prompts** (⚡): type a common instruction with one click.
 - **The project's automations in the side panel:** run, restart or stop
   each one, edit it, delete it, or add a new one, right where you work.
-- **Any of eight coding agents,** chosen for all projects or per project
+- **Any of twelve coding agents,** chosen for all projects or per project
   (see [Coding agents](#coding-agents)).
 
 ### Split panes and a files panel
@@ -156,6 +155,10 @@ installed are marked, and starting one tells you where to get it.
 | GitHub Copilot CLI | `copilot` | `--continue` | `--allow-all-tools` | git, automations |
 | Devin | `devin` | `--continue` | `--permission-mode bypass` | git, automations |
 | Aider | `aider` | `--restore-chat-history` | `--yes-always` | git, automations |
+| Amp | `amp` | `threads continue --last` | `--dangerously-allow-all` | git, automations |
+| Goose | `goose` | `session --resume` | — (`GOOSE_MODE=auto` in its config) | git, automations |
+| Qwen Code | `qwen` | `--continue` | `--yolo` | git, automations |
+| Cursor CLI | `agent` | `--continue` | `--force` | git, automations |
 
 Claude Code gets the deepest integration, because Quarters reads its session
 logs: session stats, plan usage, past conversations, the phone's chat view
@@ -348,6 +351,7 @@ Managing it without a window:
 | `quarters --pair` | a one-time link that pairs a device with a passkey (HTTPS or `localhost` only) |
 | `quarters --devices` | list the paired devices and the password sign-in |
 | `quarters --remove-device NAME` | unpair a device (by name or id); it is signed out at once |
+| `quarters --version` | which Quarters this is, e.g. `Quarters 0.7.0 (linux/amd64, server)`; worth adding to a bug report |
 | `quarters --help` | all of the above |
 
 To keep it running, a systemd user service works well:

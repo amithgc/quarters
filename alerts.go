@@ -83,11 +83,16 @@ func (a *App) pushKey() (string, error) {
 
 // ---- keep the Mac awake ----
 
-// keepAwake runs caffeinate while Claude is working or a browser is connected.
+// keepAwake runs caffeinate while Claude is working or a browser is
+// connected, and while a hold from the top bar lasts.
 func (a *App) keepAwake() {
 	want := a.config().On("keep_awake") && (a.sessions.Busy(2*time.Minute) || a.browsersOnline())
 	a.fmu.Lock()
 	defer a.fmu.Unlock()
+	if a.f.awakeHold > 0 && time.Now().UnixMilli() >= a.f.awakeHold {
+		a.f.awakeHold = 0
+	}
+	want = want || a.f.awakeHold != 0
 	switch {
 	case want && a.f.awake == nil:
 		cmd := awakeCmd(os.Getpid())
@@ -99,6 +104,40 @@ func (a *App) keepAwake() {
 		_ = a.f.awake.Process.Kill()
 		a.f.awake = nil
 	}
+}
+
+// AwakeView is the top bar's keep-awake button.
+type AwakeView struct {
+	On    bool  `json:"on"`    // keeping the machine awake right now, for whatever reason
+	Until int64 `json:"until"` // the hold: when it ends (unix ms), -1 until stopped, 0 none
+	Auto  bool  `json:"auto"`  // the keep_awake setting: awake while agents work or a browser is connected
+	Can   bool  `json:"can"`   // this machine can be kept awake (Linux needs systemd)
+}
+
+// Awake says whether the machine is kept awake, and why.
+func (a *App) Awake() AwakeView {
+	v := AwakeView{Auto: a.config().On("keep_awake"), Can: awakeCmd(os.Getpid()) != nil}
+	a.fmu.Lock()
+	defer a.fmu.Unlock()
+	v.On, v.Until = a.f.awake != nil, a.f.awakeHold
+	return v
+}
+
+// SetAwake keeps the machine awake for this many minutes whatever it's
+// doing, like Amphetamine: -1 until it's stopped, 0 ends the hold.
+func (a *App) SetAwake(minutes int) AwakeView {
+	a.fmu.Lock()
+	switch {
+	case minutes < 0:
+		a.f.awakeHold = -1
+	case minutes == 0:
+		a.f.awakeHold = 0
+	default:
+		a.f.awakeHold = time.Now().Add(time.Duration(minutes) * time.Minute).UnixMilli()
+	}
+	a.fmu.Unlock()
+	a.keepAwake()
+	return a.Awake()
 }
 
 func (a *App) stopAwake() {

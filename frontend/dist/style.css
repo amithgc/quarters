@@ -43,7 +43,8 @@
   --r-lg: 10px; /* panels and dialogs */
 }
 
-/* light theme: follows macOS, unless Settings → Appearance picks one (data-theme on <html>) */
+/* light theme: follows macOS, unless Settings → Appearance picks one (data-theme on <html>).
+   Text colours reach 4.5:1 (WCAG AA) on --tile, the darkest light surface. */
 @media (prefers-color-scheme: light) {
   :root:not([data-theme="dark"]) {
     --bg: #F4F2EE;
@@ -56,12 +57,12 @@
     --border-strong: #C5C0B6;
     --text: #24232A;
     --soft: #4A4853;
-    --muted: #7C7987;
-    --accent: #C8643F;
+    --muted: #6B6874;
+    --accent: #A75030;
     --violet: #6E4FD8;
-    --green: #2E9A4E;
-    --yellow: #A87A00;
-    --red: #CC3B30;
+    --green: #24793D;
+    --yellow: #896400;
+    --red: #C2382E;
     --bar: #B9B4C8;
     --hover: #F0EDE7;
     --hover-strong: #E7E3DB;
@@ -71,7 +72,7 @@
     --overlay: rgba(40, 36, 30, .28);
   }
   :root:not([data-theme="dark"]) .st-key, :root:not([data-theme="dark"]) .btn.primary, :root:not([data-theme="dark"]) .btn.primary:hover { color: #FFFFFF; }
-  :root:not([data-theme="dark"]) .st-key { box-shadow: 0 4px 0 #8E4329; }
+  :root:not([data-theme="dark"]) .st-key { box-shadow: 0 4px 0 #7A3A22; }
   :root:not([data-theme="dark"]) .ended, :root:not([data-theme="dark"]) .palette-box, :root:not([data-theme="dark"]) .dialog-box, :root:not([data-theme="dark"]) .auto-menu, :root:not([data-theme="dark"]) .img-pop { box-shadow: 0 16px 40px rgba(60, 50, 40, .18); }
 }
 :root[data-theme="light"] {
@@ -85,12 +86,12 @@
   --border-strong: #C5C0B6;
   --text: #24232A;
   --soft: #4A4853;
-  --muted: #7C7987;
-  --accent: #C8643F;
+  --muted: #6B6874;
+  --accent: #A75030;
   --violet: #6E4FD8;
-  --green: #2E9A4E;
-  --yellow: #A87A00;
-  --red: #CC3B30;
+  --green: #24793D;
+  --yellow: #896400;
+  --red: #C2382E;
   --bar: #B9B4C8;
   --hover: #F0EDE7;
   --hover-strong: #E7E3DB;
@@ -100,7 +101,7 @@
   --overlay: rgba(40, 36, 30, .28);
 }
 :root[data-theme="light"] .st-key, :root[data-theme="light"] .btn.primary, :root[data-theme="light"] .btn.primary:hover { color: #FFFFFF; }
-:root[data-theme="light"] .st-key { box-shadow: 0 4px 0 #8E4329; }
+:root[data-theme="light"] .st-key { box-shadow: 0 4px 0 #7A3A22; }
 :root[data-theme="light"] .ended, :root[data-theme="light"] .palette-box, :root[data-theme="light"] .dialog-box, :root[data-theme="light"] .auto-menu, :root[data-theme="light"] .img-pop { box-shadow: 0 16px 40px rgba(60, 50, 40, .18); }
 
 
@@ -323,15 +324,16 @@ body.remote .legend { display: none; }
 
 /* status bar */
 #statusbar { display: flex; justify-content: space-between; align-items: center; padding: 0 6px; font-size: var(--fs-sm); color: var(--muted); gap: 16px; white-space: nowrap; overflow: hidden; }
-#hints { display: flex; gap: 18px; overflow: hidden; }
+#hints { display: flex; gap: 18px; overflow: hidden; min-width: 0; flex: 1 1 auto; }
+/* a tip beside them: the keys that don't fit fade out at the edge */
+#statusbar:has(#tip:not([hidden])) #hints { -webkit-mask-image: linear-gradient(to left, transparent, #000 48px); mask-image: linear-gradient(to left, transparent, #000 48px); }
 #hints b { color: var(--text); font-weight: 500; }
 #flash { color: var(--yellow); overflow: hidden; text-overflow: ellipsis; }
-.sb-right { display: flex; align-items: center; gap: 14px; min-width: 0; }
+.sb-right { display: flex; align-items: center; gap: 14px; min-width: 0; flex-shrink: 0; max-width: 62vw; }
 /* a tip (ui/tips.js): quiet, it fades in and out; a flash takes its place */
-#tip { display: flex; align-items: center; gap: 8px; min-width: 0; max-width: 62vw; opacity: 0; transition: opacity .6s; }
+#tip { display: flex; align-items: center; gap: 8px; min-width: 0; max-width: 55vw; opacity: 0; transition: opacity .6s; }
 #tip[hidden], .sb-right:has(#flash:not(:empty)) #tip { display: none; }
 #tip.on { opacity: 1; }
-#statusbar:has(#tip:not([hidden])) #hints > :not(:first-child) { display: none; } /* the tip takes their room */
 #tip .tip-ic { color: var(--accent); }
 #tip.done .tip-ic { color: var(--green); }
 #tip .tip-text { overflow: hidden; text-overflow: ellipsis; }
@@ -343,6 +345,18 @@ body.remote .legend { display: none; }
 @media (prefers-reduced-motion: reduce) { #tip { transition: none; } }
 #version { color: var(--muted); font-size: var(--fs-xs); flex-shrink: 0; }
 #version:hover { color: var(--text); }
+/* a newer release is out: red, beside the version */
+.update-pill { flex-shrink: 0; padding: 1px 8px; border-radius: 999px; font-size: var(--fs-xs); font-weight: 600; color: #fff; background: var(--red); }
+.update-pill:hover { filter: brightness(1.1); }
+.update-pill.current { color: var(--muted); background: var(--hover-strong); font-weight: 500; }
+.update-pill.current:hover { color: var(--text); filter: none; }
+.update-box { width: min(560px, calc(100vw - 32px)); }
+.up-lead { line-height: 1.5; }
+.up-step { display: flex; flex-direction: column; gap: 6px; }
+.up-step b { font-weight: 600; }
+.up-cmd { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--foot); }
+.up-cmd code { flex: 1; min-width: 0; overflow-x: auto; white-space: pre; color: var(--accent); user-select: text; -webkit-user-select: text; }
+.up-note { font-size: var(--fs-sm); line-height: 1.5; }
 
 /* palette */
 .overlay { position: fixed; inset: 0; background: var(--overlay); display: flex; justify-content: center; align-items: center; padding: 12px 16px; z-index: 50; }
@@ -389,6 +403,9 @@ body.remote .legend { display: none; }
 .path-row { display: flex; gap: 8px; }
 .path-row input { flex: 1; min-width: 0; }
 .path-row .btn { flex-shrink: 0; }
+.pd-note { color: var(--muted); font-size: var(--fs-sm); line-height: 1.5; }
+.pd-note code { color: var(--soft); }
+body.remote .pd-note.remote-only { display: block; }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .chip { padding: 1px 10px; border-radius: 11px; border: 1px solid var(--border-strong); color: var(--soft); font-size: var(--fs-sm); line-height: 20px; }
 .chip:hover, .chip.on { border-color: var(--accent); color: var(--accent); }
@@ -542,6 +559,30 @@ body.remote.offline .offline-badge { display: inline; color: var(--yellow); }
   #btn-files.on svg { filter: drop-shadow(0 0 3px color-mix(in srgb, var(--accent) 60%, transparent)); }
 }
 @media (max-width: 760px) { .tb-btn.panel-toggle { display: none; } }
+/* add, settings, alerts and sign out: in the top bar beside the panel buttons; on a phone, at the foot of the drawer */
+.tb-acts { display: inline-flex; align-items: center; gap: 2px; margin-right: 6px; padding-right: 6px; border-right: 1px solid var(--line); }
+.tb-act { width: 26px; height: 26px; border-radius: var(--r-sm); color: var(--muted); transition: color .15s, background .15s; }
+.tb-act:hover { color: var(--text); background: var(--hover); }
+.tb-act svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.3; stroke-linecap: round; stroke-linejoin: round; }
+/* keep awake: the cup fills while the machine is kept awake; orange while you hold it awake */
+#btn-awake .side { fill: currentColor; stroke: none; opacity: 0; transition: opacity .15s; }
+#btn-awake.on .side { opacity: .35; }
+#btn-awake.hold { color: var(--accent); }
+#btn-awake.hold .side { opacity: .8; }
+#btn-awake.hold svg { filter: drop-shadow(0 0 3px color-mix(in srgb, var(--accent) 60%, transparent)); }
+.aw-status { padding: 0 8px 8px; font-size: var(--fs-sm); line-height: 1.5; color: var(--soft); border-bottom: 1px solid var(--line); margin-bottom: 6px; }
+.aw-times { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; padding: 2px 8px 8px; }
+.aw-times .chip { text-align: center; padding: 1px 0; }
+.aw-sub { color: var(--muted); font-size: var(--fs-xs); letter-spacing: 1px; padding: 6px 8px 4px; }
+.aw-auto { display: flex; align-items: flex-start; gap: 10px; padding: 8px; border-top: 1px solid var(--line); margin-top: 4px; font-size: var(--fs-sm); line-height: 1.45; cursor: pointer; }
+.aw-auto .switch { margin-top: 1px; flex-shrink: 0; }
+.foot-actions { display: none; }
+body.remote .panel-foot { display: none; }
+@media (max-width: 760px) {
+  .tb-acts { display: none; }
+  .foot-actions { display: flex; }
+  body.remote .panel-foot { display: flex; }
+}
 
 .remote-box { width: min(720px, calc(100vw - 32px)); }
 .rm-intro { line-height: 19px; }
@@ -670,7 +711,7 @@ body.access-view .st-press, body.access-view .st-more, body.access-view .st-auto
 body.access-type .st-press, body.access-type .st-more, body.access-type .st-autos,
 body.access-view #btn-new-tab, body.access-view #btn-new-shell, body.access-view #btn-auto, body.access-view #btn-wt,
 body.access-type #btn-new-tab, body.access-type #btn-new-shell, body.access-type #btn-auto, body.access-type #btn-wt,
-body.access-view #btn-add, body.access-type #btn-add, body.access-view .tab .close, body.access-type .tab .close,
+body.access-view [data-act="add"], body.access-type [data-act="add"], body.access-view .tab .close, body.access-type .tab .close,
 body.access-view .ended .btn, body.access-type .ended .btn { display: none !important; }
 
 /* ---------- touch screens: phones, tablets ---------- */
@@ -1119,7 +1160,7 @@ body.focus-mode #statusbar { display: none; }
 .ab-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 .ab-actions .btn { flex: 1; white-space: nowrap; }
 .ab-foot { font-size: var(--fs-xs); text-align: center; }
-@media (max-width: 760px) { #version { display: none; } } /* the phone's status bar is only for messages */
+@media (max-width: 760px) { #version, .update-pill { display: none; } } /* the phone's status bar is only for messages */
 
 /* ---------- files panel ---------- */
 .fl-head-right { display: flex; align-items: center; gap: 8px; min-width: 0; }

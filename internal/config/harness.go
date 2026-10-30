@@ -54,6 +54,13 @@ var Harnesses = []Harness{
 	{ID: "devin", Name: "Devin", Bin: "devin", Yolo: []string{"--permission-mode", "bypass"}, Continue: []string{"--continue"}, Site: "https://docs.devin.ai/cli", Instructions: "AGENTS.md"},
 	{ID: "aider", Name: "Aider", Bin: "aider", Yolo: []string{"--yes-always"}, Continue: []string{"--restore-chat-history"}, Site: "https://aider.chat",
 		Interrupt: "\x03", Instructions: "CONVENTIONS.md"}, // Aider stops a reply with ^C, and ignores Esc
+	{ID: "amp", Name: "Amp", Bin: "amp", Yolo: []string{"--dangerously-allow-all"}, Continue: []string{"threads", "continue", "--last"}, Site: "https://ampcode.com", Instructions: "AGENTS.md"},
+	// Goose has no yolo switch (GOOSE_MODE=auto in its config does it), and
+	// stops a reply with ^C
+	{ID: "goose", Name: "Goose", Bin: "goose", Continue: []string{"session", "--resume"}, Site: "https://github.com/block/goose",
+		Interrupt: "\x03", Instructions: ".goosehints"},
+	{ID: "qwen", Name: "Qwen Code", Bin: "qwen", Yolo: []string{"--yolo"}, Continue: []string{"--continue"}, Site: "https://github.com/QwenLM/qwen-code", Instructions: "QWEN.md"},
+	{ID: "cursor", Name: "Cursor CLI", Bin: "agent", Yolo: []string{"--force"}, Continue: []string{"--continue"}, Site: "https://cursor.com/cli", Instructions: "AGENTS.md"},
 }
 
 // defaultInterrupt is Esc (see Harness.Interrupt).

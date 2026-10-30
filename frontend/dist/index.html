@@ -38,6 +38,14 @@
       <span class="offline-badge">offline · reconnecting…</span>
       <button id="btn-files-m" class="tb-btn mobile-only" type="button" aria-label="Files"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M1.5 4.5a1 1 0 0 1 1-1h3.6l1.4 1.5h6a1 1 0 0 1 1 1v6.5a1 1 0 0 1-1 1h-11a1 1 0 0 1-1-1z"/></svg></button>
       <button id="btn-stats" class="tb-btn mobile-only" type="button" aria-label="Session, plan and tools">⋯</button>
+      <span class="tb-acts">
+        <button class="tb-btn tb-act" data-act="add" type="button" title="Add a project folder (⌘O)" aria-label="Add a project"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 3v10M3 8h10"/></svg></button>
+        <button class="tb-btn tb-act" data-act="settings" type="button" title="Settings (⌘,)" aria-label="Settings"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M12.81 6.62 L14.52 6.97 L14.52 9.03 L12.81 9.38 L12.37 10.42 L13.34 11.88 L11.88 13.34 L10.42 12.37 L9.38 12.81 L9.03 14.52 L6.97 14.52 L6.62 12.81 L5.58 12.37 L4.12 13.34 L2.66 11.88 L3.63 10.42 L3.19 9.38 L1.48 9.03 L1.48 6.97 L3.19 6.62 L3.63 5.58 L2.66 4.12 L4.12 2.66 L5.58 3.63 L6.62 3.19 L6.97 1.48 L9.03 1.48 L9.38 3.19 L10.42 3.63 L11.88 2.66 L13.34 4.12 L12.37 5.58Z"/><circle cx="8" cy="8" r="2"/></svg></button>
+        <button class="tb-btn tb-act" data-act="theme" id="btn-theme" type="button" title="Theme" aria-label="Theme"></button>
+        <button class="tb-btn tb-act" data-act="awake" id="btn-awake" type="button" title="Keep the Mac awake" aria-label="Keep awake" aria-haspopup="menu"><svg viewBox="0 0 16 16" aria-hidden="true"><path class="side" d="M3 6.5h8v3.5a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3z"/><path d="M3 6.5h8v3.5a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3z"/><path d="M11 7.5h.8a1.6 1.6 0 0 1 0 3.2H11"/><path d="M5.5 2.2c-.6.8.6 1.4 0 2.3M8.5 2.2c-.6.8.6 1.4 0 2.3"/></svg></button>
+        <button class="tb-btn tb-act remote-only hidden" data-act="notify" type="button" title="Tell me when Claude is waiting" aria-label="Notify me"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 11.5V7a4 4 0 0 1 8 0v4.5l1 1H3z"/><path d="M6.6 14a1.5 1.5 0 0 0 2.8 0"/></svg></button>
+        <button class="tb-btn tb-act remote-only" data-act="signout" type="button" title="Sign out of this browser" aria-label="Sign out"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M9.5 2.5h-5a1 1 0 0 0-1 1v9a1 1 0 0 0 1 1h5"/><path d="M7 8h7M11.5 5.5 14 8l-2.5 2.5"/></svg></button>
+      </span>
       <button id="btn-files" class="tb-btn panel-toggle" type="button" title="Show the files panel (⇧⌘E)" aria-label="Files panel" aria-pressed="false"><svg viewBox="0 0 16 16" aria-hidden="true"><path class="side" d="M1.5 4.5a1 1 0 0 1 1-1h3.6l1.4 1.5h6a1 1 0 0 1 1 1v6.5a1 1 0 0 1-1 1h-11a1 1 0 0 1-1-1z"/><path d="M1.5 4.5a1 1 0 0 1 1-1h3.6l1.4 1.5h6a1 1 0 0 1 1 1v6.5a1 1 0 0 1-1 1h-11a1 1 0 0 1-1-1z"/></svg></button>
       <button id="btn-right" class="tb-btn panel-toggle on" type="button" title="Hide the side panel (⌘I)" aria-label="Side panel" aria-pressed="true"><svg viewBox="0 0 16 16" aria-hidden="true"><rect class="side" x="10" y="2.5" width="4.5" height="11"/><rect x="1.5" y="2.5" width="13" height="11" rx="2"/><path d="M10 2.5v11"/></svg></button>
     </div>
@@ -58,10 +66,10 @@
       <div id="project-list" class="scroll"></div>
       <div class="panel-foot">
         <div class="foot-actions">
-          <button id="btn-add" class="link-btn" type="button" title="Add a project folder (⌘O)">＋ add</button>
-          <button id="btn-config" class="link-btn" type="button" title="Settings (⌘,)">⚙ settings</button>
-          <button id="btn-notify" class="link-btn remote-only hidden" type="button" title="Tell me when Claude is waiting">🔔 notify me</button>
-          <button id="btn-signout" class="link-btn remote-only" type="button" title="Sign out of this browser">⎋ sign out</button>
+          <button class="link-btn" data-act="add" type="button" title="Add a project folder (⌘O)">＋ add</button>
+          <button class="link-btn" data-act="settings" type="button" title="Settings (⌘,)">⚙ settings</button>
+          <button class="link-btn remote-only hidden" data-act="notify" type="button" title="Tell me when Claude is waiting">🔔 notify me</button>
+          <button class="link-btn remote-only" data-act="signout" type="button" title="Sign out of this browser">⎋ sign out</button>
         </div>
         <span class="legend"><span class="green">●</span> run <span class="yellow">◐</span> wait <span class="muted">○</span> idle</span>
       </div>
@@ -173,7 +181,7 @@
       <span><b>⌘I</b> stats</span>
       <span><b>⌘,</b> settings</span>
     </div>
-    <span class="sb-right"><span id="tip" hidden></span><span id="flash"></span><button type="button" id="version" class="hint-btn" hidden></button></span>
+    <span class="sb-right"><span id="tip" hidden></span><span id="flash"></span><button type="button" id="update-pill" class="update-pill" hidden></button><button type="button" id="version" class="hint-btn" hidden></button></span>
   </footer>
 </div>
 
@@ -282,6 +290,15 @@ cloudflared tunnel run --url http://127.0.0.1:8421 quarters</pre>
   </div>
 </div>
 
+<!-- How to update (the pill beside the version) -->
+<div id="update-dialog" class="overlay hidden">
+  <div class="dialog-box update-box" role="dialog" aria-labelledby="up-title">
+    <div class="pal-head"><span id="up-title" class="panel-title accent">UPDATE AVAILABLE</span><span id="up-versions" class="muted"></span></div>
+    <div class="fields" id="up-body"></div>
+    <div class="dialog-actions"><button id="up-notes" class="btn" type="button">What's new</button><span class="push"></span><button id="up-close" class="btn primary" type="button">Close</button></div>
+  </div>
+</div>
+
 <!-- Settings -->
 <div id="settings-dialog" class="overlay hidden">
   <div class="dialog-box settings-box" role="dialog" aria-labelledby="set-title">
@@ -292,7 +309,6 @@ cloudflared tunnel run --url http://127.0.0.1:8421 quarters</pre>
         <span class="field-label">Appearance <span class="soft-note">— this device only</span></span>
         <div class="set-list">
           <div class="set-row"><span class="set-text"><b>Theme</b><span class="muted">The window and its terminals. System follows macOS (or the phone).</span></span><span class="seg" id="set-theme"><button type="button" data-theme="system">System</button><button type="button" data-theme="light">Light</button><button type="button" data-theme="dark">Dark</button></span></div>
-          <label class="set-row keys-only"><span class="set-text"><b>Tips</b><span class="muted">For the first week, now and then, a line at the bottom about a key or a panel you haven't used yet.</span></span><input type="checkbox" class="switch" id="set-tips"></label>
         </div>
       </div>
       <div class="field">
@@ -387,6 +403,7 @@ cloudflared tunnel run --url http://127.0.0.1:8421 quarters</pre>
 <!-- Saved prompts / worktrees menus -->
 <div id="prompt-menu" class="auto-menu hidden" role="menu"></div>
 <div id="wt-menu" class="auto-menu hidden" role="menu"></div>
+<div id="awake-menu" class="auto-menu hidden" role="menu"></div>
 <div id="file-menu" class="auto-menu hidden" role="menu"></div>
 
 <!-- About Quarters (a click on the version) -->
@@ -407,8 +424,9 @@ cloudflared tunnel run --url http://127.0.0.1:8421 quarters</pre>
         <label for="pd-path">Folder</label>
         <div class="path-row">
           <input id="pd-path" type="text" placeholder="/path/to/project" spellcheck="false">
-          <button id="pd-browse" class="btn" type="button">Browse…</button>
+          <button id="pd-browse" class="btn mac-only" type="button">Browse…</button>
         </div>
+        <div class="pd-note remote-only">Type the folder's path on the machine running Quarters, e.g. <code>~/code/shop</code> (a browser can't open its folder picker).</div>
       </div>
       <div class="field">
         <label for="pd-name">Name</label>
@@ -418,7 +436,7 @@ cloudflared tunnel run --url http://127.0.0.1:8421 quarters</pre>
         <span class="field-label">Icon</span>
         <div class="icon-row">
           <span id="pd-icon-preview" class="icon-preview"></span>
-          <button id="pd-icon-choose" class="btn" type="button">Choose image…</button>
+          <button id="pd-icon-choose" class="btn mac-only" type="button">Choose image…</button>
           <button id="pd-icon-clear" class="btn danger hidden" type="button">Remove icon</button>
         </div>
         <div id="pd-icon-found" class="icon-found"></div>

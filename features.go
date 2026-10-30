@@ -32,6 +32,7 @@ type featureState struct {
 	restore   []RestoreItem        // sessions open when Quarters last quit
 	queues    map[int]*promptQueue // session → prompts waiting to be sent
 	awake     *exec.Cmd            // caffeinate, while keeping the Mac awake
+	awakeHold int64                // the top bar's keep-awake hold: when it ends (unix ms), -1 until stopped, 0 none
 	hotkeyErr string
 }
 
