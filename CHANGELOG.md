@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.6.0
 
 - Split panes, as in iTerm: ⌘D opens a shell beside the tab you're in, ⇧⌘D
   one below it, and splits nest. ⌘[ and ⌘] move between panes, ⌘W closes
