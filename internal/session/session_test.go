@@ -186,3 +186,55 @@ func TestPrinted(t *testing.T) {
 		t.Error("an unknown session printed it")
 	}
 }
+
+// A full-screen program sets its modes once, as it starts: a snapshot taken
+// after that output is long gone still starts with them.
+func TestSnapshotKeepsModes(t *testing.T) {
+	m := NewManager(func(string, any) {}, nil)
+	id, err := m.Start(t.TempDir(), []string{"/bin/sh", "-c", `printf '\033[?1049h\033[?1000;1006h\033[?2004h\033[?2004l'; yes 'a line of output' | head -c 1500000; sleep 10`}, 80, 24, "", nil, "mac")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer m.CloseAll()
+	var b []byte
+	for deadline := time.Now().Add(10 * time.Second); time.Now().Before(deadline); time.Sleep(50 * time.Millisecond) {
+		sn, _ := m.Snapshot(id)
+		if sn.Off >= 1500000 {
+			b, _ = base64.StdEncoding.DecodeString(sn.Data)
+			break
+		}
+	}
+	if want := "\x1b[?1049h\x1b[?1000h\x1b[?1006h"; !strings.HasPrefix(string(b), want+"a line") && !strings.HasPrefix(string(b), want+"\r\n") {
+		t.Errorf("snapshot starts %q", b[:min(len(b), 60)])
+	}
+}
+
+// The mouse moving over a terminal, or its window gaining focus, isn't
+// typing: it doesn't take the session from the window using it.
+func TestReportsDontTakeOver(t *testing.T) {
+	m := NewManager(func(string, any) {}, nil)
+	id, err := m.Start(t.TempDir(), []string{"/bin/cat"}, 80, 24, "", nil, "mac")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer m.CloseAll()
+	m.Write("web1", id, "\x1b[<35;10;5M\x1b[<35;11;5M")
+	m.Write("web1", id, "\x1b[I")
+	if l := m.List(); l[0].Owner != "mac" {
+		t.Errorf("a report took the session: owner %q", l[0].Owner)
+	}
+	m.Write("mac", id, "\x1b[<64;3;4M")
+	m.Write("web1", id, "typed\r")
+	var out string
+	for deadline := time.Now().Add(5 * time.Second); time.Now().Before(deadline) && !strings.Contains(out, "typed"); time.Sleep(20 * time.Millisecond) {
+		sn, _ := m.Snapshot(id)
+		b, _ := base64.StdEncoding.DecodeString(sn.Data)
+		out = string(b)
+	}
+	if strings.Contains(out, "35;10;5M") || !strings.Contains(out, "64;3;4M") {
+		t.Errorf("reports: only the owner's go through: %q", out)
+	}
+	if l := m.List(); l[0].Owner != "web1" {
+		t.Errorf("typing should take the session: owner %q", l[0].Owner)
+	}
+}

@@ -69,10 +69,16 @@ func newSnapEnv(ctx context.Context, root string) (*snapEnv, error) {
 	if err != nil {
 		return nil, err
 	}
-	if src, err := os.Open(real); err == nil {
-		_, _ = io.Copy(f, src)
-		src.Close()
+	src, err := os.Open(real)
+	if err != nil {
+		// no index yet (nothing ever staged): git starts one, but an empty
+		// file it refuses
+		f.Close()
+		os.Remove(f.Name())
+		return &snapEnv{root: root, index: f.Name()}, nil
 	}
+	_, _ = io.Copy(f, src)
+	src.Close()
 	f.Close()
 	// The copy keeps the index's time: git trusts a file whose size and time
 	// match its index entry unless it changed in the index's own second, and

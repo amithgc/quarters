@@ -13,7 +13,9 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -97,6 +99,7 @@ type session struct {
 	mu      sync.Mutex
 	pending bytes.Buffer
 	recent  []byte // the last keepBytes of output
+	modes   modes  // the terminal modes in force where recent starts
 	total   int64
 	code    int
 	owner   string // window (client) whose size the terminal has
@@ -160,6 +163,7 @@ func (s *session) flush(emit Emitter, watch func(int, []byte)) {
 		if i := bytes.IndexByte(s.recent[over:], '\n'); i >= 0 && i < 4096 {
 			cut = over + i + 1
 		}
+		s.modes = s.modes.scan(s.recent[:cut])
 		s.recent = append([]byte(nil), s.recent[cut:]...)
 	}
 	var copied []byte
@@ -303,14 +307,31 @@ func (s *session) info() Info {
 
 // Write sends text typed in window client to a session. Typing makes that
 // window the session's owner: the terminal takes its size.
+//
+// A terminal's own reports (the mouse moving over it, focus) aren't typing:
+// they never take a session over, and only the window in use sends them.
 func (m *Manager) Write(client string, id int, data string) {
-	if s := m.get(id); s != nil {
-		m.claim(s, client)
-		s.mu.Lock()
-		s.lastInput = time.Now()
-		s.mu.Unlock()
-		_, _ = s.pty.Write([]byte(data))
+	s := m.get(id)
+	if s == nil {
+		return
 	}
+	if reports.MatchString(data) {
+		s.mu.Lock()
+		mine := s.owner == "" || s.owner == client
+		if mine {
+			s.lastInput = time.Now() // what it draws back (a scroll) isn't work
+		}
+		s.mu.Unlock()
+		if mine {
+			_, _ = s.pty.Write([]byte(data))
+		}
+		return
+	}
+	m.claim(s, client)
+	s.mu.Lock()
+	s.lastInput = time.Now()
+	s.mu.Unlock()
+	_, _ = s.pty.Write([]byte(data))
 }
 
 // Send types data into a session for Quarters itself (a queued prompt):
@@ -401,6 +422,9 @@ func (m *Manager) Claim(client string, id, cols, rows int) {
 	m.claim(s, client)
 	if cur, err := pty.GetsizeFull(s.pty); err == nil && int(cur.Cols) == cols && int(cur.Rows) == rows && rows > 3 {
 		_ = pty.Setsize(s.pty, &pty.Winsize{Cols: uint16(cols), Rows: uint16(rows - 1)})
+		// apart, or a program that reads its size late (Claude Code) sees
+		// the same size twice and doesn't redraw
+		time.Sleep(50 * time.Millisecond)
 	}
 	m.Resize(client, id, cols, rows)
 }
@@ -424,8 +448,53 @@ func (m *Manager) Snapshot(id int) (Snap, error) {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return Snap{Data: base64.StdEncoding.EncodeToString(s.recent), Off: s.total}, nil
+	return Snap{Data: base64.StdEncoding.EncodeToString(append(s.modes.replay(), s.recent...)), Off: s.total}, nil
 }
+
+// modes are the terminal modes a program turns on and off (ESC [ ? n h/l):
+// the alternate screen, mouse reporting, bracketed paste. A full-screen
+// program (Claude Code's own scrolling) sets them once, as it starts, long
+// before the output a late window is sent, so a snapshot starts with them.
+type modes map[int]bool
+
+var (
+	modeSeq = regexp.MustCompile(`\x1b\[\?([0-9;]+)([hl])`)
+	// the screens first: the rest of the snapshot is drawn on the one in use
+	keptModes = []int{1049, 1047, 47, 1, 1000, 1002, 1003, 1004, 1005, 1006, 1015, 2004, 25}
+)
+
+// scan returns the modes after output b.
+func (md modes) scan(b []byte) modes {
+	if !bytes.Contains(b, []byte("\x1b[?")) {
+		return md
+	}
+	for _, m := range modeSeq.FindAllSubmatch(b, -1) {
+		for _, n := range bytes.Split(m[1], []byte(";")) {
+			if v, err := strconv.Atoi(string(n)); err == nil && slices.Contains(keptModes, v) {
+				if md == nil {
+					md = modes{}
+				}
+				md[v] = m[2][0] == 'h'
+			}
+		}
+	}
+	return md
+}
+
+// replay is the output that sets the modes again.
+func (md modes) replay() []byte {
+	var b []byte
+	for _, v := range keptModes {
+		if on, ok := md[v]; ok && (on || v == 25) { // 25: the cursor, shown unless hidden
+			b = fmt.Appendf(b, "\x1b[?%d%c", v, map[bool]byte{true: 'h', false: 'l'}[on])
+		}
+	}
+	return b
+}
+
+// reports matches what a terminal sends by itself rather than typing: mouse
+// reports (moves, clicks, the wheel) and focus in or out.
+var reports = regexp.MustCompile(`^(?:\x1b\[<\d+;\d+;\d+[Mm]|\x1b\[M[\s\S]{3}|\x1b\[[IO])+$`)
 
 // List describes every session, oldest first.
 func (m *Manager) List() []Info {

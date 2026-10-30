@@ -1,0 +1,28 @@
+# The Quarters server in Docker. From this folder:
+#   docker compose up -d --build
+#   docker compose run --rm quarters quarters --set-password YOUR-NAME
+# then open http://localhost:8421. Every step: the README, "Docker".
+services:
+  quarters:
+    build:
+      context: .
+      args:
+        QUARTERS_VERSION: "0.8.1"
+        QUARTERS_UID: "${QUARTERS_UID:-1000}" # your user id (id -u), so files in code/ stay yours
+    image: quarters-server:0.8.1
+    container_name: quarters
+    restart: unless-stopped
+    init: true # cleans up the processes agents leave behind
+    ports:
+      - "8421:8421" # keep both numbers the same
+    environment:
+      TZ: "${TZ:-UTC}" # for "today" in stats and summaries, e.g. Europe/Berlin
+      # QUARTERS_URL: "https://quarters.example.com" # behind a tunnel: its HTTPS address (read on the first start)
+    volumes:
+      - home:/home/dev # settings, sign-ins, conversations, and Claude Code itself
+      - ${CODE_DIR:-./code}:/home/dev/code # your projects
+      # - ~/.ssh:/home/dev/.ssh:ro # to push over SSH
+      # - ~/.gitconfig:/home/dev/.gitconfig:ro # your git name and email
+
+volumes:
+  home:

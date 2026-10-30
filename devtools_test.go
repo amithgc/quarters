@@ -174,6 +174,16 @@ func TestCheckpointSeesSameSizeEdit(t *testing.T) {
 	}
 }
 
+// A repository where nothing was ever staged has no index file yet.
+func TestCheckpointWithoutIndex(t *testing.T) {
+	dir := t.TempDir()
+	gitOut(t, dir, "init", "-q")
+	write(t, filepath.Join(dir, "a.txt"), "one\n")
+	if id, err := checkpoint(dir, "x"); err != nil || id == "" {
+		t.Fatalf("checkpoint: %q, %v", id, err)
+	}
+}
+
 func TestCheckpointOnEnter(t *testing.T) {
 	a, dir := testApp(t)
 	write(t, filepath.Join(dir, "a.txt"), "changed\n")

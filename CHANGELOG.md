@@ -1,5 +1,42 @@
 # Changelog
 
+## Unreleased
+
+Fixes for agents that run full-screen (recent Claude Code versions), and
+the server in Docker:
+
+- **The conversation stays after a reload or an idle tab** (#14, #15).
+  Recent Claude Code versions draw full-screen, on the terminal's alternate
+  screen, and scroll their own history with the mouse wheel. They switch
+  that on once, as they start; a browser that joined later, reloaded, or
+  reconnected after sitting idle replayed only the recent output, so it
+  lost the full-screen mode and mouse reporting: the conversation was blank
+  and scrolling did nothing. Quarters now remembers the modes a program
+  has switched on and replays them first, and taking a tab over or
+  resizing it clears the screen without dropping them. On phones, swiping
+  a full-screen agent scrolls its history.
+- **Windows no longer take sessions from each other by themselves** (#16).
+  The mouse moving over a terminal and a window gaining focus are reported
+  to full-screen agents; Quarters treated those reports like typing, so
+  two windows showing the same session (the Mac and a browser) could take
+  it back and forth, each time redrawing it at another size. Only typing,
+  clicking and tapping take a session over now; reports from a window that
+  isn't the one in use are dropped. Taking a tab over makes the agent
+  redraw every time (the size nudge was too quick for Claude Code to see).
+- **The ACTIVE list shows from 5 projects** (#17). With fewer, every
+  project fits at a glance, and a project listed both in ACTIVE and in its
+  group looked like two projects.
+- **Checkpoints work in a new repository** (#18): where nothing had ever
+  been staged, every checkpoint failed with "index file smaller than
+  expected".
+- **Two timing bugs CI found** (#19): a file staged and then changed to the
+  same size within a second could be checkpointed as staged, and
+  config.json saved in the editor could stay unused on Linux until the next
+  change.
+- **Run the server in Docker** (#20): `docker/` has a `Dockerfile` and a
+  `compose.yaml` (the server, Claude Code, a volume for settings and
+  sign-ins, your code folder); see the README's Docker section.
+
 ## 0.8.0
 
 Everyday developer tools, around the agent's work:

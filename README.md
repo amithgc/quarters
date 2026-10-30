@@ -115,9 +115,9 @@ page, with your tabs still running behind it:
   click to see it full screen.
 - **"Your turn" alerts:** when an agent finishes in a tab you aren't looking
   at, you get a notification and a Dock badge, and the tab is marked.
-- **Who's waiting for you:** the ACTIVE list puts the sessions that
-  finished (or are asking you something) first, longest waiting first, with
-  how long; **⌘J** (or a click on "◐ waiting" in the title bar) goes to the
+- **Who's waiting for you:** the ACTIVE list (with 5 projects or more)
+  puts the sessions that finished (or are asking you something) first,
+  longest waiting first, with how long; **⌘J** (or a click on "◐ waiting" in the title bar) goes to the
   next one.
 - **Prompt queue:** line up prompts for a session ("add tests", then "fix
   lint"…); each goes in when the agent finishes the one before, never over
@@ -463,6 +463,59 @@ WantedBy=default.target
 systemctl --user enable --now quarters
 loginctl enable-linger $USER    # keep it running when you're logged out
 ```
+
+### Docker: the server in a container
+
+The [`docker/`](docker) folder has a `Dockerfile` and a `compose.yaml` that
+run the Linux server with Claude Code inside, as a normal user (Claude Code
+won't skip its permission prompts as root). Your projects live in a folder
+you mount, and settings, sign-ins and conversations in a volume, so they
+survive updates.
+
+```sh
+git clone https://github.com/amithgc/quarters && cd quarters/docker
+mkdir -p code                       # your projects go here (or set CODE_DIR=/path/to/code)
+docker compose build
+docker compose run --rm quarters quarters --set-password amith   # username and password
+docker compose up -d
+```
+
+Open `http://localhost:8421` (or `http://<the machine's IP>:8421` from
+another device on your network) and sign in. Then:
+
+1. **Sign Claude Code in, once:** `docker compose exec quarters claude`,
+   then `/login`; it prints a link to open in any browser and asks for the
+   code it shows. The login stays in the volume.
+2. **Add projects** from the browser (＋ add): folders under `code/` are at
+   `/home/dev/code/…` in the container. To clone one there:
+   `docker compose exec quarters git clone https://github.com/you/app code/app`.
+3. **Git:** set your name and email once
+   (`docker compose exec quarters git config --global user.name "You"`, and
+   `user.email`), or mount your `~/.gitconfig`; mount `~/.ssh` to push over
+   SSH (both are in `compose.yaml`, commented out).
+
+Good to know:
+
+- **Your user id:** files Quarters writes in `code/` belong to user 1000. If
+  your id (`id -u`) is different, build with
+  `QUARTERS_UID=$(id -u) docker compose build`.
+- **Ports:** keep both numbers in `"8421:8421"` the same; the server checks
+  the address it is reached at.
+- **Changing the password:** run the `--set-password` line again, then
+  `docker compose restart`.
+- **The home network only:** the container answers plain HTTP from private
+  addresses (your network, Tailscale), never from the internet. For HTTPS and
+  passkeys, put a tunnel in front: set `QUARTERS_URL` in `compose.yaml` to its
+  address (e.g. `https://quarters.example.com`) before the first start, and
+  point the tunnel at `http://localhost:8421` (`cloudflared tunnel run --url
+  http://localhost:8421 quarters`, or `tailscale serve --bg 8421`). If the
+  settings already exist, add `"url"` under `"remote"` in
+  `~/.config/quarters/config.json` (`docker compose exec quarters vi …`, or
+  edit it in the browser) and restart.
+- **Other agents:** install them in the image (add a `RUN` line to the
+  `Dockerfile`, e.g. `npm i -g @openai/codex` after adding Node.js).
+- **Updating:** change `QUARTERS_VERSION` in `compose.yaml`, then
+  `docker compose up -d --build`. Claude Code updates itself.
 
 ### Windows: the server in WSL
 

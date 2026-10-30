@@ -691,19 +691,20 @@ async function newTab(path, kind = "claude", opts = {}) {
   }
   state.byId[tab.id] = tab;
   term.onData((d) => {
+    if (REPORTS.test(d)) return canType() && !isPaused(tab) && !tab.exited && Go().Write(tab.id, d);
     if (!canType()) return watchOnly();
     tab.lastInput = Date.now();
     if (isPaused(tab)) claimTab(tab);
     if (!tab.exited) Go().Write(tab.id, stickyCtrl(d));
   });
-  term.onBinary((d) => canType() && !tab.exited && Go().Write(tab.id, d));
+  term.onBinary((d) => canType() && !isPaused(tab) && !tab.exited && Go().Write(tab.id, d)); // old-style mouse reports
   let resizing = 0;
   term.onResize(() => {
     clearTimeout(resizing); // dragging a panel resizes many times: send the size it settles on
     resizing = setTimeout(() => {
       if (tab.owner !== state.me || tab.exited) return;
       const size = `${term.cols}x${term.rows}`;
-      if (tab.sent && tab.sent !== size && !mirrors(tab)) term.reset(); // Claude reprints it all at the new size
+      if (tab.sent && tab.sent !== size && !mirrors(tab)) clearTerm(term); // Claude redraws at the new size
       tab.sent = size;
       Go().Resize(tab.id, term.cols, term.rows);
     }, 120);
@@ -720,6 +721,17 @@ async function newTab(path, kind = "claude", opts = {}) {
   refreshStats();
   return tab;
 }
+
+// clearTerm empties a terminal, its scrollback too, but keeps the modes the
+// program set: a full-screen one (Claude Code scrolling its own history)
+// turns on the alternate screen and mouse reporting once, as it starts, and
+// term.reset() would lose them for good.
+const clearTerm = (term) => term.write("\x1b[0m\x1b[r\x1b[H\x1b[2J\x1b[3J");
+
+// REPORTS is what a terminal sends by itself, not typing: mouse reports
+// (moves, clicks, the wheel, when the program asked for them) and focus in
+// or out. They never take a session over from another window.
+const REPORTS = /^(?:\x1b\[<\d+;\d+;\d+[Mm]|\x1b\[M[\s\S]{3}|\x1b\[[IO])+$/;
 
 const newKey = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 
@@ -837,9 +849,9 @@ function claimTab(tab) {
   if (!tab || !tab.id || tab.exited || (tab.owner === state.me && !tab.paused)) return;
   tab.owner = state.me;
   fitTab(tab); // back to this window's size
-  // Claude reprints the whole conversation for this size (a claim always
-  // makes it redraw), so start from an empty terminal.
-  if (!mirrors(tab)) tab.term.reset();
+  // Claude redraws for this size (a claim always makes it): the whole
+  // conversation, or in full-screen mode its screen, so start from empty.
+  if (!mirrors(tab)) clearTerm(tab.term);
   setPaused(tab, false);
   tab.sent = `${tab.term.cols}x${tab.term.rows}`;
   Go().Claim(tab.id, tab.term.cols, tab.term.rows);
@@ -2470,6 +2482,7 @@ const RC_ICON = '<svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="tr
 
 // The ACTIVE section's key in the folded-groups list.
 const ACTIVE_GROUP = "\u2605active";
+const ACTIVE_FROM = 5; // projects before the ACTIVE section shows
 
 function renderProjects() {
   const vis = visibleProjects();
@@ -2484,8 +2497,10 @@ function renderProjects() {
   const grouped = state.projects.some((p) => p.group);
   const filtering = !!$("#filter").value.trim();
   // ACTIVE: projects with open sessions, those waiting for you first (they
-  // also stay in their group, where their status isn't said twice)
-  const live = filtering ? [] : activeProjects(state.projects);
+  // also stay in their group, where their status isn't said twice). Only
+  // with 5 projects or more: fewer fit at a glance, and one listed twice
+  // looked like two.
+  const live = filtering || state.projects.length < ACTIVE_FROM ? [] : activeProjects(state.projects);
   const shownLive = new Set(state.collapsed.has(ACTIVE_GROUP) ? [] : live.map((p) => p.path));
   if (live.length) {
     const folded = state.collapsed.has(ACTIVE_GROUP);
@@ -3828,9 +3843,19 @@ function wireTouchScroll() {
   const scrollBy = (tab, px) => {
     acc += px;
     const lh = lineHeight(tab), n = Math.trunc(acc / lh);
-    if (n) {
-      tab.term.scrollLines(-n);
-      acc -= n * lh;
+    if (!n) return;
+    acc -= n * lh;
+    // A full-screen program (Claude Code) has no scrollback here: it scrolls
+    // its own history on the mouse wheel, so the swipe turns into wheel turns.
+    if (tab.term.buffer.active.type === "alternate" && tab.term.modes.mouseTrackingMode !== "none") return wheel(tab, n);
+    tab.term.scrollLines(-n);
+  };
+  const wheel = (tab, n) => {
+    const s = tab.term.element?.querySelector(".xterm-screen");
+    if (!s) return;
+    const r = s.getBoundingClientRect();
+    for (let i = 0; i < Math.abs(n); i++) {
+      s.dispatchEvent(new WheelEvent("wheel", { deltaY: n > 0 ? -1 : 1, deltaMode: WheelEvent.DOM_DELTA_LINE, clientX: r.left + r.width / 2, clientY: r.top + r.height / 2, bubbles: true, cancelable: true }));
     }
   };
   terms.addEventListener("touchstart", (e) => {
