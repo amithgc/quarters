@@ -56,8 +56,8 @@ var latest struct {
 	version, url string
 }
 
-// CheckUpdate asks GitHub for the newest release, at most every six hours
-// (every hour while it can't be reached). A dev build never asks.
+// CheckUpdate asks GitHub for the newest release, at most once an hour
+// (every 15 minutes while it can't be reached). A dev build never asks.
 func (a *App) CheckUpdate() Update {
 	u := Update{OS: runtime.GOOS, Arch: runtime.GOARCH, Server: serverBuild}
 	if version == "dev" {
@@ -65,12 +65,12 @@ func (a *App) CheckUpdate() Update {
 	}
 	latest.Lock()
 	defer latest.Unlock()
-	if time.Since(latest.at) > 6*time.Hour {
+	if time.Since(latest.at) > time.Hour {
 		latest.at = time.Now()
 		if v, url, err := fetchLatest(releasesAPI); err == nil {
 			latest.version, latest.url = v, url
 		} else {
-			latest.at = time.Now().Add(-5 * time.Hour)
+			latest.at = time.Now().Add(-45 * time.Minute)
 		}
 	}
 	u.Latest, u.URL = latest.version, latest.url

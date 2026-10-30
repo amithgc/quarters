@@ -13,6 +13,8 @@ import {
   baseName,
   closeTab,
   dlg,
+  dropdown,
+  emojiIcon,
   esc,
   flash,
   harnessOptions,
@@ -22,6 +24,7 @@ import {
   monogram,
   on,
   onMenu,
+  openEmoji,
   project,
   projectColor,
   render,
@@ -101,6 +104,12 @@ function wireAutosEditor() {
 function renderIconField() {
   const prev = $("#pd-icon-preview");
   const name = $("#pd-name").value.trim() || baseName($("#pd-path").value.trim()) || "?";
+  if (emojiIcon(dlg.icon)) {
+    prev.innerHTML = `<span class="picon emo">${esc(dlg.icon)}</span>`;
+    $("#pd-icon-clear").classList.remove("hidden");
+    document.querySelectorAll("#pd-icon-found button").forEach((b) => b.classList.remove("on"));
+    return;
+  }
   if (dlg.icon) {
     loadIcon(dlg.icon, renderIconField);
     prev.innerHTML = iconData[dlg.icon] ? `<img class="picon" src="${iconData[dlg.icon]}" alt="">` : iconData[dlg.icon] === null ? '<span class="red">✕</span>' : "";
@@ -144,9 +153,11 @@ function openProjectDialog(p) {
   $("#pd-yolo").value = p ? p.yolo || "" : "";
   $("#pd-yolo").disabled = REMOTE; // only changed on the Mac
   const def = agentName(state.settings?.harness);
-  $("#pd-harness").innerHTML = `<option value="">as in Settings (${esc(def)})</option>` + harnessOptions();
+  $("#pd-harness").innerHTML = `<option value="" data-sep>as in Settings (${esc(def)})</option>` + harnessOptions();
   $("#pd-harness").value = p ? p.harness || "" : "";
   $("#pd-harness").disabled = REMOTE;
+  dropdown($("#pd-yolo"));
+  dropdown($("#pd-harness"));
   dlg.color = p ? p.color || "" : "";
   renderColorField();
   $("#pd-error").textContent = "";
@@ -160,7 +171,6 @@ function openProjectDialog(p) {
   renderGroupChips();
   $("#proj-dialog").classList.remove("hidden");
   (p ? $("#pd-name") : $("#pd-path")).focus();
-  if (!p) browseFolder(); // adding starts with the folder picker
 }
 
 function renderColorField() {
@@ -277,6 +287,11 @@ function wireProjectDialog() {
     dlg.icon = dlg.icon === b.dataset.icon ? "" : b.dataset.icon;
     renderIconField();
   });
+  $("#pd-icon-emoji").addEventListener("click", () =>
+    openEmoji(emojiIcon(dlg.icon) ? dlg.icon : "", (e) => {
+      dlg.icon = e;
+      renderIconField();
+    }));
   $("#pd-group").addEventListener("input", renderGroupChips);
   $("#pd-colors").addEventListener("click", (e) => {
     const b = e.target.closest("[data-color]");

@@ -25,9 +25,19 @@ async function showDiff(path, file) {
   $("#df-title").textContent = d.file.split("/").pop().toUpperCase();
   $("#df-note").textContent = d.note || "";
   $("#df-note").classList.toggle("hidden", !d.note);
+  const { html, add, del } = diffHTML(d);
+  $("#df-body").innerHTML = html;
+  $("#df-stat").innerHTML = d.diff ? `<span class="green">+${add}</span> <span class="red">−${del}</span>` : "";
+}
+
+// diffHTML draws a file's diff (see FileDiff in Go) as coloured lines, and
+// counts them. The checkpoint view uses it too.
+export function diffHTML(d) {
   let add = 0, del = 0;
-  const lines = (d.diff || "").replace(/\n$/, "").split("\n");
-  const html = lines
+  if (!d.diff) return { html: "", add, del };
+  const html = d.diff
+    .replace(/\n$/, "")
+    .split("\n")
     .map((l) => {
       if (d.added) {
         add++;
@@ -41,8 +51,7 @@ async function showDiff(path, file) {
     })
     .filter(Boolean)
     .join("");
-  $("#df-body").innerHTML = d.diff ? html : "";
-  $("#df-stat").innerHTML = d.diff ? `<span class="green">+${add}</span> <span class="red">−${del}</span>` : "";
+  return { html, add, del };
 }
 
 function closeDiff() {

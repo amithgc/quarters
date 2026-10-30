@@ -17,12 +17,12 @@ function steps(u) {
       ? `Download <code>${esc(`quarters-linux-${u.arch}.tar.gz`)}</code> from the release page, unpack it and put <code>quarters</code> where the old one is.`
       : "Build it again from the source (<code>git pull && go build -tags server</code>) and put it where the old one is.";
     return `
-      <div class="up-step"><b>Homebrew</b>${cmd("brew upgrade amithgc/tap/quarters-server")}</div>
+      <div class="up-step"><b>Homebrew</b>${cmd("brew update && brew upgrade amithgc/tap/quarters-server")}</div>
       <div class="up-step"><b>Or by hand</b><span class="up-note muted">${byHand}</span></div>
       <div class="up-note muted">Then restart the server (<code>systemctl --user restart quarters</code> if it runs as a service). Your sessions keep running in the old one until it stops; this page reconnects by itself.</div>`;
   }
   return `
-    <div class="up-step"><b>Homebrew</b>${cmd("brew upgrade --cask quarters")}</div>
+    <div class="up-step"><b>Homebrew</b>${cmd("brew update && brew upgrade --cask quarters")}</div>
     <div class="up-step"><b>Or by hand</b><span class="up-note muted">Download the zip from the release page and drag Quarters into Applications.</span></div>
     <div class="up-note muted">${REMOTE ? "Run it on the Mac, then quit Quarters there and open it again. This page reconnects by itself." : "Quit Quarters first (running sessions end), update, then open it again."}</div>`;
 }

@@ -51,6 +51,7 @@ func main() {
 	sess.AddText("Next Tab", keys.Combo("]", keys.CmdOrCtrlKey, keys.ShiftKey), send("next-tab"))
 	sess.AddText("Previous Tab", keys.Combo("[", keys.CmdOrCtrlKey, keys.ShiftKey), send("prev-tab"))
 	sess.AddText("Next Waiting for You", keys.CmdOrCtrl("j"), send("next-waiting"))
+	sess.AddText("Send Selection to the Agent", keys.Combo("l", keys.CmdOrCtrlKey, keys.ShiftKey), send("send-to-agent"))
 	sess.AddSeparator()
 	sess.AddText("Clear Scrollback", keys.CmdOrCtrl("k"), send("clear"))
 
@@ -62,6 +63,9 @@ func main() {
 	proj.AddText("Edit config.json", keys.Combo(",", keys.CmdOrCtrlKey, keys.OptionOrAltKey), send("edit-config"))
 	proj.AddText("Show in Finder", keys.Combo("r", keys.CmdOrCtrlKey, keys.ShiftKey), send("reveal"))
 	proj.AddText("Search Conversations…", keys.Combo("f", keys.CmdOrCtrlKey, keys.ShiftKey), send("history"))
+	proj.AddText("Search Every Project…", keys.Combo("k", keys.CmdOrCtrlKey, keys.ShiftKey), send("search"))
+	proj.AddText("Commit…", nil, send("commit"))
+	proj.AddText("Copy Today's Summary", nil, send("copy-summary"))
 	proj.AddText("Worktrees…", keys.Combo("g", keys.CmdOrCtrlKey, keys.ShiftKey), send("worktrees"))
 	proj.AddSeparator()
 	proj.AddText("Remote Access…", nil, send("remote"))

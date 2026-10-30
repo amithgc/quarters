@@ -304,51 +304,101 @@ func (r *Reader) Session(claudeDir string) (Session, bool) {
 		}
 		return s.Tools[i].Name < s.Tools[j].Name
 	})
-	now := time.Now().Unix() / 60
-	bucketMin := int64(BucketSize / time.Minute)
-	for minute, n := range agg.byMinute {
-		age := now - minute
-		if age < 0 || age >= Buckets*bucketMin {
-			if age >= 3*60 {
-				delete(agg.byMinute, minute)
-			}
-			continue
-		}
-		s.Activity[Buckets-1-int(age/bucketMin)] += n
-	}
+	agg.addActivity(&s.Activity)
 	return s, true
 }
 
-// Today adds up today's usage across every project's logs.
-func (r *Reader) Today(root string) (Usage, int) {
-	today := todayKey(time.Now())
-	var total Usage
-	sessions := 0
-	dirs, _ := os.ReadDir(root)
-	for _, d := range dirs {
-		if !d.IsDir() {
+// addActivity adds the file's tokens to the activity chart, and forgets
+// minutes too old for it.
+func (a *fileAgg) addActivity(chart *[Buckets]int) {
+	now := time.Now().Unix() / 60
+	bucketMin := int64(BucketSize / time.Minute)
+	for minute, n := range a.byMinute {
+		age := now - minute
+		if age < 0 || age >= Buckets*bucketMin {
+			if age >= 3*60 {
+				delete(a.byMinute, minute)
+			}
 			continue
 		}
-		files, _ := os.ReadDir(filepath.Join(root, d.Name()))
+		chart[Buckets-1-int(age/bucketMin)] += n
+	}
+}
+
+// Day is today's use across every project: tokens, sessions, and the
+// activity chart of the last two hours.
+type Day struct {
+	Usage    Usage
+	Sessions int
+	Activity [Buckets]int
+}
+
+// Today adds up today's usage across every project's logs.
+func (r *Reader) Today(root string) Day {
+	today := todayKey(time.Now())
+	recent := time.Now().Add(-Buckets * BucketSize)
+	var d Day
+	dirs, _ := os.ReadDir(root)
+	for _, dir := range dirs {
+		if !dir.IsDir() {
+			continue
+		}
+		files, _ := os.ReadDir(filepath.Join(root, dir.Name()))
 		for _, f := range files {
 			if f.IsDir() || !strings.HasSuffix(f.Name(), ".jsonl") {
 				continue
 			}
 			info, err := f.Info()
-			if err != nil || todayKey(info.ModTime()) != today {
+			// written today, or in the chart's two hours (just after midnight)
+			if err != nil || (todayKey(info.ModTime()) != today && info.ModTime().Before(recent)) {
 				continue
 			}
-			path := filepath.Join(root, d.Name(), f.Name())
+			path := filepath.Join(root, dir.Name(), f.Name())
 			r.mu.Lock()
 			agg, err := r.update(path)
-			if err == nil && agg.today != (Usage{}) {
-				total.add(agg.today, 1)
-				sessions++
+			if err == nil {
+				if agg.today != (Usage{}) {
+					d.Usage.add(agg.today, 1)
+					d.Sessions++
+				}
+				agg.addActivity(&d.Activity)
 			}
 			r.mu.Unlock()
 		}
 	}
-	return total, sessions
+	return d
+}
+
+// DayChat is one conversation in a project's logs.
+type DayChat struct {
+	Title   string
+	Prompts int
+	Last    time.Time
+}
+
+// TodayChats lists the conversations in a project's log folder that were
+// active today, the most recent first.
+func (r *Reader) TodayChats(dir string) []DayChat {
+	today := todayKey(time.Now())
+	entries, _ := os.ReadDir(dir)
+	var out []DayChat
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".jsonl") {
+			continue
+		}
+		info, err := e.Info()
+		if err != nil || todayKey(info.ModTime()) != today {
+			continue
+		}
+		r.mu.Lock()
+		agg, err := r.update(filepath.Join(dir, e.Name()))
+		if err == nil && agg.session.Turns > 0 {
+			out = append(out, DayChat{Title: agg.session.Title, Prompts: agg.session.Turns, Last: agg.session.Last})
+		}
+		r.mu.Unlock()
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Last.After(out[j].Last) })
+	return out
 }
 
 func newestLog(dir string) string {

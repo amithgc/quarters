@@ -62,7 +62,11 @@ project can use a different one). Its goals are deliberately narrow:
    terminals a project needs — backend, frontend, a script, a watcher — each
    in its own folder, side by side, when you open the project, on a
    schedule or with one click.
-5. **Work from anywhere.** Leave Quarters running on your big machine at
+5. **Do the daily chores where you work.** Commit, push and open pull
+   requests (with CI status), run a project's scripts, stop the dev server
+   holding a port, undo an agent turn that went wrong, search every project
+   at once, and copy a summary of your day.
+6. **Work from anywhere.** Leave Quarters running on your big machine at
    home and use it from a laptop, tablet or phone through the browser: the
    same projects, the same live sessions, secured with passkeys.
 
@@ -76,6 +80,27 @@ services. Your projects, your logins and your machine stay yours.
 > of Anthropic; the other names are trademarks of their owners.
 
 ## Features
+
+### Home: every project at a glance
+
+<img src="docs/home.png" alt="The home page: the mascot, a tagline, tiles for jumping to a project, adding one, searching conversations and Settings, and today's activity across every project as an animated chart" width="900">
+
+The house at the left of the title bar (or **Home** in ⇧⌘P) shows the home
+page, with your tabs still running behind it:
+
+- **Jump to a project, add one, search conversations, Settings:** one tile
+  each, with its shortcut. A different tagline greets you every time.
+- **Today, across every project:** sessions, tokens written and read, and
+  the cache hit rate, with the last two hours as an animated chart (bars
+  rise in, the current five minutes glow; hover one for its time and
+  tokens).
+- **Today's work:** per project, your commits since midnight, the agent
+  conversations you had and how many prompts, and what isn't committed yet.
+  **Copy** puts it on the clipboard as Markdown, for a standup or a
+  timesheet (also ⇧⌘P → *Copy today's summary*).
+- **Active now:** every running session, the ones waiting for you first.
+
+<img src="docs/today.png" alt="Today across every project: totals and a bar chart of the last two hours, then today's work per project: commits, prompts and uncommitted files, with a Copy button" width="560">
 
 ### Projects, tabs and sessions
 
@@ -98,9 +123,12 @@ services. Your projects, your logins and your machine stay yours.
   lint"…); each goes in when the agent finishes the one before, never over
   a question it is asking or a message you started typing. On a phone, ⏭
   in the message card queues what you typed while the agent works.
-- Groups, project icons (favicons found automatically), drag to reorder,
-  **⌘P / ⇧⇧** to jump anywhere, git status (●changes ↑ahead ↓behind) in the
-  list.
+- Groups, project icons, drag to reorder, **⌘P / ⇧⇧** to jump anywhere,
+  git status (●changes ↑ahead ↓behind) in the list, and **＋ add** in the
+  list's header.
+- **Project icons:** an image (favicons and app icons in the folder are
+  suggested), or any emoji from **Emoji…**, every emoji there is, by group
+  and with a search by name.
 - **A colour per project** on its tabs and the terminal's frame, so you
   can tell projects apart at a glance (from its name, or one you pick).
 - **Every command by name:** **⇧⌘P** (or `>` in the jump list).
@@ -138,6 +166,63 @@ services. Your projects, your logins and your machine stay yours.
   passwords (`.env`, `*.pem`…) are never opened.
 
 <img src="docs/files.png" alt="The files panel with git marks, and a file open in an editor tab beside the terminals" width="900">
+
+### Everyday developer tools
+
+The chores around an agent's work, without leaving the project.
+
+<img src="docs/commit.png" alt="The commit dialog: the changed files, a message drafted by Claude Code, and Commit or Commit & push" width="900">
+
+- **Commit, push and pull requests:** **Commit…** under the changed files in
+  the side panel's GIT section opens a dialog with the files and a message
+  box; **✨ Draft it** asks Claude Code (`claude -p`) to write the message
+  from the diff, in the style of your recent commits, and nothing is
+  committed until you click. **Commit & push** does both; **Push ↑2** pushes
+  what's ahead (setting the upstream the first time); **Open a pull
+  request** runs `gh pr create --fill`. Files that look like they hold
+  secrets (`.env`, keys…) are never committed: the commit stops and names
+  them.
+- **CI at a glance:** the branch's pull request shows under the files with
+  its checks: ✓ passed, ● running, ✕ failed (and which). It's read with the
+  GitHub CLI (`gh`), about once a minute.
+- **Scripts, one click away:** the SCRIPTS section lists what the project
+  knows how to run: `package.json` scripts (with pnpm, yarn, bun or npm,
+  from the lockfile), `Makefile` targets, `justfile` recipes, `deno.json`
+  tasks, and Cargo and Go commands. A click runs one in a tab of its own; a
+  running one is marked and goes to its tab. In ⇧⌘P, `run dev` runs it too.
+- **Ports:** the PORTS section lists what the project's tabs are listening
+  on (`:5173 node · web`), and other processes of yours working in its
+  folder. **open** opens it in the browser, **tab** goes to the tab that
+  started it, **stop** ends it ("port 3000 is already in use", solved).
+- **Checkpoints before every prompt:** each time you send an agent a
+  prompt, Quarters quietly snapshots the project's files (everything git
+  doesn't ignore, committed or not). The CHECKPOINTS section lists them with
+  what changed after each; open one to see every file's diff since, and
+  **restore** to put the files back as they were. Restoring takes a
+  checkpoint first, so it can be undone too. Your branch, index and stash
+  are never touched: checkpoints are commits kept under
+  `refs/quarters/checkpoints/`, the last 50 per project, and a plain
+  `git push` doesn't send them anywhere.
+
+<img src="docs/checkpoints.png" alt="What changed since a checkpoint: the files on the left, a file's diff on the right, and Restore these files" width="900">
+
+- **Clickable errors:** `src/cart.ts:42:7` (or `file.py:12`, `File
+  "x.py", line 3`, `Foo.cs(10,5)`) in any terminal is a link when the file
+  is in the project: **⌘-click** opens it in the editor at that line.
+- **Send to agent:** select output in a terminal, or lines in the editor,
+  and press **⇧⌘L** (or the button that appears): it's typed into the
+  project's agent tab, with the file and line numbers from the editor, but
+  not sent, so you can say what to do with it.
+
+<img src="docs/send-to-agent.png" alt="A failing test's file:line is a link (⌘-click to open cart.ts at line 42), and the selected error can be sent to the agent" width="900">
+
+- **Search every project** (**⇧⌘K**): one box searches the files of all
+  your projects at once, with ripgrep when it's installed (git grep
+  otherwise). Match case, whole words, regular expressions and a file
+  filter (`*.go`); results by project and file, and Enter opens the file at
+  the line. Files that may hold secrets are never searched.
+
+<img src="docs/search.png" alt="Searching every project for csrf: matches in api-gateway, website and shop, by file, with the match highlighted" width="900">
 
 ### Coding agents
 
@@ -183,7 +268,7 @@ whether they're answering.
 
 <table>
 <tr>
-<td width="34%"><img src="docs/stats.png" alt="The side panel: usage, git, files Claude changed, tools and instructions, with the bar that jumps between sections"></td>
+<td width="34%"><img src="docs/stats.png" alt="The side panel: git with Commit and Push, the pull request's checks, servers, scripts, ports and checkpoints"></td>
 <td>
 
 - **Plan:** Claude's usage limits and when they reset, as `/usage` shows
@@ -193,10 +278,15 @@ whether they're answering.
   automations with run, stop, edit, delete and ＋ new.
 - **Session:** title, model, permission mode, prompts, context window use,
   tokens (this session or today) and activity.
-- **Git:** branch, ahead/behind, changed files.
+- **Git:** branch, ahead/behind, changed files, **Commit…**, **Push** and
+  **Open a pull request**, and the pull request's checks.
 - **Claude changed:** the files Claude edited this session; click one for its
   diff.
 - **Servers:** `localhost` links your terminals printed, up or down.
+- **Scripts** and **Ports:** the project's scripts to run in a tab, and
+  what its tabs listen on, to open or stop.
+- **Checkpoints:** a snapshot before each prompt, to diff against or
+  restore.
 - **Usage:** the project's tokens today, over 7 and 30 days, and its share
   of yours; **⇧⌘U** ranks every project (from Claude Code's logs).
 - **Instructions:** edit the project's `CLAUDE.md`, `AGENTS.md`,
@@ -234,8 +324,8 @@ whether they're answering.
 
 <img src="docs/settings.png" alt="Settings: every optional feature can be switched on or off" width="900">
 
-Every optional feature has a switch, and Claude's permission mode can be
-set globally or per project. **Appearance** picks light, dark or the
+Every optional feature has a switch (checkpoints, scripts and ports among
+them), and Claude's permission mode can be set globally or per project. **Appearance** picks light, dark or the
 system's look, on each device.
 
 ### Remote access: work from anywhere
@@ -284,8 +374,8 @@ brew install --cask amithgc/tap/quarters
 ```
 
 The app is signed with a Developer ID and notarized by Apple, so it opens
-like any other. `brew upgrade --cask quarters` updates it. You can also
-download the zip from the
+like any other. `brew update && brew upgrade --cask quarters` updates it.
+You can also download the zip from the
 [releases](https://github.com/amithgc/quarters/releases).
 
 ### Building from source
@@ -419,6 +509,9 @@ step.
 | ⌘O | add a project |
 | ⌘, / ⌥⌘, | Settings / edit config.json |
 | ⇧⌘F / ⇧⌘G | search past conversations / worktrees |
+| ⇧⌘K | search every project's files |
+| ⇧⌘L | send the selection (terminal or editor) to the agent |
+| ⌘-click a `file:line` | open it in the editor at that line |
 | ⇧⌘U | usage by project |
 | ⌥⌘R | start or stop the remote-access server |
 | ⌃⌥Space (from any app) | bring Quarters forward, or hide it |
@@ -514,18 +607,18 @@ it.
 | `projects[].path` | project folder (`~` allowed); required |
 | `projects[].name` | label in the list (default: the folder name) |
 | `projects[].group` | heading to group projects under |
-| `projects[].icon` | image next to the project (png, jpg, svg, ico, webp; relative = inside the project) |
+| `projects[].icon` | image next to the project (png, jpg, svg, ico, webp; relative = inside the project), or an emoji, e.g. `"🚀"` |
 | `projects[].color` | colour of its tabs and terminal frame: `#rrggbb` or `accent` (default: from its name) |
 | `projects[].harness` | the coding agent for this project, overriding `harness` |
 | `projects[].command` | how the project's agent starts in this project |
 | `projects[].yolo` | `true`/`false`: skip the agent's permission prompts here, overriding `yolo` |
 | `projects[].automations` | terminals to start together (see below) |
-| `harness` | the coding agent new tabs start: `claude` (default), `codex`, `gemini`, `antigravity`, `opencode`, `copilot`, `devin` or `aider` |
+| `harness` | the coding agent new tabs start: `claude` (default), `codex`, `gemini`, `antigravity`, `opencode`, `copilot`, `devin`, `aider`, `amp`, `goose`, `qwen` or `cursor` |
 | `command` | how Claude Code starts (default `["claude"]`) |
 | `yolo` | skip the agent's permission prompts (default `true`; see below) |
 | `shell` | shell for shell tabs (default `$SHELL`) |
 | `prompts` | saved prompts for ⚡ (edited in Settings) |
-| `features` | optional features switched on or off (Settings) |
+| `features` | optional features switched on or off (Settings), e.g. `{"checkpoints": false}` |
 | `hotkey` | global hotkey, e.g. `ctrl+alt+space` |
 | `usage_alert_at` | warn when a plan limit passes this percentage (default 80) |
 | `context_window` | tokens; 0 = read from Claude Code's model setting |
@@ -547,10 +640,13 @@ running.
 > Other agents get their own switch: Codex
 > `--dangerously-bypass-approvals-and-sandbox`, Gemini CLI `--yolo`,
 > Antigravity `--dangerously-skip-permissions`, Copilot CLI
-> `--allow-all-tools`, Devin `--permission-mode bypass`, Aider `--yes-always`
-> (OpenCode has none; set it in its own config). "Continue" runs `codex resume
-> --last`, `gemini --resume latest`, `agy --continue`, `opencode --continue`,
-> `copilot --continue`, `devin --continue` or `aider --restore-chat-history`.
+> `--allow-all-tools`, Devin `--permission-mode bypass`, Aider `--yes-always`,
+> Amp `--dangerously-allow-all`, Qwen Code `--yolo`, Cursor CLI `--force`
+> (OpenCode and Goose have none; set it in their own config). "Continue"
+> runs `codex resume --last`, `gemini --resume latest`, `agy --continue`,
+> `opencode --continue`, `copilot --continue`, `devin --continue`,
+> `aider --restore-chat-history`, `amp threads continue --last`,
+> `goose session --resume`, `qwen --continue` or `agent --continue`.
 
 ## How it works
 
@@ -567,6 +663,11 @@ JavaScript frontend in the system WebView.
   (`internal/stats`). Plan usage comes from the endpoint `/usage` uses, with
   the login Claude Code keeps in the Keychain, which is only ever sent to
   Anthropic.
+- The developer tools run your own programs: `git` for commits and
+  checkpoints (snapshots go through a temporary index, so yours is never
+  touched), `gh` for pull requests and checks, `claude -p` for a drafted
+  commit message, `lsof` (or `ss`) for ports, and `rg` (or `git grep`) for
+  search.
 - Remote access (`internal/remote`) is an HTTP server with passkey
   (WebAuthn) sign-in and a WebSocket carrying the same calls and events the
   Mac window uses.
@@ -624,6 +725,17 @@ No. Quarters has no AI of its own, no accounts and no analytics. It starts
 the agents you installed, with their own logins, and they talk to their
 providers as they always do. Remote access is off until you start it, and
 then it only listens on this Mac (see [SECURITY.md](SECURITY.md)).
+
+**Does ✨ Draft it send my code anywhere?**
+Only when you click it: it runs your own Claude Code (`claude -p`) with the
+diff of the commit (files that look like they hold secrets left out), the
+same as asking it in a terminal, and uses your plan the same way.
+
+**Where do checkpoints live, and do they get pushed?**
+In the project's own git repository, as commits under
+`refs/quarters/checkpoints/` (the last 50). They aren't on any branch, so
+`git push` doesn't send them; `git for-each-ref refs/quarters` lists them,
+and switching Checkpoints off in Settings stops new ones.
 
 **Does it work with my Claude subscription or API key?**
 Yes: it runs `claude` (or another agent) exactly as you would in a

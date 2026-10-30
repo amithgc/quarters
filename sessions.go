@@ -136,7 +136,10 @@ func (a *App) Sessions() []session.Info { return a.sessions.List() }
 func (a *App) Snapshot(id int) (session.Snap, error) { return a.sessions.Snapshot(id) }
 
 // Write sends typed text to a session.
-func (a *App) Write(id int, data string) { a.sessions.Write(macClient, id, data) }
+func (a *App) Write(id int, data string) {
+	a.beforeInput(id, data)
+	a.sessions.Write(macClient, id, data)
+}
 
 // Resize changes a session's terminal size (if the Mac window drives it).
 func (a *App) Resize(id, cols, rows int) { a.sessions.Resize(macClient, id, cols, rows) }

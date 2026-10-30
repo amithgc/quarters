@@ -19,7 +19,7 @@ import (
 // the session ones handled in remoteBackend.Call. Everything about remote
 // access itself (pairing, devices, turning it on) is Mac-only on purpose.
 var remoteMethods = map[string]bool{
-	"Projects": true, "ConfigError": true, "Version": true, "CheckUpdate": true, "Layout": true, "Stats": true, "Account": true, "AgentAccount": true, "Awake": true, "SetAwake": true,
+	"Projects": true, "ConfigError": true, "Version": true, "CheckUpdate": true, "Today": true, "Layout": true, "Stats": true, "Account": true, "AgentAccount": true, "Awake": true, "SetAwake": true,
 	"IconData": true, "FindIcons": true, "SetCollapsed": true, "SaveProject": true, "MoveProject": true,
 	"SaveAutomationSizes": true, "RemoveProject": true, "ConfigPath": true, "ReadConfig": true, "SaveConfig": true, "PastedImage": true,
 	"CloseSession": true, "SetSessionGroup": true, "Sessions": true, "Snapshot": true,
@@ -29,19 +29,24 @@ var remoteMethods = map[string]bool{
 	"Queues": true, "QueueAdd": true, "QueueRemove": true, "QueueMove": true, "QueueNext": true,
 	"Usage": true, "Instructions": true, "ReadInstructions": true, "SaveInstructions": true, "Notes": true, "SaveNotes": true,
 	"ListDir": true, "ListFiles": true, "FileStatus": true, "ReadFile": true, "FileStamp": true, "SaveFile": true,
+	"GitCommit": true, "GitPush": true, "DraftCommitMessage": true, "CreatePullRequest": true, "PullRequest": true,
+	"Scripts": true, "Ports": true, "StopPort": true, "SearchProjects": true, "DailySummary": true,
+	"Checkpoints": true, "CheckpointFiles": true, "CheckpointDiff": true, "RestoreCheckpoint": true,
 }
 
 // What a device with less than full access may call ("view": watch only;
 // "type": also type into running sessions).
 var (
 	viewMethods = map[string]bool{
-		"ClientID": true, "Access": true, "Projects": true, "ConfigError": true, "Version": true, "CheckUpdate": true, "Awake": true, "Layout": true, "Stats": true,
+		"ClientID": true, "Access": true, "Projects": true, "ConfigError": true, "Version": true, "CheckUpdate": true, "Today": true, "Awake": true, "Layout": true, "Stats": true,
 		"Account": true, "AgentAccount": true, "IconData": true, "ConfigPath": true, "PastedImage": true, "Sessions": true,
 		"Snapshot": true, "Settings": true, "Conversations": true, "Diff": true, "DevLinks": true,
 		"ProjectTools": true, "Worktrees": true, "RestoreInfo": true, "SetViewing": true, "Chat": true, "TabImage": true, "RemoteControlled": true,
 		"PushKey": true, "PushSubscribe": true, "PushUnsubscribe": true,
 		"Queues": true, "Usage": true, "Instructions": true, "ReadInstructions": true, "Notes": true,
 		"ListDir": true, "ListFiles": true, "FileStatus": true, "ReadFile": true, "FileStamp": true,
+		"PullRequest": true, "Scripts": true, "Ports": true, "SearchProjects": true, "DailySummary": true,
+		"Checkpoints": true, "CheckpointFiles": true, "CheckpointDiff": true,
 	}
 	// queued prompts are typed in later: the same as typing them now
 	typeMethods = map[string]bool{"Write": true, "Resize": true, "Claim": true,
@@ -335,6 +340,7 @@ func (b remoteBackend) Call(client, method string, args []json.RawMessage) (any,
 		if err := decodeArgs(args, &id, &data); err != nil {
 			return nil, err
 		}
+		a.beforeInput(id, data)
 		a.sessions.Write(client, id, data)
 		return nil, nil
 	case "Resize", "Claim":

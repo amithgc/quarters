@@ -29,10 +29,14 @@ const errText = (e) => String(e).replace(/^Error: /, "");
 const CHECK_MS = 2500;
 
 // openFile opens rel (in dir: the project or one of its worktrees) in an
-// editor tab of project path, or shows the tab it's already in.
-export async function openFile(path, dir, rel) {
+// editor tab of project path, or shows the tab it's already in; with line,
+// at that line.
+export async function openFile(path, dir, rel, line) {
   const have = fileTabsOf(path).find((f) => f.dir === dir && f.rel === rel);
-  if (have) return showFileTab(have);
+  if (have) {
+    showFileTab(have);
+    return goToLine(have, line);
+  }
   const name = rel.split("/").pop();
   let r, CM;
   try {
@@ -43,7 +47,10 @@ export async function openFile(path, dir, rel) {
   if (r.image) return showImageView(r.image, name);
   if (r.note) return flash(`${name}: ${r.note}`);
   const again = fileTabsOf(path).find((f) => f.dir === dir && f.rel === rel); // opened twice quickly
-  if (again) return showFileTab(again);
+  if (again) {
+    showFileTab(again);
+    return goToLine(again, line);
+  }
 
   const el = document.createElement("div");
   el.className = "file-pane hidden";
@@ -65,6 +72,27 @@ export async function openFile(path, dir, rel) {
   (state.fileTabs[path] ||= []).push(f);
   showStatus(f);
   showFileTab(f);
+  goToLine(f, line);
+}
+
+// goToLine puts the cursor at the start of line n, in the middle of the view.
+function goToLine(f, n) {
+  const doc = f?.view?.state.doc;
+  if (!n || !doc) return;
+  const line = doc.line(Math.max(1, Math.min(n, doc.lines)));
+  requestAnimationFrame(() => {
+    f.view.dispatch({ selection: { anchor: line.from }, effects: f.view.constructor.scrollIntoView(line.from, { y: "center" }) });
+    f.view.focus();
+  });
+}
+
+// selectionOf is the text selected in a file's editor, with the file and
+// its lines ("" when nothing is selected).
+export function selectionOf(f) {
+  const st = f?.view?.state;
+  if (!st || st.selection.main.empty) return null;
+  const { from, to } = st.selection.main;
+  return { text: st.sliceDoc(from, to), rel: f.rel, from: st.doc.lineAt(from).number, to: st.doc.lineAt(to).number };
 }
 
 // extensions sets up an editor for a file called name: save runs on ⌘S,

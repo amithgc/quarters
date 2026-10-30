@@ -625,6 +625,20 @@ func lookPath(name string, env []string) (string, error) {
 	return exec.LookPath(name)
 }
 
+// Command prepares a program found on the login shell's PATH, with that
+// environment (an app started from the Dock lacks it), to run in dir.
+func (m *Manager) Command(ctx context.Context, dir, name string, args ...string) (*exec.Cmd, error) {
+	env := m.loginEnv()
+	bin, err := lookPath(name, env)
+	if err != nil {
+		return nil, fmt.Errorf("%s isn't installed here (it's not on your PATH)", name)
+	}
+	cmd := exec.CommandContext(ctx, bin, args...)
+	cmd.Dir = dir
+	cmd.Env = append(env, "NO_COLOR=1", "GIT_TERMINAL_PROMPT=0", "GH_PROMPT_DISABLED=1")
+	return cmd, nil
+}
+
 // Installed reports whether a program is on the login shell's PATH.
 func (m *Manager) Installed(name string) bool {
 	_, err := lookPath(name, m.loginEnv())

@@ -8,6 +8,7 @@ import {
   activeTab,
   agentName,
   canChange,
+  dropdown,
   esc,
   flash,
   harnessOptions,
@@ -57,6 +58,7 @@ function renderSettings(full) {
   $("#set-harness").innerHTML = harnessOptions();
   $("#set-harness").value = v.harness;
   $("#set-harness").disabled = REMOTE;
+  dropdown($("#set-harness"));
   const h = (v.harnesses || []).find((x) => x.id === v.harness);
   $("#set-harness-note").innerHTML = h && !h.installed
     ? `<span class="red">${esc(h.bin)} isn't installed on this machine</span> · <a href="${esc(h.site)}" target="_blank" rel="noopener">get ${esc(h.name)}</a>`

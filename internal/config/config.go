@@ -140,6 +140,8 @@ var Features = []Feature{
 	{"usage", "Usage by project", "Which projects use your tokens: today, 7 and 30 days, from Claude Code's logs (stats panel and View → Usage by Project).", true, false},
 	{"instructions", "Agent instructions & notes", "Edit the project's CLAUDE.md / AGENTS.md / GEMINI.md and keep your own notes, from the stats panel.", true, false},
 	{"dev_links", "Dev server links", "Links to servers your terminals start (localhost:3000…), with whether they're up.", true, false},
+	{"checkpoints", "Checkpoints", "Before each prompt to an agent, a snapshot of the project's files you can diff against or restore (stats panel).", true, false},
+	{"scripts", "Scripts & ports", "The project's scripts (npm, make, just, cargo, go) to run in a tab, and the ports its tabs listen on (stats panel).", true, false},
 	{"skills", "Skills & MCP servers", "The project's Claude Code skills and MCP servers in the stats panel.", true, false},
 	{"hotkey", "Global hotkey", "Brings Quarters to the front from any app.", true, true},
 }

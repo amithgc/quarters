@@ -24,6 +24,7 @@
     <div class="tb-left">
       <button id="btn-drawer" class="tb-btn mobile-only" type="button" aria-label="Projects">☰</button>
       <button id="btn-left" class="tb-btn panel-toggle on" type="button" title="Hide the projects panel (⌘B)" aria-label="Projects panel" aria-pressed="true"><svg viewBox="0 0 16 16" aria-hidden="true"><rect class="side" x="1.5" y="2.5" width="4.5" height="11"/><rect x="1.5" y="2.5" width="13" height="11" rx="2"/><path d="M6 2.5v11"/></svg></button>
+      <button id="btn-home" class="tb-btn panel-toggle" type="button" title="Home: every session at a glance" aria-label="Home"><svg viewBox="0 0 16 16" aria-hidden="true"><path class="side" d="M2.5 7.2 8 2.8l5.5 4.4V13a.5.5 0 0 1-.5.5H3a.5.5 0 0 1-.5-.5z"/><path d="M2.5 7.2 8 2.8l5.5 4.4V13a.5.5 0 0 1-.5.5H3a.5.5 0 0 1-.5-.5z"/><path d="M6.5 13.5V10h3v3.5"/></svg></button>
       <span class="brand">◆ Quarters</span>
       <span class="sep">│</span>
       <span id="tb-icon" class="tb-icon"></span>
@@ -43,6 +44,7 @@
         <button class="tb-btn tb-act" data-act="settings" type="button" title="Settings (⌘,)" aria-label="Settings"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M12.81 6.62 L14.52 6.97 L14.52 9.03 L12.81 9.38 L12.37 10.42 L13.34 11.88 L11.88 13.34 L10.42 12.37 L9.38 12.81 L9.03 14.52 L6.97 14.52 L6.62 12.81 L5.58 12.37 L4.12 13.34 L2.66 11.88 L3.63 10.42 L3.19 9.38 L1.48 9.03 L1.48 6.97 L3.19 6.62 L3.63 5.58 L2.66 4.12 L4.12 2.66 L5.58 3.63 L6.62 3.19 L6.97 1.48 L9.03 1.48 L9.38 3.19 L10.42 3.63 L11.88 2.66 L13.34 4.12 L12.37 5.58Z"/><circle cx="8" cy="8" r="2"/></svg></button>
         <button class="tb-btn tb-act" data-act="theme" id="btn-theme" type="button" title="Theme" aria-label="Theme"></button>
         <button class="tb-btn tb-act" data-act="awake" id="btn-awake" type="button" title="Keep the Mac awake" aria-label="Keep awake" aria-haspopup="menu"><svg viewBox="0 0 16 16" aria-hidden="true"><path class="side" d="M3 6.5h8v3.5a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3z"/><path d="M3 6.5h8v3.5a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3z"/><path d="M11 7.5h.8a1.6 1.6 0 0 1 0 3.2H11"/><path d="M5.5 2.2c-.6.8.6 1.4 0 2.3M8.5 2.2c-.6.8.6 1.4 0 2.3"/></svg></button>
+        <button class="tb-btn tb-act" data-act="github" type="button" title="Quarters on GitHub: star it, report a bug, ask for a feature" aria-label="GitHub"><svg class="mark" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg></button>
         <button class="tb-btn tb-act remote-only hidden" data-act="notify" type="button" title="Tell me when Claude is waiting" aria-label="Notify me"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 11.5V7a4 4 0 0 1 8 0v4.5l1 1H3z"/><path d="M6.6 14a1.5 1.5 0 0 0 2.8 0"/></svg></button>
         <button class="tb-btn tb-act remote-only" data-act="signout" type="button" title="Sign out of this browser" aria-label="Sign out"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M9.5 2.5h-5a1 1 0 0 0-1 1v9a1 1 0 0 0 1 1h5"/><path d="M7 8h7M11.5 5.5 14 8l-2.5 2.5"/></svg></button>
       </span>
@@ -56,7 +58,7 @@
     <section id="left" class="panel">
       <div class="panel-head">
         <span class="panel-title">PROJECTS</span>
-        <span id="project-count" class="muted"></span>
+        <span class="ph-right"><span id="project-count" class="muted"></span><button class="pa-add" data-act="add" type="button" title="Add a project folder (⌘O)">＋ add</button></span>
       </div>
       <label class="filter">
         <span class="accent">/</span>
@@ -96,18 +98,43 @@
         <div id="start" class="hidden"></div>
         <div id="file-view" class="hidden"></div>
         <div id="welcome">
-          <div id="restore" class="restore hidden"></div>
-          <img class="welcome-mascot" src="mascot/excited.svg" alt="" draggable="false">
-          <div id="active-list" class="active-list hidden"></div>
-          <div class="welcome-card">
-            <div class="wc-title"><span class="accent">✻</span> Welcome to <b>Quarters</b></div>
-            <div class="muted keys-only">Pick a project on the left, or press <b class="kbd">⌘P</b> (or tap <b class="kbd">⇧ ⇧</b>) to jump to one.</div>
-            <div class="muted touch-only">Tap <b class="kbd">☰</b> to pick a project. Sessions you start here also show on the Mac, and the other way round.</div>
-            <div class="wc-keys">
-              <div><b class="kbd">click</b><span>open a project, then <b class="kbd">C</b> starts Claude Code</span></div>
-              <div><b class="kbd">⌘T</b><span>new Claude tab · <b class="kbd">⇧⌘T</b> continue last conversation</span></div>
-              <div><b class="kbd">⌥⌘T</b><span>shell tab · <b class="kbd">⌘W</b> close tab</span></div>
-              <div><b class="kbd">⌘,</b><span>settings · <b class="kbd">⇧⌘F</b> search conversations</span></div>
+          <div class="home">
+            <div id="restore" class="restore hidden"></div>
+            <div class="home-hero">
+              <img class="welcome-mascot" src="mascot/excited.svg" alt="" draggable="false">
+              <h1 class="home-title"><span class="accent">◆</span> Quarters</h1>
+              <p id="home-tagline" class="home-tagline">From developers, to developers.</p>
+            </div>
+            <div class="home-acts">
+              <button type="button" data-home="palette"><span class="ha-ic">⌕</span><span class="ha-text"><b>Jump to a project</b><span>or press ⇧ twice, anywhere</span></span><kbd class="keys-only">⌘P</kbd></button>
+              <button type="button" data-home="add-project" class="can-change"><span class="ha-ic">＋</span><span class="ha-text"><b>Add a project</b><span>any folder with code</span></span><kbd class="keys-only">⌘O</kbd></button>
+              <button type="button" data-home="history"><span class="ha-ic">⟲</span><span class="ha-text"><b>Search conversations</b><span>every question, every project</span></span><kbd class="keys-only">⇧⌘F</kbd></button>
+              <button type="button" data-home="settings"><span class="ha-ic">⚙</span><span class="ha-text"><b>Settings</b><span>agents, features, theme</span></span><kbd class="keys-only">⌘,</kbd></button>
+            </div>
+            <div id="home-today" class="home-today hidden">
+              <div class="ht-head"><span class="ht-title">TODAY</span><span class="muted">across every project</span><span class="push"></span><span class="ht-live"><i></i>live</span></div>
+              <div class="ht-stats">
+                <div><b data-n="sessions">0</b><span>sessions</span></div>
+                <div><b data-n="output">0</b><span>tokens written</span></div>
+                <div><b data-n="input">0</b><span>tokens read</span></div>
+                <div><b data-n="hit" class="green">0%</b><span>cache hit</span></div>
+              </div>
+              <div class="ht-chart"><div class="ht-grid"><i></i><i></i><i></i></div><div id="ht-bars" class="ht-bars"></div></div>
+              <div class="ht-axis muted"><span>2 h ago</span><span>1 h</span><span>now</span></div>
+            </div>
+            <div id="home-work" class="home-work hidden">
+              <div class="ht-head"><span class="ht-title">TODAY'S WORK</span><span class="muted">your commits and agent conversations</span><span class="push"></span><button id="hw-copy" class="btn hw-copy" type="button" title="Copy as Markdown, for a standup or a timesheet">Copy</button></div>
+              <div id="hw-list" class="hw-list"></div>
+            </div>
+            <div class="muted touch-only home-touch">Tap <b class="kbd">☰</b> to pick a project. Sessions you start here also show on the Mac, and the other way round.</div>
+            <div id="active-list" class="active-list hidden"></div>
+            <div class="home-keys keys-only">
+              <div><kbd>C</kbd><span>start the agent</span></div>
+              <div><kbd>⌘T</kbd><span>new agent tab</span></div>
+              <div><kbd>⇧⌘T</kbd><span>continue the last chat</span></div>
+              <div><kbd>⌥⌘T</kbd><span>shell tab</span></div>
+              <div><kbd>⌘D</kbd><span>split a shell</span></div>
+              <div><kbd>⌘/</kbd><span>every shortcut</span></div>
             </div>
           </div>
         </div>
@@ -411,6 +438,8 @@ cloudflared tunnel run --url http://127.0.0.1:8421 quarters</pre>
 
 <!-- Pasted image shown on hover -->
 <div id="img-pop" class="img-pop hidden"></div>
+<div id="link-tip" class="link-tip hidden"></div>
+<button id="send-pill" class="send-pill hidden" type="button" title="Type the selection into the agent's tab (⇧⌘L)">→ Send to agent <kbd>⇧⌘L</kbd></button>
 
 <!-- Automations menu -->
 <div id="auto-menu" class="auto-menu hidden" role="menu"></div>
@@ -436,6 +465,7 @@ cloudflared tunnel run --url http://127.0.0.1:8421 quarters</pre>
         <span class="field-label">Icon</span>
         <div class="icon-row">
           <span id="pd-icon-preview" class="icon-preview"></span>
+          <button id="pd-icon-emoji" class="btn" type="button">Emoji…</button>
           <button id="pd-icon-choose" class="btn mac-only" type="button">Choose image…</button>
           <button id="pd-icon-clear" class="btn danger hidden" type="button">Remove icon</button>
         </div>
@@ -457,7 +487,7 @@ cloudflared tunnel run --url http://127.0.0.1:8421 quarters</pre>
       <div class="field">
         <label for="pd-yolo">Permissions</label>
         <select id="pd-yolo" class="pd-select">
-          <option value="">as in Settings</option>
+          <option value="" data-sep>as in Settings</option>
           <option value="on">skip permission prompts (yolo)</option>
           <option value="off">ask before running tools</option>
         </select>
@@ -480,6 +510,72 @@ cloudflared tunnel run --url http://127.0.0.1:8421 quarters</pre>
       <button id="pd-save" class="btn primary" type="submit">Add project</button>
     </div>
   </form>
+</div>
+
+<!-- Commit (the side panel's GIT section) -->
+<div id="commit-dialog" class="overlay hidden">
+  <div class="dialog-box commit-box" role="dialog" aria-labelledby="ci-title">
+    <div class="pal-head"><span id="ci-title" class="panel-title accent">COMMIT</span><span id="ci-branch" class="muted"></span></div>
+    <div id="ci-files" class="ci-files"></div>
+    <textarea id="ci-msg" class="ed-text mono ci-msg" spellcheck="true" placeholder="What changed, and why. The first line is the summary." aria-label="Commit message"></textarea>
+    <div id="ci-note" class="ed-note hidden"></div>
+    <div class="dialog-actions">
+      <button id="ci-draft" class="btn" type="button" title="Claude Code writes the message from the diff (claude -p)">✨ Draft it</button>
+      <span id="ci-status" class="muted ed-status"></span>
+      <span class="push"></span>
+      <button id="ci-cancel" class="btn" type="button">Cancel</button>
+      <button id="ci-commit" class="btn" type="button">Commit</button>
+      <button id="ci-push" class="btn primary" type="button">Commit &amp; push</button>
+    </div>
+  </div>
+</div>
+
+<!-- What changed since a checkpoint -->
+<div id="cp-dialog" class="overlay hidden">
+  <div class="dialog-box cp-box" role="dialog" aria-labelledby="cp-title">
+    <div class="pal-head"><span id="cp-title" class="panel-title accent">SINCE THE CHECKPOINT</span><span id="cp-when" class="muted"></span></div>
+    <div class="cp-split">
+      <div id="cp-files" class="cp-files"></div>
+      <pre id="cp-diff" class="df-body cp-diff"></pre>
+    </div>
+    <div class="dialog-actions">
+      <span id="cp-stat" class="muted ed-status"></span>
+      <span class="push"></span>
+      <button id="cp-restore" class="btn danger can-change" type="button">Restore these files</button>
+      <button id="cp-close" class="btn" type="button">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Search every project -->
+<div id="search-dialog" class="overlay top hidden">
+  <div class="dialog-box search-box" role="dialog" aria-label="Search every project">
+    <div class="sx-bar">
+      <span class="sx-ic">⌕</span>
+      <input id="sx-q" type="text" placeholder="Search every project…" spellcheck="false" autocomplete="off" aria-label="Search for">
+      <button type="button" class="sx-opt" data-opt="case" title="Match case">Aa</button>
+      <button type="button" class="sx-opt" data-opt="word" title="Whole words">ab</button>
+      <button type="button" class="sx-opt" data-opt="regex" title="Regular expression">.*</button>
+      <input id="sx-glob" type="text" placeholder="in files, e.g. *.go" spellcheck="false" autocomplete="off" aria-label="In files like">
+    </div>
+    <div id="sx-list" class="sx-list"></div>
+    <div class="pal-foot"><span id="sx-status"></span><span class="push"><b>↑↓</b> move <b>↵</b> open <b>esc</b> close</span></div>
+  </div>
+</div>
+
+<!-- Every emoji, for a project's icon (over the project dialog) -->
+<div id="emoji-dialog" class="overlay hidden">
+  <div class="dialog-box emoji-box" role="dialog" aria-labelledby="em-title">
+    <div class="pal-head"><span id="em-title" class="panel-title accent">EMOJI</span><span class="muted">the project's icon</span></div>
+    <input id="em-search" class="em-search" type="search" placeholder="search, e.g. rocket" spellcheck="false" autocomplete="off" aria-label="Search emoji">
+    <div id="em-tabs" class="em-tabs"></div>
+    <div id="em-list" class="em-list"></div>
+    <div class="dialog-actions">
+      <span id="em-name" class="muted ed-status"></span>
+      <span class="push"></span>
+      <button id="em-cancel" class="btn" type="button">Cancel</button>
+    </div>
+  </div>
 </div>
 
 <!-- config.json in a browser (the Mac app opens it in a text editor); after

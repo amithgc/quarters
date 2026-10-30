@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/amithgc/quarters/internal/config"
 )
 
 func TestFindIconsAndDataURL(t *testing.T) {
@@ -24,5 +26,19 @@ func TestFindIconsAndDataURL(t *testing.T) {
 	}
 	if _, err := IconDataURL(filepath.Join(dir, "notes.txt")); err == nil {
 		t.Error("a text file is not an icon")
+	}
+}
+
+func TestEmojiIcon(t *testing.T) {
+	for icon, want := range map[string]bool{
+		"🚀": true, "🛠️": true, "👩‍💻": true, "🇮🇳": true, "★": true,
+		"": false, "logo.png": false, "web/favicon.svg": false, "~/icons/a.png": false, "abc": false, "café.png": false,
+	} {
+		if got := EmojiIcon(icon); got != want {
+			t.Errorf("EmojiIcon(%q) = %v", icon, got)
+		}
+	}
+	if got := IconPath(config.Project{Path: "/x", Icon: "🚀"}); got != "🚀" {
+		t.Errorf("IconPath = %q", got)
 	}
 }

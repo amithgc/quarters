@@ -233,8 +233,11 @@ function highlight(name, pos) {
 
 const iconData = {}; // icon path -> data: URL ("" while loading, null if unreadable)
 
+// An icon is an image's full path, or an emoji (which has no "/").
+const emojiIcon = (icon) => !!icon && !icon.includes("/");
+
 function loadIcon(path, then) {
-  if (!path || path in iconData) return;
+  if (!path || emojiIcon(path) || path in iconData) return;
   iconData[path] = "";
   Go().IconData(path)
     .then((url) => (iconData[path] = url))
@@ -267,6 +270,7 @@ function projectColor(p) {
 const PROJECT_COLORS = ["#e0605a", "#e5b454", "#7cc48a", "#5fbfc2", "#6f9cf0", "#a98bf2", "#e27fb1", "#9c9aa8"];
 
 function iconHTML(p) {
+  if (emojiIcon(p.icon)) return `<span class="picon emo">${esc(p.icon)}</span>`;
   if (p.icon) {
     loadIcon(p.icon);
     if (iconData[p.icon]) return `<img class="picon" src="${iconData[p.icon]}" alt="">`;
@@ -341,23 +345,7 @@ function popImage(key, label, url, e) {
 function pathImageLinks(term, tabOf) {
   return {
     provideLinks(y, done) {
-      const buf = term.buffer.active;
-      let top = y - 1, bottom = y - 1;
-      while (top > 0 && buf.getLine(top)?.isWrapped) top--;
-      while (buf.getLine(bottom + 1)?.isWrapped) bottom++;
-      // the whole line, and the cell each character of it is in
-      let text = "";
-      const at = [];
-      for (let r = top; r <= bottom; r++) {
-        const line = buf.getLine(r);
-        for (let x = 0; line && x < line.length; x++) {
-          const cell = line.getCell(x);
-          if (!cell || cell.getWidth() === 0) continue; // the right half of a wide character
-          const ch = cell.getChars() || " ";
-          for (let k = 0; k < ch.length; k++) at.push({ x: x + 1, y: r + 1 });
-          text += ch;
-        }
-      }
+      const { text, at } = wrappedLine(term, y);
       const links = [];
       for (const m of text.matchAll(IMG_PATH)) {
         const start = at[m.index], end = at[m.index + m[0].length - 1];
@@ -375,6 +363,145 @@ function pathImageLinks(term, tabOf) {
       done(links);
     },
   };
+}
+
+// wrappedLine is row y of a terminal with the rows it wraps onto (one
+// logical line), and the cell each of its characters is in.
+function wrappedLine(term, y) {
+  const buf = term.buffer.active;
+  let top = y - 1, bottom = y - 1;
+  while (top > 0 && buf.getLine(top)?.isWrapped) top--;
+  while (buf.getLine(bottom + 1)?.isWrapped) bottom++;
+  let text = "";
+  const at = [];
+  for (let r = top; r <= bottom; r++) {
+    const line = buf.getLine(r);
+    for (let x = 0; line && x < line.length; x++) {
+      const cell = line.getCell(x);
+      if (!cell || cell.getWidth() === 0) continue; // the right half of a wide character
+      const ch = cell.getChars() || " ";
+      for (let k = 0; k < ch.length; k++) at.push({ x: x + 1, y: r + 1 });
+      text += ch;
+    }
+  }
+  return { text, at };
+}
+
+// Where compilers, linters and stack traces say a problem is: path:line,
+// path:line:col, path(line,col), and Python's File "path", line n.
+const FILE_LINE = /(?:File "([^"\n]+)", line (\d+))|((?:[A-Za-z]:)?[\w@~.+\-\/]*[\w@+\-]\.[A-Za-z0-9]{1,10})(?::(\d+)(?::(\d+))?|\((\d+),(\d+)\))/g;
+const fileSeen = new Map(); // "dir|rel" -> Promise<bool>: the file is in the project
+
+// fileLinks makes file:line in a terminal a link (when the file is in the
+// tab's folder): ⌘-click (a tap, on a phone) opens it in the editor at the line.
+function fileLinks(term, tabOf) {
+  return {
+    provideLinks(y, done) {
+      const tab = tabOf();
+      const { text, at } = wrappedLine(term, y);
+      const found = [];
+      for (const m of text.matchAll(FILE_LINE)) {
+        const start = at[m.index], end = at[m.index + m[0].length - 1];
+        if (!start || !end || y < start.y || y > end.y) continue;
+        const file = m[1] || m[3], line = +(m[2] || m[4] || m[6]);
+        if (!line || /^https?:|:\/\//.test(file)) continue;
+        found.push({ m, start, end, file, line });
+      }
+      if (!found.length || !tab) return done(undefined);
+      const dir = tab.startOpts?.cwd || tab.path;
+      Promise.all(found.map(async (f) => {
+        let rel = f.file.replace(/^\.\//, "");
+        if (rel.startsWith(dir + "/")) rel = rel.slice(dir.length + 1);
+        if (rel.startsWith("/") || rel.startsWith("~")) return null; // outside the project
+        const key = `${dir}|${rel}`;
+        if (!fileSeen.has(key)) fileSeen.set(key, Go().FileStamp(dir, rel).then(() => true, () => false));
+        if (fileSeen.size > 500) fileSeen.delete(fileSeen.keys().next().value);
+        return (await fileSeen.get(key)) ? { ...f, rel } : null;
+      })).then((list) =>
+        done(list.filter(Boolean).map((f) => ({
+          text: f.m[0],
+          range: { start: f.start, end: f.end },
+          decorations: { pointerCursor: true, underline: true },
+          activate: (e) => (e.metaKey || e.ctrlKey || isTouch()) && openFileAt(tab.path, dir, f.rel, f.line),
+          hover: (e) => isTouch() || showLinkTip(`${APPLE || !REMOTE ? "⌘" : "Ctrl"}-click to open ${baseName(f.rel)} at line ${f.line}`, e),
+          leave: hideLinkTip,
+        }))),
+      );
+    },
+  };
+}
+
+function showLinkTip(text, e) {
+  const tip = $("#link-tip");
+  tip.textContent = text;
+  tip.style.left = `${Math.min(e.clientX + 12, innerWidth - 260)}px`;
+  tip.style.top = `${e.clientY + 16}px`;
+  tip.classList.remove("hidden");
+}
+
+function hideLinkTip() {
+  $("#link-tip").classList.add("hidden");
+}
+
+// openFileAt opens a file of a project (dir: the project or one of its
+// worktrees) in the editor at line.
+function openFileAt(path, dir, rel, line) {
+  if (state.current !== path) openProject(path);
+  return fileView().then((m) => m.openFile(path, dir, rel, line));
+}
+
+// ---------- send a selection to the agent (⇧⌘L) ----------
+
+// agentTabOf is the agent tab a selection goes to: the one in view if it's
+// an agent's, else the project's most recently used one.
+function agentTabOf(path) {
+  const cur = activeTab();
+  if (cur && cur.path === path && cur.kind !== "shell" && !cur.autoKey && !cur.exited) return cur;
+  return tabsOf(path).filter((t) => t.kind !== "shell" && !t.autoKey && !t.exited).sort((a, b) => (b.lastInput || 0) - (a.lastInput || 0))[0] || null;
+}
+
+// selectionToSend is what ⇧⌘L sends: the editor's selection (with its file
+// and lines), else the terminal's.
+async function selectionToSend() {
+  const f = shownFile();
+  if (f) {
+    const sel = (await fileView()).selectionOf(f);
+    if (sel) return `${sel.rel}:${sel.from}${sel.to > sel.from ? `-${sel.to}` : ""}\n\`\`\`\n${sel.text}\n\`\`\` `;
+  }
+  // no new line at the end: a program without bracketed paste would take it as Enter
+  const t = activeTab();
+  const text = t ? t.term.getSelection().trim() : "";
+  return text ? `\`\`\`\n${text}\n\`\`\` ` : "";
+}
+
+async function sendToAgent() {
+  const path = state.current;
+  if (!path) return flash("open a project first");
+  const text = await selectionToSend();
+  if (!text) return flash("select some text first: output in a terminal, or lines in the editor");
+  const tab = agentTabOf(path);
+  if (!tab) return flash(`start ${shortAgent(project(path)?.agent)} first (C), then send it`);
+  if (!canType()) return watchOnly();
+  activeTab()?.term.clearSelection();
+  goToTab(tab);
+  claimTab(tab);
+  tab.lastInput = Date.now();
+  tab.term.paste(text); // typed in, not sent: say what to do with it
+  if (!isTouch()) tab.term.focus();
+  $("#send-pill").classList.add("hidden");
+}
+
+// The pill offers it while text is selected in a terminal and there's an
+// agent tab to send it to.
+function updateSendPill(tab) {
+  const pill = $("#send-pill");
+  const show = tab === activeTab() && tab.term.hasSelection() && tab.term.getSelection().trim().length > 0 && !!agentTabOf(tab.path) && canType();
+  pill.classList.toggle("hidden", !show);
+  if (show) {
+    const r = tab.el.getBoundingClientRect();
+    pill.style.left = `${r.right - 16}px`;
+    pill.style.top = `${r.bottom - 16}px`;
+  }
 }
 
 // tabImage is an image file a tab showed, as a data: URL (kept once loaded).
@@ -496,6 +623,7 @@ async function newTab(path, kind = "claude", opts = {}) {
   term.loadAddon(new WebLinksAddon((_e, uri) => rt().BrowserOpenURL(uri)));
   if (kind !== "shell") term.registerLinkProvider(imageLinks(term, () => tab));
   term.registerLinkProvider(pathImageLinks(term, () => tab));
+  term.registerLinkProvider(fileLinks(term, () => tab));
   const unicode = new Unicode11Addon();
   term.loadAddon(unicode);
   term.unicode.activeVersion = "11";
@@ -529,6 +657,7 @@ async function newTab(path, kind = "claude", opts = {}) {
     if (e.metaKey) return false; // ⌘ shortcuts belong to the menus
     return true;
   });
+  term.onSelectionChange(() => updateSendPill(tab));
   term.onTitleChange((t) => {
     tab.title = cleanTitle(t);
     renderTabs();
@@ -1018,7 +1147,11 @@ function showActive() {
     el.style.order = i >= 0 ? String(i) : "";
   });
   const start = !cur && !shownFile() && state.current ? project(state.current) : null;
-  $("#welcome").classList.toggle("hidden", !!cur || !!start || !!shownFile());
+  const home = !cur && !start && !shownFile();
+  const back = home && $("#welcome").classList.contains("hidden");
+  if (back) newTagline(); // a new one each time home comes back
+  $("#welcome").classList.toggle("hidden", !home);
+  if (back) renderToday(true);
   renderStart(start);
   for (const t of panes) useGL(t);
   if (cur) {
@@ -1317,6 +1450,12 @@ function selectTab(i) {
   showActive();
 }
 
+// goToTab shows a tab of any project.
+function goToTab(t) {
+  if (state.current !== t.path) openProject(t.path);
+  selectTab(tabsOf(t.path).indexOf(t));
+}
+
 // selectEntry picks the k-th entry of the tab bar (a split group returns to the pane last used).
 function selectEntry(k) {
   const n = entries(state.current).length;
@@ -1352,6 +1491,16 @@ function openProject(path) {
   autoStart(path);
 }
 
+// goHome shows the home page in the middle: every session at a glance. The
+// tabs keep running; opening a project shows them again.
+function goHome() {
+  if (!state.current) return;
+  state.current = null;
+  setFocus("projects");
+  showActive();
+  render();
+}
+
 // autoStart runs a project's "run on open" automations the first time it is
 // opened after Quarters starts (not again if you stop them).
 const autoStarted = new Set();
@@ -1370,9 +1519,10 @@ function renderStart(p) {
   el.classList.toggle("hidden", !p);
   if (!p) return;
   const sig = `${p.path}|${on("history")}|${p.agent}`;
-  if (el.dataset.path !== sig || el.dataset.icon !== (iconData[p.icon] ? p.icon : "")) {
+  const icon = emojiIcon(p.icon) || iconData[p.icon] ? p.icon : "";
+  if (el.dataset.path !== sig || el.dataset.icon !== icon) {
     el.dataset.path = sig;
-    el.dataset.icon = iconData[p.icon] ? p.icon : "";
+    el.dataset.icon = icon;
     const autos = (p.automations || []).map((a, i) =>
       `<button class="btn" type="button" data-start="auto" data-i="${i}">▶ ${esc(a.name)}</button>`).join("");
     el.innerHTML = `
@@ -1603,6 +1753,26 @@ function onMenu(action) {
     case "clear":
       cur?.term.clear();
       break;
+    case "home":
+      goHome();
+      break;
+    case "search":
+      ui("search.js").then((m) => m.openSearch());
+      break;
+    case "send-to-agent":
+      sendToAgent();
+      break;
+    case "commit":
+      if (!target) flash("open a project first");
+      else if (!canChange()) watchOnly();
+      else ui("commit.js").then((m) => m.openCommit(target));
+      break;
+    case "push":
+      if (target && canChange()) Go().GitPush(target).then(flash, (e) => flash(String(e).replace(/^Error: /, ""))).finally(() => refreshStats());
+      break;
+    case "copy-summary":
+      copySummary();
+      break;
     case "palette":
       openPalette();
       break;
@@ -1804,10 +1974,113 @@ function autosToSave(list = dlg.autos) {
 }
 
 // harnessOptions lists the coding agents for a <select>, marking the ones
-// this machine doesn't have.
+// this machine doesn't have (see dropdown for data-sub and data-warn).
 function harnessOptions() {
-  return (state.settings?.harnesses || []).map((h) => `<option value="${esc(h.id)}">${esc(h.name)}${h.installed ? "" : " (not installed)"}</option>`).join("");
+  return (state.settings?.harnesses || [])
+    .map((h) => `<option value="${esc(h.id)}" data-sub="${esc(h.installed ? h.bin : "not installed")}"${h.installed ? "" : " data-warn"}>${esc(h.name)}</option>`)
+    .join("");
 }
+
+// ---------- menus in place of a <select> ----------
+
+// dropdown shows a <select> as the app's own menu, like the side panel's
+// agent picker. The select stays, hidden: it holds the value and fires
+// change, so the code around it doesn't change. An option's data-sub shows
+// on its right (data-warn: in yellow, and on the button too); data-sep
+// draws a line after it. Call it again after setting the select's options,
+// value or disabled.
+function dropdown(sel) {
+  if (!sel.dd) {
+    const box = document.createElement("div");
+    box.className = "dd dd-select";
+    box.innerHTML = `<button type="button" class="dd-btn" aria-haspopup="listbox" aria-expanded="false"><span class="dd-label"></span><span class="dd-sub warn"></span><span class="dd-chev">▾</span></button>`;
+    sel.after(box);
+    sel.classList.add("dd-native");
+    sel.dd = box;
+    const btn = box.firstElementChild;
+    btn.addEventListener("click", () => (ddOpen?.sel === sel ? closeDropdown() : openDropdown(sel)));
+    btn.addEventListener("keydown", (e) => {
+      if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+      e.preventDefault();
+      openDropdown(sel);
+    });
+  }
+  const o = sel.selectedOptions[0], btn = sel.dd.firstElementChild;
+  btn.querySelector(".dd-label").textContent = o ? o.textContent : "";
+  btn.querySelector(".dd-sub").textContent = o && "warn" in o.dataset ? o.dataset.sub || "" : "";
+  btn.disabled = sel.disabled;
+  btn.title = sel.title;
+}
+
+let ddOpen = null; // { sel, menu, at: the button's top when it opened }
+
+function openDropdown(sel) {
+  closeDropdown();
+  const btn = sel.dd.firstElementChild;
+  const menu = document.createElement("div");
+  menu.className = "dd-menu dd-float";
+  menu.setAttribute("role", "listbox");
+  menu.innerHTML = [...sel.options]
+    .map((o, i) => {
+      const on = o.selected;
+      return `<button type="button" class="dd-opt${on ? " on" : ""}" role="option" aria-selected="${on}" data-i="${i}"${o.disabled ? " disabled" : ""}>
+        <span class="dd-check">${on ? "✓" : ""}</span><span class="dd-name">${esc(o.textContent)}</span><span class="dd-sub${"warn" in o.dataset ? " warn" : ""}">${esc(o.dataset.sub || "")}</span></button>${"sep" in o.dataset ? '<div class="dd-sep"></div>' : ""}`;
+    })
+    .join("");
+  document.body.appendChild(menu);
+  // under the button (above it when there's more room there), at least as wide
+  const r = btn.getBoundingClientRect(), w = Math.max(r.width, 290);
+  const below = innerHeight - r.bottom - 12, above = r.top - 12, up = below < Math.min(menu.scrollHeight, 320) && above > below;
+  Object.assign(menu.style, {
+    width: `${w}px`,
+    left: `${Math.max(8, Math.min(r.width >= w ? r.left : r.right - w, innerWidth - w - 8))}px`,
+    maxHeight: `${up ? above : below}px`,
+    ...(up ? { bottom: `${innerHeight - r.top + 4}px` } : { top: `${r.bottom + 4}px` }),
+  });
+  ddOpen = { sel, menu, at: r.top };
+  sel.dd.classList.add("open");
+  btn.setAttribute("aria-expanded", "true");
+  (menu.querySelector(".dd-opt.on") || menu.querySelector(".dd-opt:not(:disabled)"))?.focus({ preventScroll: true });
+  menu.addEventListener("click", (e) => {
+    const b = e.target.closest(".dd-opt");
+    if (b) pickDropdown(+b.dataset.i);
+  });
+  menu.addEventListener("keydown", (e) => {
+    const opts = [...menu.querySelectorAll(".dd-opt:not(:disabled)")], i = opts.indexOf(document.activeElement);
+    if (e.key === "Escape" || e.key === "Tab") closeDropdown(e.key === "Escape");
+    else if ((e.key === "Enter" || e.key === " ") && i >= 0) pickDropdown(+opts[i].dataset.i); // the app's keys would take Enter
+    else if (e.key === "ArrowDown" || e.key === "ArrowUp") opts[(i + (e.key === "ArrowDown" ? 1 : -1) + opts.length) % opts.length]?.focus();
+    else if (e.key === "Home" || e.key === "End") opts[e.key === "Home" ? 0 : opts.length - 1]?.focus();
+    else return;
+    e.preventDefault();
+    e.stopPropagation(); // Esc closes the menu, not the dialog under it
+  });
+}
+
+function pickDropdown(i) {
+  const { sel } = ddOpen;
+  closeDropdown(true);
+  if (sel.selectedIndex === i) return;
+  sel.selectedIndex = i;
+  dropdown(sel);
+  sel.dispatchEvent(new Event("change", { bubbles: true }));
+}
+
+function closeDropdown(focus) {
+  if (!ddOpen) return;
+  const { sel, menu } = ddOpen;
+  ddOpen = null;
+  menu.remove();
+  sel.dd.classList.remove("open");
+  sel.dd.firstElementChild.setAttribute("aria-expanded", "false");
+  if (focus) sel.dd.firstElementChild.focus();
+}
+
+// a click elsewhere, a resize, or a scroll that moves the button closes it
+// (it's placed for where the button was)
+window.addEventListener("mousedown", (e) => ddOpen && !e.target.closest(".dd-float, .dd-select") && closeDropdown(), true);
+window.addEventListener("scroll", () => ddOpen && Math.abs(ddOpen.sel.dd.getBoundingClientRect().top - ddOpen.at) > 1 && closeDropdown(), true);
+window.addEventListener("resize", () => closeDropdown());
 
 const baseName = (path) => path.replace(/\/+$/, "").split("/").pop() || "";
 
@@ -1939,6 +2212,170 @@ function render() {
   renderStats(); // automations started or stopped (redrawn only when it changed)
 }
 
+// One line under the name on the home page, a different one each time.
+const TAGLINES = [
+  "From developers, to developers.",
+  "There's no place like 127.0.0.1.",
+  "Home is where the shell is.",
+  "Where your agents clock in.",
+  "Works on my machine. Now on yours too.",
+  "Tabs or spaces? Tabs. Lots of tabs.",
+  "Keep calm and press C.",
+  "Pair programming, minus the awkward silence.",
+  "Your agents don't sleep. Your Mac doesn't have to either.",
+  "Have you tried turning the agent off and on again?",
+  "Merge conflicts sold separately.",
+  "One window, every agent, zero yak shaving.",
+  "Less tab hunting, more shipping.",
+  "Ship it. Then ship it again.",
+  "Hello, world. Again.",
+  "sudo make me a sandwich.",
+  "Built at midnight, shipped by morning.",
+  "Every project gets its own quarters.",
+  "Your rubber duck writes code now.",
+  "It's not a bug, it's an agent's feature.",
+  "Fewer windows, more done.",
+  'git commit -m "it works, don\'t touch it"',
+  "The coffee is yours. The typing is theirs.",
+  "Talk to your agents. They're great listeners.",
+  "Twelve agents walk into a terminal…",
+  "It worked yesterday.",
+  "There are 10 kinds of developers, and they're both here.",
+  "Powered by coffee and stack traces.",
+  "99 little bugs in the code. Patch one, 127 to go.",
+  "It's always DNS.",
+  "Deploying on a Friday? Bold. We respect it.",
+  "The agent wrote the tests. They all pass. Suspicious.",
+  "TODO: write a funnier tagline.",
+  "Localhost, sweet localhost.",
+  "We put the fun in function.",
+  "// it's fine. everything is fine.",
+  "No semicolons were harmed in the making of this app.",
+  "Exit code 0. Life is good.",
+  "Ctrl+C, Ctrl+V, Ctrl+Ship.",
+  "Have you read the error? Neither has the agent.",
+  "Your agents work the night shift. You take the credit.",
+  "Code by agents, blame by git.",
+  "rm -rf distractions/",
+  "undefined is not a function. This is.",
+  "Now with 100% fewer lost terminals.",
+  "Merge first, ask questions later.",
+  "Agents in the terminal, you in the hammock.",
+  "Off by one? Not today.",
+  "Two hard problems: naming, caching, and off-by-one errors.",
+  "Stack Overflow, but it types for you.",
+];
+
+// ---------- the home page's "today" card ----------
+
+// renderToday draws today's use across every project: the totals count up
+// to their new values and the bars move to theirs. grow: the bars rise from
+// nothing, one after another (home has just been shown).
+let todayFirst = true;
+async function renderToday(grow) {
+  if ($("#welcome").classList.contains("hidden")) return;
+  renderWork();
+  let t;
+  try {
+    t = await Go().Today();
+  } catch {
+    return;
+  }
+  const act = t.activity || [];
+  const card = $("#home-today");
+  const any = t.sessions > 0 || act.some((v) => v > 0);
+  // the first figures come from a scan in the background: ask again shortly
+  if (!any && todayFirst) setTimeout(() => renderToday(true), 1500);
+  todayFirst = false;
+  card.classList.toggle("hidden", !any);
+  if (!any) return;
+  const u = t.usage || {};
+  const prompt = (u.Input || 0) + (u.CacheRead || 0) + (u.CacheWrite || 0);
+  countUp(card.querySelector('[data-n="sessions"]'), t.sessions, String);
+  countUp(card.querySelector('[data-n="output"]'), u.Output || 0, fmtTokens);
+  countUp(card.querySelector('[data-n="input"]'), prompt, fmtTokens);
+  countUp(card.querySelector('[data-n="hit"]'), prompt ? Math.round((100 * (u.CacheRead || 0)) / prompt) : 0, (n) => `${n}%`);
+
+  const box = $("#ht-bars"), peak = Math.max(1, ...act), now = Date.now();
+  if (box.children.length !== act.length) {
+    box.innerHTML = act.map((_, i) => `<div class="ht-bar" style="--i:${i}"><i></i></div>`).join("");
+    grow = true;
+  }
+  const at = (i) => new Date(now - (act.length - 1 - i) * 5 * 60000).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  [...box.children].forEach((b, i) => {
+    const v = act[i] || 0;
+    b.dataset.tip = `${at(i)} · ${v ? `${fmtTokens(v)} tokens` : "quiet"}`;
+    b.classList.toggle("zero", !v);
+    b.classList.toggle("now", i === act.length - 1);
+    b.classList.toggle("peak", v > 0 && v === peak);
+    b.style.setProperty("--h", v ? `${Math.max(6, (100 * v) / peak).toFixed(1)}%` : "3px");
+  });
+  if (grow) {
+    box.classList.remove("grow");
+    void box.offsetWidth; // start the rise again
+    box.classList.add("grow");
+  }
+}
+
+// renderWork lists today's work on Home: per project, your commits, the
+// agent conversations and what isn't committed yet.
+let work = null;
+async function renderWork() {
+  try {
+    work = await Go().DailySummary();
+  } catch {
+    return;
+  }
+  const list = work.projects || [];
+  $("#home-work").classList.toggle("hidden", !list.length);
+  const html = list
+    .map((d) => {
+      const p = project(d.path);
+      const commits = d.commits.slice(0, 4).map((c) => `<li><span class="violet">●</span>${esc(c)}</li>`).join("") + (d.commits.length > 4 ? `<li class="muted">+ ${d.commits.length - 4} more commits</li>` : "");
+      const chats = d.prompts ? `<li><span class="accent">✻</span>${d.prompts} prompt${d.prompts === 1 ? "" : "s"}${d.chats.length ? `: <span class="muted">${esc(d.chats.slice(0, 3).join(" · "))}</span>` : ""}</li>` : "";
+      const wip = d.uncommitted ? `<li><span class="yellow">◐</span>${d.uncommitted} file${d.uncommitted === 1 ? "" : "s"} not committed yet</li>` : "";
+      return `<div class="hw-proj"><button type="button" class="hw-name" data-open="${esc(d.path)}">${p ? iconHTML(p) : ""}<b>${esc(d.name)}</b>${d.commits.length ? `<span class="muted">${d.commits.length} commit${d.commits.length === 1 ? "" : "s"}</span>` : ""}</button><ul>${commits}${chats}${wip}</ul></div>`;
+    })
+    .join("");
+  const box = $("#hw-list");
+  if (box.dataset.html !== html) box.innerHTML = box.dataset.html = html;
+}
+
+// copySummary puts today's work on the clipboard as Markdown.
+async function copySummary() {
+  try {
+    work = await Go().DailySummary();
+    await (REMOTE || !rt().ClipboardSetText ? navigator.clipboard.writeText(work.markdown) : rt().ClipboardSetText(work.markdown));
+    flash(`copied today's summary: ${work.projects.length} project${work.projects.length === 1 ? "" : "s"}`);
+  } catch (e) {
+    flash(`couldn't copy: ${String(e).replace(/^Error: /, "")}`);
+  }
+}
+
+// countUp moves a number to n over a moment, eased.
+function countUp(el, n, fmt) {
+  const from = +el.dataset.v || 0;
+  el.dataset.v = n;
+  if (from === n || matchMedia("(prefers-reduced-motion: reduce)").matches) return void (el.textContent = fmt(n));
+  const t0 = performance.now(), ms = 900;
+  const step = (t) => {
+    const k = Math.min(1, (t - t0) / ms), e = 1 - (1 - k) ** 3;
+    el.textContent = fmt(Math.round(from + (n - from) * e));
+    if (k < 1 && +el.dataset.v === n) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+}
+
+function newTagline() {
+  const el = $("#home-tagline"), now = el.textContent;
+  let t = now;
+  while (t === now) t = TAGLINES[Math.floor(Math.random() * TAGLINES.length)];
+  el.textContent = t;
+  el.style.animation = "none"; // play the fade-in again
+  void el.offsetWidth;
+  el.style.animation = "";
+}
+
 // renderActiveList shows, on the welcome screen, the projects with open
 // sessions: working ones first, then those waiting for you.
 function renderActiveList() {
@@ -1956,9 +2393,9 @@ function renderActiveList() {
 }
 
 function renderTitle() {
-  const path = state.current || state.selected;
-  const p = project(path);
-  setText($("#tb-name"), p ? p.name : "");
+  const p = project(state.current);
+  setText($("#tb-name"), p ? p.name : "Home");
+  $("#btn-home").classList.toggle("on", !p);
   const ic = p ? iconHTML(p) : "";
   if ($("#tb-icon").dataset.html !== ic) {
     $("#tb-icon").innerHTML = ic;
@@ -2259,7 +2696,7 @@ function renderStats(force) {
       t += `<button type="button" class="row file-row" data-diff="${esc(f.Path)}"><span class="path" title="${esc(f.Path)} — show changes"><span class="${col} st">${esc(st)}</span><span class="muted">${esc(dir)}</span>${esc(base)}</span><span>${diff}</span></button>`;
     }
     if (files.length > 8) t += `<div class="muted">+ ${files.length - 8} more</div>`;
-    h += sec("git", t + `</div>`);
+    h += sec("git", t + `</div>` + renderGitActions(path, g));
   }
 
   // files Claude edited this session
@@ -2284,6 +2721,10 @@ function renderStats(force) {
       t += `<button type="button" class="row link-row" data-link="${esc(l.url)}" title="${esc(l.url)} · from ${esc(l.title)}"><span>${l.up ? '<span class="green">●</span>' : '<span class="muted">○</span>'} ${esc(l.url.replace(/^https?:\/\//, ""))}</span><span class="muted">${l.up ? esc(l.title) : "not answering"}</span></button>`;
     h += sec("servers", t + `</div>`);
   }
+
+  h += sec("scripts", renderPanelScripts(path));
+  h += sec("ports", renderPanelPorts(path));
+  if (g && g.IsRepo) h += sec("checkpoints", renderPanelCheckpoints(path));
 
   // tools
   if (!other && s.has && s.tools && s.tools.length) {
@@ -2503,6 +2944,12 @@ function closePalette() {
 
 // Every command, for the palette's ">" mode (⇧⌘P). mac: only in the Mac app.
 const COMMANDS = [
+  ["home", "Home: every session at a glance", ""],
+  ["search", "Search every project", "⇧⌘K"],
+  ["send-to-agent", "Send the selection to the agent", "⇧⌘L"],
+  ["commit", "Commit the project's changes…", ""],
+  ["push", "Push the project's branch", ""],
+  ["copy-summary", "Copy today's summary (Markdown)", ""],
   ["new-claude", "New agent tab", "⌘T"],
   ["continue", "Continue the last conversation", "⇧⌘T"],
   ["new-shell", "New shell tab", "⌥⌘T"],
@@ -2579,9 +3026,16 @@ function renderPalette() {
   $("#pal-list .sel")?.scrollIntoView({ block: "nearest" });
 }
 
+// scriptCommands are the open project's scripts, as commands ("run dev").
+function scriptCommands() {
+  const path = state.current || state.selected;
+  const list = (on("scripts") && dev[path]?.scripts) || [];
+  return list.map((s, i) => ({ action: `run-script:${i}`, title: `run ${s.name}`, keys: s.command }));
+}
+
 function renderCommands(q) {
   $("#palette").classList.add("commands");
-  const matches = COMMANDS.map((c) => ({ c, m: q ? fuzzy(q, c.title) : { score: 0, pos: [] } })).filter((x) => x.m);
+  const matches = [...COMMANDS, ...scriptCommands()].map((c) => ({ c, m: q ? fuzzy(q, c.title) : { score: 0, pos: [] } })).filter((x) => x.m);
   if (q) matches.sort((x, y) => y.m.score - x.m.score);
   state.palette.matches = matches;
   state.palette.sel = Math.min(state.palette.sel, Math.max(0, matches.length - 1));
@@ -2599,6 +3053,10 @@ function pickPalette(i, newTabToo) {
   const m = state.palette.matches[i];
   closePalette();
   if (!m) return;
+  if (m.c && m.c.action.startsWith("run-script:")) {
+    const path = state.current || state.selected;
+    return runScript(path, (dev[path]?.scripts || [])[+m.c.action.slice(11)]);
+  }
   if (m.c) return onMenu(m.c.action);
   if (m.a) return runAutomation(m.p.path, m.a);
   if (newTabToo) newTab(m.p.path, "claude");
@@ -2712,13 +3170,14 @@ function wireProjects() {
     } else return;
     e.preventDefault();
   });
-  // add and settings sit in the top bar (and at the foot of the drawer on a phone), with the theme
+  // add, settings and the rest sit in the top bar (and at the foot of the drawer on a phone), with the theme
   document.addEventListener("click", (e) => {
     const act = e.target.closest?.("[data-act]")?.dataset.act;
     if (act === "add") addProject();
     else if (act === "settings") onMenu("settings");
     else if (act === "theme") onMenu(`theme-${THEME_NEXT[theme]}`);
     else if (act === "awake") $("#awake-menu").classList.contains("hidden") ? showAwakeMenu() : hideMenus();
+    else if (act === "github") REMOTE ? window.open(REPO, "_blank", "noopener") : openLink(REPO); // a browser's own tab, not one on the Mac
   });
   $("#config-error").addEventListener("click", () => onMenu("edit-config"));
 }
@@ -3247,6 +3706,14 @@ function wireClaudeRemote() {
 }
 
 function wireActiveList() {
+  $("#hw-list").addEventListener("click", (e) => {
+    const b = e.target.closest("[data-open]");
+    if (b) openProject(b.dataset.open);
+  });
+  $(".home-acts").addEventListener("click", (e) => {
+    const b = e.target.closest("[data-home]");
+    if (b) onMenu(b.dataset.home);
+  });
   $("#active-list").addEventListener("click", (e) => {
     const b = e.target.closest("[data-open]");
     if (b) openProject(b.dataset.open);
@@ -3436,6 +3903,10 @@ function wireMobile() {
   $("#btn-stats").addEventListener("click", () => openDrawer("right"));
   $("#btn-files-m").addEventListener("click", () => openDrawer("files"));
   $("#btn-left").addEventListener("click", () => togglePanel("left"));
+  $("#btn-home").addEventListener("click", () => onMenu("home"));
+  $("#send-pill").addEventListener("mousedown", (e) => e.preventDefault()); // keep the selection
+  $("#send-pill").addEventListener("click", sendToAgent);
+  $("#hw-copy").addEventListener("click", copySummary);
   $("#btn-right").addEventListener("click", () => togglePanel("right"));
   $("#btn-files").addEventListener("click", () => togglePanel("files"));
   $("#scrim").addEventListener("click", closeDrawers);
@@ -3845,6 +4316,8 @@ function wireStatsExtras() {
     const d = e.target.closest("[data-diff]"), l = e.target.closest("[data-link]");
     if (d) showDiff(state.statsPath, d.dataset.diff);
     if (l) openLink(l.dataset.link);
+    const b = e.target.closest("[data-dev]");
+    if (b) devAction(b);
   });
   // a section's header folds it (its buttons and switches do their own thing)
   el.addEventListener("click", (e) => {
@@ -3869,6 +4342,182 @@ function wireStatsExtras() {
   });
 }
 
+// ---------- developer tools in the side panel ----------
+//
+// Scripts to run, the ports the project's tabs listen on, checkpoints taken
+// before each prompt, and commit / push / pull request in the GIT section.
+
+const dev = {}; // project path -> { scripts, ports, checkpoints, pr, at: { what: ms } }
+
+// refreshDev fetches a project's scripts (every 30 s), ports (each refresh:
+// Go keeps them 2 s), checkpoints (every 8 s) and pull request (Go asks gh
+// once a minute). now: checkpoints too, whatever their age.
+async function refreshDev(path, now) {
+  const d = (dev[path] ||= { scripts: null, ports: [], checkpoints: null, pr: null, at: {} });
+  const due = (k, ms) => {
+    if (!now && Date.now() - (d.at[k] || 0) < ms) return false;
+    d.at[k] = Date.now();
+    return true;
+  };
+  const jobs = [Go().PullRequest(path).then((v) => (d.pr = v))];
+  if (on("scripts")) {
+    if (due("scripts", 30000)) jobs.push(Go().Scripts(path).then((v) => (d.scripts = v || [])));
+    jobs.push(Go().Ports(path).then((v) => (d.ports = v || [])));
+  }
+  if (on("checkpoints") && due("cp", 8000)) jobs.push(Go().Checkpoints(path).then((v) => (d.checkpoints = v || [])));
+  await Promise.allSettled(jobs);
+  if ((state.current || state.selected) === path) renderStats();
+}
+
+// The commit, push and pull request buttons under the changed files, and
+// the branch's pull request with its checks.
+function renderGitActions(path, g) {
+  const pr = dev[path]?.pr;
+  let t = "";
+  if (canChange()) {
+    const files = (g.Files || []).length;
+    const main = /^(main|master|trunk|develop)$/.test(g.Branch);
+    const acts = [];
+    if (files) acts.push(`<button type="button" class="btn dev-btn primary" data-dev="commit">Commit…</button>`);
+    if (g.Ahead) acts.push(`<button type="button" class="btn dev-btn" data-dev="push">Push ↑${g.Ahead}</button>`);
+    if (pr && !pr.has && !pr.noGh && !pr.note && !main && g.Branch !== "HEAD") acts.push(`<button type="button" class="btn dev-btn" data-dev="pr">Open a pull request</button>`);
+    if (acts.length) t += `<div class="dev-acts">${acts.join("")}</div>`;
+  }
+  // gh is there but can't say (not signed in, no GitHub remote…)
+  if (pr && pr.note) t += `<div class="muted pr-note" title="${esc(pr.note)}">gh: ${esc(pr.note)}</div>`;
+  if (pr && pr.has) {
+    const failed = pr.failed || [];
+    const checks = failed.length
+      ? `<span class="red" title="${esc(failed.join(", "))}">✕ ${failed.length} failed: ${esc(failed.slice(0, 2).join(", "))}${failed.length > 2 ? "…" : ""}</span>`
+      : pr.pending
+        ? `<span class="yellow">● ${pr.pending} running</span>${pr.passed ? ` <span class="muted">· ${pr.passed} passed</span>` : ""}`
+        : pr.passed
+          ? `<span class="green">✓ ${pr.passed} passed</span>`
+          : '<span class="muted">no checks</span>';
+    const state_ = pr.state === "MERGED" ? '<span class="violet">merged</span>' : pr.state === "CLOSED" ? '<span class="muted">closed</span>' : pr.draft ? '<span class="muted">draft</span>' : "";
+    t += `<button type="button" class="row link-row pr-row" data-link="${esc(pr.url)}" title="${esc(pr.title)} — open on GitHub"><span class="pr-title"><span class="violet">#${pr.number}</span> ${esc(pr.title)}</span><span class="pr-checks">${state_ ? state_ + " " : ""}${checks}</span></button>`;
+  }
+  return t;
+}
+
+const scriptKey = (path, s) => `${path}::script:${s.command}`;
+const scriptTab = (path, s) => tabsOf(path).find((t) => t.autoKey === scriptKey(path, s) && !t.exited);
+
+function renderPanelScripts(path) {
+  const list = on("scripts") && dev[path]?.scripts;
+  if (!list || !list.length) return "";
+  let t = `<div class="sec-row"><span class="sec">SCRIPTS</span><span class="muted note">click to run in a tab</span></div>`;
+  let from = "";
+  list.forEach((s, i) => {
+    if (s.from !== from) {
+      t += `${from ? "</div>" : ""}<div class="sc-from muted">${esc(s.from)}</div><div class="scripts">`;
+      from = s.from;
+    }
+    const run = scriptTab(path, s);
+    t += `<button type="button" class="script${run ? " on" : ""}" data-dev="script" data-i="${i}" title="${esc(s.command)}${run ? " · running: go to its tab" : ""}">${run ? '<span class="green">●</span>' : '<span class="accent">▶</span>'}${esc(s.name)}</button>`;
+  });
+  return t + "</div>";
+}
+
+function renderPanelPorts(path) {
+  const list = on("scripts") ? dev[path]?.ports || [] : [];
+  if (!list.length) return "";
+  let t = `<div class="sec-row"><span class="sec">PORTS</span><span class="muted note">listening now</span></div><div class="kv ports">`;
+  for (const p of list)
+    t += `<div class="port-row"><span class="port">:${p.port}</span><span class="grow" title="pid ${p.pid}"><b>${esc(p.process)}</b> <span class="muted">${p.tab ? `· ${esc(p.title || "a tab")}` : "· not from Quarters"}</span></span>
+      <button type="button" class="pt-btn" data-dev="port-open" data-port="${p.port}" title="Open http://localhost:${p.port}">open</button>
+      ${p.tab ? `<button type="button" class="pt-btn" data-dev="port-tab" data-tab="${p.tab}" title="Go to the tab it runs in">tab</button>` : ""}
+      ${canChange() ? `<button type="button" class="pt-btn stop" data-dev="port-stop" data-pid="${p.pid}" data-port="${p.port}" data-mine="${p.tab ? 1 : 0}" title="End the process (SIGTERM, then SIGKILL)">stop</button>` : ""}</div>`;
+  return t + "</div>";
+}
+
+function renderPanelCheckpoints(path) {
+  if (!on("checkpoints")) return "";
+  const list = dev[path]?.checkpoints;
+  if (!list) return "";
+  let t = `<div class="sec-row"><span class="sec">CHECKPOINTS</span><span class="muted note">${list.length ? `${list.length} · ` : ""}before each prompt</span></div>`;
+  if (!list.length) return t + `<div class="muted">None yet: one is taken each time you send an agent a prompt, so a turn that goes wrong can be undone.</div>`;
+  t += `<div class="kv cps">`;
+  for (const c of list.slice(0, 8)) {
+    const when = new Date(c.at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+    const what = c.files ? `<span class="green">+${c.added}</span> <span class="red">−${c.del}</span> <span class="muted">· ${c.files} file${c.files === 1 ? "" : "s"}</span>` : '<span class="muted">no changes after</span>';
+    t += `<div class="cp-row"><button type="button" class="cp-main" data-dev="cp-open" data-id="${c.id}" title="${esc(c.label)} — see what changed since"><span class="cp-when">${when}</span><span class="cp-label muted">${esc(c.label.replace(/^Before a prompt in /, "→ "))}</span><span class="cp-what">${what}</span></button>
+      ${canChange() ? `<button type="button" class="pt-btn" data-dev="cp-restore" data-id="${c.id}" title="Put the files back as they were then (how they are now is saved first)">restore</button>` : ""}</div>`;
+  }
+  if (list.length > 8) t += `<div class="muted">+ ${list.length - 8} older</div>`;
+  return t + "</div>";
+}
+
+// armed: a button that does something hard to take back asks for a second
+// click within 4 s.
+function armed(b, label) {
+  if (b.dataset.armed) return true;
+  b.dataset.armed = "1";
+  const was = b.textContent;
+  b.textContent = label;
+  b.classList.add("armed");
+  setTimeout(() => {
+    delete b.dataset.armed;
+    b.textContent = was;
+    b.classList.remove("armed");
+  }, 4000);
+  return false;
+}
+
+async function devAction(b) {
+  const path = state.statsPath;
+  const d = dev[path] || {};
+  const err = (e) => flash(String(e).replace(/^Error: /, ""));
+  switch (b.dataset.dev) {
+    case "commit":
+      return ui("commit.js").then((m) => m.openCommit(path));
+    case "push":
+      b.disabled = true;
+      b.textContent = "pushing…";
+      return Go().GitPush(path).then(flash, err).finally(() => refreshStats());
+    case "pr":
+      b.disabled = true;
+      b.textContent = "opening…";
+      return Go().CreatePullRequest(path).then((url) => {
+        flash("pull request opened");
+        openLink(url);
+      }, err).finally(() => refreshDev(path, true));
+    case "script":
+      return runScript(path, (d.scripts || [])[+b.dataset.i]);
+    case "port-open":
+      return openLink(`http://localhost:${b.dataset.port}`);
+    case "port-tab": {
+      const t = tabsOf(path).find((x) => x.id === +b.dataset.tab);
+      return t && goToTab(t);
+    }
+    case "port-stop":
+      if (b.dataset.mine !== "1" && !armed(b, "sure?")) return;
+      b.disabled = true;
+      return Go().StopPort(+b.dataset.pid, +b.dataset.port).then(() => flash(`stopped :${b.dataset.port}`), err).finally(() => refreshDev(path, true));
+    case "cp-open": {
+      const c = (d.checkpoints || []).find((x) => x.id === b.dataset.id);
+      return c && ui("checkpoint.js").then((m) => m.openCheckpoint(path, c));
+    }
+    case "cp-restore":
+      if (!armed(b, "sure?")) return;
+      b.disabled = true;
+      return Go().RestoreCheckpoint(path, b.dataset.id).then(() => flash("restored · how things were is a checkpoint too, so this can be undone"), err).finally(() => {
+        refreshDev(path, true);
+        refreshStats();
+      });
+  }
+}
+
+// runScript runs a project's script in a tab of its own, or shows the tab
+// it already runs in.
+function runScript(path, s) {
+  if (!s) return;
+  const run = scriptTab(path, s);
+  if (run) return goToTab(run);
+  if (!canChange()) return watchOnly();
+  newTab(path, "shell", { title: s.name, dir: path, command: s.command, autoKey: scriptKey(path, s) });
+}
+
 // ---------- side panel sections: each folds to its header ----------
 
 // Which sections are folded is remembered on each device (a phone's
@@ -3877,7 +4526,7 @@ const FOLDS_KEY = "quarters.folded";
 const FOLD_DEFAULTS = { skills: true };
 const SECTION_NAMES = {
   plan: "Plan", agent: "Agent", automations: "Automations", session: "Session", queue: "Queue", tokens: "Tokens", usage: "Usage",
-  git: "Git", changed: "Changed", servers: "Servers", tools: "Tools", instructions: "Instructions", mcp: "MCP", skills: "Skills",
+  git: "Git", changed: "Changed", servers: "Servers", scripts: "Scripts", ports: "Ports", checkpoints: "Checkpoints", tools: "Tools", instructions: "Instructions", mcp: "MCP", skills: "Skills",
 };
 const folds = (() => {
   try {
@@ -4081,6 +4730,7 @@ async function refreshStats() {
     refreshTools();
     refreshUsage();
     refreshInstructions(path);
+    refreshDev(path);
     const s = await Go().Stats(path);
     if ((state.current || state.selected) === path) {
       state.stats = s;
@@ -4173,6 +4823,8 @@ async function main() {
       wakeMascot();
       renderMascot();
     });
+  $("#home-tagline").textContent = "";
+  newTagline(); // any of them, the first time
   setFocus("projects");
 
   state.me = REMOTE ? remoteMod.remote.client : await Go().ClientID();
@@ -4209,6 +4861,8 @@ async function main() {
   every(30000, refreshAccount, { behind: 2 });
   // Go says when the list changes ("projects"); this only catches a missed event
   every(30000, loadProjects, { behind: 1 });
+  every(15000, () => renderToday());
+  renderToday(true);
   wireTimers();
 }
 
@@ -4732,6 +5386,10 @@ function ui(file) {
   }));
 }
 
+function openEmoji(...args) {
+  return ui("emoji.js").then((m) => m.openEmoji(...args));
+}
+
 function openUpdate(...args) {
   return ui("update.js").then((m) => m.openUpdate(...args));
 }
@@ -4837,6 +5495,8 @@ export {
   closeFileTab,
   closeTab,
   dlg,
+  dropdown,
+  emojiIcon,
   esc,
   fileTabsOf,
   filesRoot,
@@ -4860,6 +5520,10 @@ export {
   newTab,
   on,
   onMenu,
+  openEmoji,
+  openFileAt,
+  refreshDev,
+  refreshStats,
   openDrawer,
   openLink,
   openProject,

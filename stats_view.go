@@ -15,11 +15,10 @@ import (
 
 // todayCache keeps today's totals, which scan every project's logs.
 type todayCache struct {
-	mu    sync.Mutex
-	at    time.Time
-	usage stats.Usage
-	n     int
-	busy  bool
+	mu   sync.Mutex
+	at   time.Time
+	day  stats.Day
+	busy bool
 }
 
 // accountCache keeps the plan's limits, fetched from Anthropic.
@@ -103,21 +102,41 @@ func (a *App) Stats(path string) StatsView {
 	}
 	v.Git = a.gitNow(path)
 
-	// Today's totals scan every project's logs: refresh at most every 30 s,
-	// in the background.
+	d := a.day()
+	v.Today, v.TodayCount = d.Usage, d.Sessions
+	return v
+}
+
+// day is today's use across every project. It scans every project's logs,
+// so it's refreshed at most every 30 s, in the background: the first call
+// (and one after a quiet spell) gets the last figures.
+func (a *App) day() stats.Day {
 	a.today.mu.Lock()
+	defer a.today.mu.Unlock()
 	if time.Since(a.today.at) > 30*time.Second && !a.today.busy {
 		a.today.busy = true
 		go func() {
-			u, n := a.reader.Today(projects.ClaudeRoot())
+			d := a.reader.Today(projects.ClaudeRoot())
 			a.today.mu.Lock()
-			a.today.usage, a.today.n, a.today.at, a.today.busy = u, n, time.Now(), false
+			a.today.day, a.today.at, a.today.busy = d, time.Now(), false
 			a.today.mu.Unlock()
 		}()
 	}
-	v.Today, v.TodayCount = a.today.usage, a.today.n
-	a.today.mu.Unlock()
-	return v
+	return a.today.day
+}
+
+// TodayView is today's Claude Code use across every project, for the home
+// page.
+type TodayView struct {
+	Usage    stats.Usage `json:"usage"`
+	Sessions int         `json:"sessions"`
+	Activity []int       `json:"activity"` // tokens per 5 min, the last 2 h, oldest first
+}
+
+// Today is today's use across every project.
+func (a *App) Today() TodayView {
+	d := a.day()
+	return TodayView{Usage: d.Usage, Sessions: d.Sessions, Activity: d.Activity[:]}
 }
 
 // Confirm asks a yes/no question in a native dialog.

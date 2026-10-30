@@ -8,6 +8,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode"
+	"unicode/utf8"
 )
 
 // IconTypes are the image files a project icon can be.
@@ -20,6 +22,20 @@ const (
 	maxIconBytes = 2 << 20
 	maxCached    = 256 // icons kept in memory
 )
+
+// EmojiIcon reports whether a project's icon is an emoji ("🚀") rather than
+// an image: a few characters, not all plain letters, and nothing a path has.
+func EmojiIcon(icon string) bool {
+	if icon == "" || len(icon) > 40 || utf8.RuneCountInString(icon) > 10 || strings.ContainsAny(icon, "/\\.~ ") {
+		return false
+	}
+	for _, r := range icon {
+		if r > unicode.MaxASCII {
+			return true
+		}
+	}
+	return false
+}
 
 // Where projects usually keep a favicon or app icon, most likely first.
 var iconPatterns = []string{

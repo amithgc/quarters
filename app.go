@@ -398,7 +398,7 @@ func (a *App) SetCollapsed(groups []string) error {
 }
 
 // SaveProject adds a project (oldPath "") or edits the one at oldPath, and
-// returns its full path. icon is an image path ("" for none).
+// returns its full path. icon is an image path or an emoji ("" for none).
 // yolo is "" (the global setting), "on" or "off"; harness is the
 // project's coding agent ("" for the default).
 func (a *App) SaveProject(oldPath, name, path, group, icon string, autos []config.Automation, yolo, harness, color string) (string, error) {
@@ -422,7 +422,7 @@ func (a *App) SaveProject(oldPath, name, path, group, icon string, autos []confi
 		name = "" // the default; keep config.json short
 	}
 	icon = strings.TrimSpace(icon)
-	if icon != "" {
+	if icon != "" && !projects.EmojiIcon(icon) {
 		icon = config.ExpandPath(icon)
 		if _, err := projects.IconDataURL(icon); err != nil {
 			return "", err

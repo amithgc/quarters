@@ -177,7 +177,10 @@ func (a *App) QueueNext(id int) (bool, error) {
 	}
 	// Enter on its own, a moment later: agents treat Enter that arrives
 	// with the text as part of a paste
-	time.AfterFunc(80*time.Millisecond, func() { a.sessions.Send(id, "\r") })
+	time.AfterFunc(80*time.Millisecond, func() {
+		a.beforeInput(id, "\r")
+		a.sessions.Send(id, "\r")
+	})
 	a.emit("queue", v)
 	return true, nil
 }

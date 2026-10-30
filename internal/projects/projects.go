@@ -21,7 +21,7 @@ type Project struct {
 	Name        string
 	Path        string
 	Group       string
-	Icon        string // full path of the icon image, "" for none
+	Icon        string // full path of the icon image, an emoji, "" for none
 	Command     []string
 	Automations []config.Automation
 	Yolo        *bool
@@ -74,12 +74,12 @@ func Load(cfg *config.Config) []Project {
 }
 
 // IconPath is the full path of a project's icon ("" for none). A relative
-// one is inside the project folder.
+// one is inside the project folder. An emoji is returned as it is.
 func IconPath(cp config.Project) string {
 	icon := strings.TrimSpace(cp.Icon)
 	switch {
-	case icon == "":
-		return ""
+	case icon == "" || EmojiIcon(icon):
+		return icon
 	case strings.HasPrefix(icon, "/") || strings.HasPrefix(icon, "~"):
 		return config.ExpandPath(icon)
 	default:

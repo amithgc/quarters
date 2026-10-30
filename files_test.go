@@ -148,3 +148,16 @@ func TestReadAndSaveConfig(t *testing.T) {
 		t.Errorf("saved over a newer file: %v", err)
 	}
 }
+
+func TestEmojiProjectIcon(t *testing.T) {
+	a, dir := testApp(t)
+	if _, err := a.SaveProject(dir, "", dir, "", " 🚀 ", nil, "", "", ""); err != nil {
+		t.Fatal(err)
+	}
+	if got := a.current().Projects[0].Icon; got != "🚀" {
+		t.Errorf("saved icon %q", got)
+	}
+	if got := a.Projects()[0].Icon; got != "🚀" {
+		t.Errorf("shown icon %q", got)
+	}
+}

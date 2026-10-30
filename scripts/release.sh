@@ -139,4 +139,4 @@ rm -rf "$TAP" "$NOTES"
 
 step "released $TAG"
 echo "https://github.com/$REPO/releases/tag/$TAG"
-echo "brew update && brew install --cask amithgc/tap/quarters    # or: brew upgrade --cask quarters"
+echo "brew update && brew install --cask amithgc/tap/quarters    # or: brew update && brew upgrade --cask quarters"
