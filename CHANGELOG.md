@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.5.2
+
+- Hide and show the side panels from the title bar: a button at each end
+  does what ⌘B and ⌘I do, and each device remembers which panels show.
+- Hiding a panel no longer squeezes the terminal into a thin strip.
+- About Quarters: click the version at the bottom right for the version,
+  the licence, and links to the website, the source, the release notes
+  and the issue tracker.
+
 ## 0.5.1
 
 - The version shows at the bottom right of the window (in a browser too);
