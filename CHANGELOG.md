@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.8.2
 
 - **Claude Code agent teams work in Quarters** (#21). With `"teammateMode":
   "tmux"` in Claude Code's settings, spawning a teammate failed with "To use
