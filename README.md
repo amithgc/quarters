@@ -254,6 +254,16 @@ remote access — working the same.
 ¹ Read from the Antigravity IDE while it's open on the same machine, through
 its local (unofficial) interface; nothing leaves the machine.
 
+**Agent teams (Claude Code) run inside the tab.** Quarters starts Claude Code
+with `--settings '{"teammateMode":"in-process"}'`, so teammates run in the
+agent's own terminal (↓ from an empty prompt manages them), on the Mac and
+in a browser alike. With `"teammateMode": "tmux"` in your Claude Code
+settings they would open in tmux panes no Quarters window shows, or fail
+with "To use agent swarms, install tmux". A `--settings` of your own in the
+project's command is left alone. Tabs also don't inherit the `TMUX` (or
+`screen`) variables of a terminal Quarters was started from, so no agent
+thinks it's inside tmux when it isn't.
+
 ### Automations: your dev stack in one action
 
 <img src="docs/automations.png" alt="An automation running the backend and the frontend side by side" width="900">

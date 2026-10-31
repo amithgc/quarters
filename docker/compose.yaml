@@ -7,9 +7,9 @@ services:
     build:
       context: .
       args:
-        QUARTERS_VERSION: "0.8.1"
+        QUARTERS_VERSION: "0.8.2"
         QUARTERS_UID: "${QUARTERS_UID:-1000}" # your user id (id -u), so files in code/ stay yours
-    image: quarters-server:0.8.1
+    image: quarters-server:0.8.2
     container_name: quarters
     restart: unless-stopped
     init: true # cleans up the processes agents leave behind

@@ -3,6 +3,7 @@ package session
 import (
 	"encoding/base64"
 	"os"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -236,5 +237,17 @@ func TestReportsDontTakeOver(t *testing.T) {
 	}
 	if l := m.List(); l[0].Owner != "web1" {
 		t.Errorf("typing should take the session: owner %q", l[0].Owner)
+	}
+}
+
+func TestEnvLeavesOuterTmux(t *testing.T) {
+	env := cleanEnv([]string{"PATH=/bin", "TMUX=/tmp/tmux-501/default,1,0", "TMUX_PANE=%3", "STY=1.pts-0", "TMUX_TMPDIR=/tmp"})
+	for _, kv := range env {
+		if strings.HasPrefix(kv, "TMUX=") || strings.HasPrefix(kv, "TMUX_PANE=") || strings.HasPrefix(kv, "STY=") {
+			t.Errorf("%s kept: agents would think the tab is inside tmux", kv)
+		}
+	}
+	if !slices.Contains(env, "TMUX_TMPDIR=/tmp") {
+		t.Errorf("TMUX_TMPDIR dropped (a tmux started in the tab needs it): %q", env)
 	}
 }

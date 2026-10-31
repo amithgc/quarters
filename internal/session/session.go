@@ -650,10 +650,14 @@ func (m *Manager) loginEnv() []string {
 }
 
 // cleanEnv sets the terminal type and drops variables that belong to the
-// terminal (or Claude Code session) Quarters itself was started from.
+// terminal (or Claude Code session) Quarters itself was started from. A
+// tmux or screen Quarters runs under isn't the tab's: agents that see $TMUX
+// open their panes there, where no Quarters window shows them, and draw
+// for tmux (OpenCode drops to 256 colours).
 func cleanEnv(env []string) []string {
 	drop := []string{"TERM=", "COLORTERM=", "TERM_PROGRAM=", "TERM_PROGRAM_VERSION=",
 		"LC_TERMINAL=", "LC_TERMINAL_VERSION=", "ITERM_", "TERM_SESSION_ID=", "SHLVL=", "_=",
+		"TMUX=", "TMUX_PANE=", "STY=",
 		"CLAUDECODE=", "CLAUDE_CODE_ENTRYPOINT=", "CLAUDE_CODE_SESSION_", "CLAUDE_CODE_CHILD_SESSION=",
 		"CLAUDE_CODE_MESSAGING_", "CLAUDE_CODE_BRIDGE_SESSION_ID=", "CLAUDE_CODE_EXECPATH=", "CLAUDE_PID=",
 		"CLAUDE_EFFORT="}

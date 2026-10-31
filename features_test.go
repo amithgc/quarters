@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -386,5 +387,16 @@ func TestAwakeHold(t *testing.T) {
 	a.keepAwake()
 	if v := a.Awake(); v.On || v.Until != 0 {
 		t.Fatalf("an ended hold: %+v", v)
+	}
+}
+
+func TestAgentTeamsStayInTab(t *testing.T) {
+	if got := strings.Join(inProcessTeams([]string{"claude", "--model", "opus"}), " "); got != `claude --model opus --settings {"teammateMode":"in-process"}` {
+		t.Errorf("got %q", got)
+	}
+	for _, own := range [][]string{{"claude", "--settings", "mine.json"}, {"claude", "--settings=mine.json"}} {
+		if got := inProcessTeams(own); !slices.Equal(got, own) {
+			t.Errorf("%q: the user's --settings replaced: %q", own, got)
+		}
 	}
 }

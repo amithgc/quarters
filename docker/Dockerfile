@@ -3,7 +3,7 @@
 #   docker compose up -d --build
 FROM debian:bookworm-slim
 
-ARG QUARTERS_VERSION=0.8.1
+ARG QUARTERS_VERSION=0.8.2
 ARG QUARTERS_UID=1000
 ARG TARGETARCH
 

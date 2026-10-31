@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+- **Claude Code agent teams work in Quarters** (#21). With `"teammateMode":
+  "tmux"` in Claude Code's settings, spawning a teammate failed with "To use
+  agent swarms, install tmux" (and with tmux, the teammates would open in
+  panes no Quarters window shows). Quarters now starts Claude Code with its
+  teammates in-process, inside the tab, on the Mac and in the browser; a
+  `--settings` of your own in the command is left alone.
+- **Tabs don't inherit tmux or screen from where Quarters was started.** A
+  server started inside tmux passed `TMUX` to every tab, so agents believed
+  they were inside tmux: Claude Code's `"auto"` teammate mode opened panes
+  in that hidden tmux, and OpenCode dropped to 256 colours.
+
 ## 0.8.1
 
 Fixes for agents that run full-screen (recent Claude Code versions), and

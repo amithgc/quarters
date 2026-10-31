@@ -72,6 +72,7 @@ func (a *App) startSession(client, path, kind string, cols, rows int, meta map[s
 			}
 			argv = append(argv, "--remote-control", name)
 		}
+		argv = inProcessTeams(argv)
 		switch kind {
 		case "continue":
 			argv = append(argv, "--continue")
@@ -174,3 +175,16 @@ func (a *App) SetSessionGroup(id int, group map[string]any) error {
 
 // CloseSession ends a session.
 func (a *App) CloseSession(id int) { a.sessions.Close(id) }
+
+// teamsInProcess keeps Claude Code's agent teams in the tab: with
+// teammateMode "tmux" (or "auto" under a tmux Quarters was started from)
+// teammates open in tmux panes no Quarters window shows, or fail when tmux
+// isn't installed. A --settings of the user's own is left alone.
+const teamsInProcess = `{"teammateMode":"in-process"}`
+
+func inProcessTeams(argv []string) []string {
+	if slices.ContainsFunc(argv, func(a string) bool { return a == "--settings" || strings.HasPrefix(a, "--settings=") }) {
+		return argv
+	}
+	return append(argv, "--settings", teamsInProcess)
+}
