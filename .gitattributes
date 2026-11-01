@@ -1,0 +1,3 @@
+# Scripts run in Linux (the Docker entrypoint, release scripts): keep LF line
+# endings even in a Windows checkout, or sh fails on the \r.
+*.sh text eol=lf

@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- **Docker on Windows.** The Docker files run in Docker Desktop on Windows:
+  a Windows checkout no longer turns the entrypoint script's line endings
+  into CRLF (which made the container fail to start with "no such file or
+  directory"), and the README and docs have the Windows steps.
+
 ## 0.8.2
 
 - **Claude Code agent teams work in Quarters** (#21). With `"teammateMode":

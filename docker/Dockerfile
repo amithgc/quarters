@@ -15,6 +15,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN curl -fsSL "https://github.com/amithgc/quarters/releases/download/v${QUARTERS_VERSION}/quarters-linux-${TARGETARCH}.tar.gz" \
       | tar -xz -C /usr/local/bin quarters
 
+# The first-start script; \r stripped in case it was checked out on Windows
+# with CRLF line endings, which sh can't run.
+COPY entrypoint.sh /usr/local/bin/quarters-entrypoint
+RUN sed -i 's/\r$//' /usr/local/bin/quarters-entrypoint && chmod 755 /usr/local/bin/quarters-entrypoint
+
 # Claude Code won't skip its permission prompts as root, so a normal user.
 RUN useradd -m -u "$QUARTERS_UID" -s /bin/bash dev
 USER dev
@@ -22,7 +27,6 @@ WORKDIR /home/dev
 RUN curl -fsSL https://claude.ai/install.sh | bash && mkdir -p code .config/quarters
 ENV PATH=/home/dev/.local/bin:$PATH SHELL=/bin/bash
 
-COPY entrypoint.sh /usr/local/bin/quarters-entrypoint
 EXPOSE 8421
 ENTRYPOINT ["quarters-entrypoint"]
 CMD ["quarters", "--serve"]

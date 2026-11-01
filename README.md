@@ -527,6 +527,24 @@ Good to know:
 - **Updating:** change `QUARTERS_VERSION` in `compose.yaml`, then
   `docker compose up -d --build`. Claude Code updates itself.
 
+**On Windows,** the same files run in [Docker Desktop](https://docs.docker.com/desktop/setup/install/windows-install/)
+(with its WSL 2 backend, the default). In PowerShell:
+
+```powershell
+git clone https://github.com/amithgc/quarters; cd quarters\docker
+mkdir code
+docker compose build
+docker compose run --rm quarters quarters --set-password amith
+docker compose up -d
+```
+
+and open `http://localhost:8421` in Edge or Chrome. Keep your projects in the
+container's `code` folder (clone them there with `docker compose exec`, as
+above) rather than pointing `CODE_DIR` at a folder on `C:\`: Windows folders
+mounted into a container work, but git and file watching are slow on them.
+The user id note above doesn't apply. Or skip Docker and run the server in
+WSL directly (next section).
+
 ### Windows: the server in WSL
 
 On Windows, run the Linux server inside [WSL](https://learn.microsoft.com/windows/wsl/install)
@@ -537,7 +555,8 @@ on Windows: WSL passes `localhost` through, so passkeys (Windows Hello) and
 installing it as an app work. To reach it from a phone, turn on WSL's
 mirrored networking and the home network. The
 [install guide](https://quarters.amithgc.com/docs#install-windows) has every
-step.
+step. Prefer a container? See [Docker](#docker-the-server-in-a-container),
+which has the Windows steps too.
 
 ## Getting started
 
