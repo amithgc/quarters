@@ -24,11 +24,17 @@ type Git struct {
 	Files         []FileChange
 }
 
-// GitStatus runs git status and git diff --numstat in dir.
-func GitStatus(dir string) Git {
+// GitStatus runs git status and git diff --numstat in dir. A new folder is
+// one entry ("new/").
+func GitStatus(dir string) Git { return gitStatus(dir, "normal") }
+
+// GitStatusAll is GitStatus with every file of a new folder listed.
+func GitStatusAll(dir string) Git { return gitStatus(dir, "all") }
+
+func gitStatus(dir, untracked string) Git {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-	out, err := exec.CommandContext(ctx, "git", "-C", dir, "status", "--porcelain=v1", "--branch", "--untracked-files=normal").Output()
+	out, err := exec.CommandContext(ctx, "git", "-C", dir, "status", "--porcelain=v1", "--branch", "--untracked-files="+untracked).Output()
 	if err != nil {
 		return Git{}
 	}

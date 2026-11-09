@@ -203,7 +203,7 @@ export async function saveFile(f) {
 // checkDisk looks for a change on the disk: taken in when there are no
 // unsaved edits, otherwise asked about.
 export async function checkDisk(f, now) {
-  if (!f || f.checking || (!now && Date.now() - (f.checked || 0) < 800)) return;
+  if (!f || f.preview || f.checking || (!now && Date.now() - (f.checked || 0) < 800)) return;
   f.checking = true;
   f.checked = Date.now();
   try {

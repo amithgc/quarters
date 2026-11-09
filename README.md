@@ -164,6 +164,16 @@ page, with your tabs still running behind it:
   follows it; a save never overwrites a change made since you opened the
   file (you choose to reload or keep yours). Files that may hold keys or
   passwords (`.env`, `*.pem`…) are never opened.
+- **Review before you commit:** **Review** in the side panel's git section
+  (or `>review` in the ⌘P box) goes through every changed file, new folders
+  included, with its diff. **j** and **k** move between files; open one in
+  the editor or go on to the commit from there.
+- **Preview a dev server in a tab:** **preview** beside a server or a port
+  in the side panel (or `>preview`, then any local address) shows it in a
+  tab of its project, next to the agent working on it. It's for servers on
+  this machine, so it needs the Mac app or a browser on that same machine;
+  from a phone, use **open** as before. A server that refuses to be shown in
+  a frame stays blank: **open in browser** is on the tab.
 
 <img src="docs/files.png" alt="The files panel with git marks, and a file open in an editor tab beside the terminals" width="900">
 
@@ -601,7 +611,9 @@ which has the Windows steps too.
 | ⌘K | clear the terminal |
 
 Also: **Shift+Enter** adds a new line in Claude Code; drop files on a
-terminal to type their paths; hover `[Image #N]` to see a pasted image;
+terminal to type their paths; paste an image in a browser (⌘V or Ctrl+V) and
+it goes to the machine the agent runs on, so it works like in a native
+terminal; hover `[Image #N]` to see a pasted image;
 double-click a tab to rename it. Light and dark mode follow macOS, or pick
 one in Settings → Appearance (each device keeps its own).
 

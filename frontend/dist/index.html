@@ -12,7 +12,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <link rel="icon" href="icons/icon-192.png">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' ws: wss:; object-src 'none'; base-uri 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' ws: wss:; object-src 'none'; base-uri 'none'; frame-src http://localhost:* http://127.0.0.1:* https://localhost:* https://127.0.0.1:*">
 <title>Quarters</title>
 <link rel="stylesheet" href="vendor/xterm.css">
 <link rel="stylesheet" href="style.css">
@@ -388,11 +388,18 @@ cloudflared tunnel run --url http://127.0.0.1:8421 quarters</pre>
 <div id="diff-dialog" class="overlay hidden">
   <div class="dialog-box diff-box" role="dialog" aria-labelledby="df-title">
     <div class="pal-head"><span id="df-title" class="panel-title accent">CHANGES</span><span id="df-stat" class="muted"></span></div>
-    <div id="df-note" class="df-note muted"></div>
-    <pre id="df-body" class="df-body"></pre>
+    <div class="df-main">
+      <div id="df-files" class="df-files"></div>
+      <div class="df-right">
+        <div id="df-note" class="df-note muted"></div>
+        <pre id="df-body" class="df-body"></pre>
+      </div>
+    </div>
     <div class="dialog-actions">
       <span id="df-file" class="muted df-file"></span>
       <span class="push"></span>
+      <button id="df-open" class="btn hidden" type="button">Open in the editor</button>
+      <button id="df-commit" class="btn primary hidden" type="button">Commit…</button>
       <button id="df-close" class="btn" type="button">Close</button>
     </div>
   </div>

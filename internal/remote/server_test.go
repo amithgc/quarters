@@ -135,6 +135,9 @@ func TestSignedOutSeesOnlySignIn(t *testing.T) {
 		if res.StatusCode != http.StatusOK {
 			t.Errorf("GET %s: %d, want 200", p, res.StatusCode)
 		}
+		if csp := res.Header.Get("Content-Security-Policy"); !strings.Contains(csp, "frame-src http://localhost:*") || strings.Contains(csp, "frame-src *") {
+			t.Errorf("%s: previews should be limited to local servers: %s", p, csp)
+		}
 		if !strings.Contains(res.Header.Get("Content-Security-Policy"), "frame-ancestors 'none'") || res.Header.Get("X-Frame-Options") != "DENY" {
 			t.Errorf("GET %s: missing security headers", p)
 		}

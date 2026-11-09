@@ -3,6 +3,8 @@ import { FitAddon } from "./vendor/addon-fit.js";
 import { WebglAddon } from "./vendor/addon-webgl.js";
 import { WebLinksAddon } from "./vendor/addon-web-links.js";
 import { Unicode11Addon } from "./vendor/addon-unicode11.js";
+import { imageForUpload, imageIn, imageInItems } from "./paste.js";
+import { previewReachable, previewURL } from "./localurl.js";
 import { layoutFor, screenClass } from "./layout.js";
 
 // In a browser (remote access) the Mac app's bridge comes over a WebSocket.
@@ -11,6 +13,7 @@ const REMOTE = !window.go && location.protocol.startsWith("http");
 const APPLE = /mac|iphone|ipad|ipod/i.test(navigator.userAgentData?.platform || navigator.platform || navigator.userAgent);
 const remoteMod = REMOTE ? await import("./remote.js") : null;
 
+const PREVIEWS = previewReachable(REMOTE, location.hostname); // a preview tab can reach this machine's servers
 const Go = () => window.go.main.App;
 const rt = () => window.runtime;
 const $ = (s) => document.querySelector(s);
@@ -655,6 +658,7 @@ async function newTab(path, kind = "claude", opts = {}) {
       return false;
     }
     if (e.metaKey) return false; // ⌘ shortcuts belong to the menus
+    if (browserCtrlV(tab, e)) return false;
     return true;
   });
   term.onSelectionChange(() => updateSendPill(tab));
@@ -1123,6 +1127,9 @@ function useGL(tab) {
       gl.onContextLoss(() => dropGL(tab));
       tab.term.loadAddon(gl);
       tab.gl = gl;
+      watchAtlas(gl.textureAtlas);
+      gl.onAddTextureAtlasCanvas(watchAtlas);
+      gl.onChangeTextureAtlas(watchAtlas);
     } catch {
       /* falls back to the DOM renderer */
     }
@@ -1139,6 +1146,51 @@ function dropGL(tab) {
   try {
     gl.dispose();
   } catch {}
+}
+
+// Terminals keep the letters they've drawn on shared "atlas" canvases and
+// never draw one twice. When the GPU drops those canvases (a reset, the Mac
+// sleeping, a browser reclaiming a tab it put away) every letter drawn before
+// is blank, and only new ones show: text with holes in it, until something
+// redraws it (#25). So the atlas is drawn afresh when a canvas comes back,
+// and after any long absence, when there may have been no signal; it takes a
+// moment, on the next frame. "Redraw the terminals" does it by hand.
+const AWAY_MS = 90000; // above what browsers slow a hidden page's timers to
+const atlasSeen = new WeakSet();
+let redrawing = false;
+
+function watchAtlas(canvas) {
+  if (!canvas || atlasSeen.has(canvas)) return;
+  atlasSeen.add(canvas);
+  canvas.addEventListener("contextrestored", redrawTerms);
+}
+
+function redrawTerms() {
+  if (redrawing) return;
+  redrawing = true;
+  requestAnimationFrame(() => {
+    redrawing = false;
+    // all in one go: they share an atlas, so a terminal cleared after another
+    // has redrawn would wipe what that one just drew
+    for (const t of glTabs) {
+      try {
+        t.term.clearTextureAtlas();
+      } catch {}
+    }
+  });
+}
+
+function wireRedraw() {
+  let tick = Date.now(), hiddenAt = 0;
+  setInterval(() => {
+    const now = Date.now();
+    if (now - tick > AWAY_MS) redrawTerms(); // timers stopped: the machine slept
+    tick = now;
+  }, 5000);
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) hiddenAt = Date.now();
+    else if (hiddenAt && Date.now() - hiddenAt > AWAY_MS) redrawTerms();
+  });
 }
 
 function showActive() {
@@ -1598,6 +1650,7 @@ function renderHints() {
   const k = (keys, what) => `<span><b>${keyText(REMOTE && APPLE ? keys.replace(/^(⇧?)⌘([TW])$/, "⌃$1⌘$2") : keys)}</b> ${what}</span>`;
   let list;
   if (state.focus === "projects" && state.selected) list = [k("↑↓", "move"), k("↵", "open"), k("/", "filter"), k("⇥", "back to the terminal"), k("⌘T", "new tab"), k("⌘B", "sidebar")];
+  else if (f?.preview) list = [k("⌘W", "close the preview"), k("⇧⌘E", "files panel"), k("⌘1-9", "tabs"), k("⌘B", "sidebar")];
   else if (f) list = [k("⌘S", "save"), k("⌘W", "close the file"), k("⇧⌘E", "files panel"), k("⌘1-9", "tabs"), k("⌘B", "sidebar")];
   else if (tab && isTree(tab.group)) list = [k("⌘[ ⌘]", "panes"), k("⌘D", "split right"), k("⇧⌘D", "split down"), k("⌘W", "close the pane"), k("⌘K", "clear"), k("⇧⌘↵", "focus mode")];
   else if (tab?.kind === "shell") list = [k("⌘D", "split right"), k("⇧⌘D", "split down"), k("⌘K", "clear"), k("⌘T", "new tab"), k("⌘W", "close tab"), k("⌘1-9", "tabs")];
@@ -1773,6 +1826,17 @@ function onMenu(action) {
       break;
     case "send-to-agent":
       sendToAgent();
+      break;
+    case "review":
+      if (!target) flash("open a project first");
+      else showReview(target);
+      break;
+    case "preview":
+      if (!target) flash("open a project first");
+      else if (PREVIEWS) openPreview(target, serverOf(target));
+      break;
+    case "redraw":
+      redrawTerms();
       break;
     case "commit":
       if (!target) flash("open a project first");
@@ -2733,7 +2797,7 @@ function renderStats(force) {
   if (on("dev_links") && links.length) {
     let t = `<div class="sec-row"><span class="sec">SERVERS</span><span class="muted note">${REMOTE ? "tap to open on the Mac" : "click to open"}</span></div><div class="kv" style="gap:4px;font-size:12px">`;
     for (const l of links)
-      t += `<button type="button" class="row link-row" data-link="${esc(l.url)}" title="${esc(l.url)} · from ${esc(l.title)}"><span>${l.up ? '<span class="green">●</span>' : '<span class="muted">○</span>'} ${esc(l.url.replace(/^https?:\/\//, ""))}</span><span class="muted">${l.up ? esc(l.title) : "not answering"}</span></button>`;
+      t += `<div class="server-row"><button type="button" class="row link-row" data-link="${esc(l.url)}" title="${esc(l.url)} · from ${esc(l.title)}"><span>${l.up ? '<span class="green">●</span>' : '<span class="muted">○</span>'} ${esc(l.url.replace(/^https?:\/\//, ""))}</span><span class="muted">${l.up ? esc(l.title) : "not answering"}</span></button>${PREVIEWS ? `<button type="button" class="pt-btn" data-preview="${esc(l.url)}" title="Show it in a tab here">preview</button>` : ""}</div>`;
     h += sec("servers", t + `</div>`);
   }
 
@@ -2962,9 +3026,11 @@ const COMMANDS = [
   ["home", "Home: every session at a glance", ""],
   ["search", "Search every project", "⇧⌘K"],
   ["send-to-agent", "Send the selection to the agent", "⇧⌘L"],
+  ["review", "Review the project's changes…", ""],
   ["commit", "Commit the project's changes…", ""],
   ["push", "Push the project's branch", ""],
   ["copy-summary", "Copy today's summary (Markdown)", ""],
+  ["preview", "Preview a local server in a tab…", "", "local"],
   ["new-claude", "New agent tab", "⌘T"],
   ["continue", "Continue the last conversation", "⇧⌘T"],
   ["new-shell", "New shell tab", "⌥⌘T"],
@@ -2977,6 +3043,7 @@ const COMMANDS = [
   ["prev-tab", "Previous tab", "⇧⌘["],
   ["next-waiting", "Go to the session waiting for you", "⌘J"],
   ["clear", "Clear the scrollback", "⌘K"],
+  ["redraw", "Redraw the terminals (letters missing?)", ""],
   ["add-project", "Add a project…", "⌘O"],
   ["history", "Search past conversations…", "⇧⌘F"],
   ["worktrees", "Worktrees…", "⇧⌘G"],
@@ -3000,7 +3067,7 @@ const COMMANDS = [
   ["edit-config", "Edit config.json…", "⌥⌘,"],
   ["remote", "Remote access…", "", "mac"],
   ["remote-toggle", "Start or stop the remote-access server", "⌥⌘R", "mac"],
-].filter(([, , , mac]) => !mac || !REMOTE).map(([action, title, keys]) => ({ action, title, keys }));
+].filter(([, , , only]) => (only === "mac" ? !REMOTE : only === "local" ? PREVIEWS : true)).map(([action, title, keys]) => ({ action, title, keys }));
 
 function renderPalette() {
   const raw = $("#pal-query").value.trim();
@@ -3354,6 +3421,108 @@ function wireFileDrop() {
   }, true);
 }
 
+// ---------- images pasted in a browser ----------
+//
+// An agent reads a pasted image from the clipboard of the machine it runs on,
+// and a browser's clipboard may be on another one. So the image goes to that
+// machine and its path is typed in, like a dropped file (see pasted.go).
+
+async function sendImage(tab, blob) {
+  if (!canType()) return watchOnly();
+  if (tab.exited) return;
+  flash("sending the image…");
+  try {
+    const path = await Go().SavePastedImage(await imageForUpload(blob));
+    tab.term.paste(shellQuote(path) + " ");
+    flash("image pasted");
+  } catch (e) {
+    flash(String(e?.message || e).replace(/^Error: /, ""));
+  }
+}
+
+// The tab a paste at this element goes to: its terminal, or a phone's message card.
+function pasteTab(el) {
+  const term = el?.closest?.(".term");
+  if (term) return Object.values(state.byId).find((t) => t.el === term) || null;
+  return el?.closest?.("#compose") ? activeTab() : null;
+}
+
+function wireImagePaste() {
+  // Before xterm.js, which only looks for text. Text is left to it.
+  document.addEventListener("paste", (e) => {
+    const tab = pasteTab(e.target);
+    const typedCtrlV = ctrlVAsked;
+    ctrlVAsked = null;
+    if (!tab) return;
+    const image = imageIn(e.clipboardData);
+    if (image) {
+      e.preventDefault();
+      e.stopPropagation();
+      sendImage(tab, image);
+    } else if (typedCtrlV === tab && canType() && !tab.exited && !e.clipboardData?.getData("text/plain")) {
+      e.preventDefault();
+      e.stopPropagation();
+      Go().Write(tab.id, "\x16"); // nothing to paste: Ctrl+V was for the program
+    }
+  }, true);
+}
+
+// In a browser, Ctrl+V on an agent's tab has to reach the browser's clipboard:
+// xterm.js would send ^V, and the agent would look on the server's. Where
+// Ctrl+V is the paste key the browser then fires a paste event; on a Mac it
+// isn't, so the clipboard is asked directly. The Mac app needs none of this:
+// there the agent's clipboard is yours.
+let ctrlVAsked = null;
+
+function browserCtrlV(tab, e) {
+  if (!REMOTE || tab.kind === "shell" || e.key.toLowerCase() !== "v" || !e.ctrlKey || e.shiftKey || e.altKey) return false;
+  if (e.type !== "keydown") return true;
+  if (APPLE) {
+    e.preventDefault();
+    if (canType() && !tab.exited) ctrlVOnMac(tab);
+  } else {
+    ctrlVAsked = tab;
+    setTimeout(() => {
+      if (ctrlVAsked === tab) ctrlVAsked = null;
+    }, 1000);
+  }
+  return true;
+}
+
+async function ctrlVOnMac(tab) {
+  let image = null;
+  try {
+    if (navigator.clipboard?.read) image = await imageInItems(await navigator.clipboard.read());
+  } catch {
+    /* not allowed, or plain http: it's the program's Ctrl+V as before */
+  }
+  if (image) return sendImage(tab, image);
+  claimTab(tab);
+  Go().Write(tab.id, "\x16");
+}
+
+// pasteClipboard is the phone key bar's paste button: text or an image.
+async function pasteClipboard(tab) {
+  try {
+    if (navigator.clipboard?.read) {
+      const items = await navigator.clipboard.read();
+      const image = await imageInItems(items);
+      if (image) return sendImage(tab, image);
+      const textItem = items.find((i) => i.types.includes("text/plain"));
+      if (textItem) {
+        const t = await (await textItem.getType("text/plain")).text();
+        if (t) tab.term.paste(t);
+        return;
+      }
+      if (items.length) return flash("nothing to paste: the clipboard holds neither text nor an image");
+    }
+    const t = await navigator.clipboard?.readText?.();
+    if (t) tab.term.paste(t);
+  } catch {
+    flash("allow clipboard access to paste");
+  }
+}
+
 // ---------- files: the files panel and editor tabs (ui/files.js, ui/fileview.js) ----------
 //
 // A file opens in an editor tab of its project, after the terminal tabs.
@@ -3417,7 +3586,7 @@ function fileTabsHTML(n) {
   return fileTabsOf(state.current).map((f, i) => {
     const wt = f.dir !== f.project ? `⎇ ${baseName(f.dir)} · ` : "";
     return `<div class="tab file${f === on ? " active" : ""}" data-e="${n + i}" role="button" title="${esc(wt + f.rel)}">
-      <span class="muted">${n + i + 1}</span><span class="file-ico" aria-hidden="true"></span><span class="label">${esc(wt + f.name)}</span>${f.dirty ? '<span class="accent" title="Not saved">●</span>' : ""}
+      <span class="muted">${n + i + 1}</span><span class="file-ico${f.preview ? " globe" : ""}" aria-hidden="true"></span><span class="label">${esc(wt + f.name)}</span>${f.dirty ? '<span class="accent" title="Not saved">●</span>' : ""}
       <button class="close" type="button" data-close="${n + i}" aria-label="Close file">×</button></div>`;
   }).join("");
 }
@@ -3476,7 +3645,7 @@ function wireKeybar() {
       return;
     }
     if (k === "paste") {
-      navigator.clipboard?.readText?.().then((t) => t && tab.term.paste(t), () => flash("allow clipboard access to paste"));
+      pasteClipboard(tab);
       return;
     }
     claimTab(tab);
@@ -4316,6 +4485,13 @@ async function refreshLinks() {
   } catch {}
 }
 
+// serverOf is the address to preview first in a project: the server its
+// terminals announced, else the port one of them listens on.
+function serverOf(path) {
+  const link = state.links.find((l) => l.path === path && l.up), port = (dev[path]?.ports || []).find((p) => p.tab);
+  return previewURL(link?.url || (port ? `localhost:${port.port}` : ""), location.origin) || "";
+}
+
 function openLink(url) {
   if (!REMOTE) return rt().BrowserOpenURL(url);
   if (!canChange()) return watchOnly();
@@ -4341,6 +4517,8 @@ function wireStatsExtras() {
     const d = e.target.closest("[data-diff]"), l = e.target.closest("[data-link]");
     if (d) showDiff(state.statsPath, d.dataset.diff);
     if (l) openLink(l.dataset.link);
+    const pv = e.target.closest("[data-preview]");
+    if (pv) openPreview(state.statsPath, previewURL(pv.dataset.preview, location.origin) || "");
     const b = e.target.closest("[data-dev]");
     if (b) devAction(b);
   });
@@ -4399,10 +4577,13 @@ async function refreshDev(path, now) {
 function renderGitActions(path, g) {
   const pr = dev[path]?.pr;
   let t = "";
+  const files = (g.Files || []).length;
+  const review = files ? `<button type="button" class="btn dev-btn" data-dev="review">Review</button>` : "";
+  if (!canChange() && review) t += `<div class="dev-acts">${review}</div>`;
   if (canChange()) {
-    const files = (g.Files || []).length;
     const main = /^(main|master|trunk|develop)$/.test(g.Branch);
     const acts = [];
+    if (review) acts.push(review);
     if (files) acts.push(`<button type="button" class="btn dev-btn primary" data-dev="commit">Commit…</button>`);
     if (g.Ahead) acts.push(`<button type="button" class="btn dev-btn" data-dev="push">Push ↑${g.Ahead}</button>`);
     if (pr && !pr.has && !pr.noGh && !pr.note && !main && g.Branch !== "HEAD") acts.push(`<button type="button" class="btn dev-btn" data-dev="pr">Open a pull request</button>`);
@@ -4450,6 +4631,7 @@ function renderPanelPorts(path) {
   let t = `<div class="sec-row"><span class="sec">PORTS</span><span class="muted note">listening now</span></div><div class="kv ports">`;
   for (const p of list)
     t += `<div class="port-row"><span class="port">:${p.port}</span><span class="grow" title="pid ${p.pid}"><b>${esc(p.process)}</b> <span class="muted">${p.tab ? `· ${esc(p.title || "a tab")}` : "· not from Quarters"}</span></span>
+      ${PREVIEWS ? `<button type="button" class="pt-btn" data-preview="http://localhost:${p.port}/" title="Show http://localhost:${p.port} in a tab here">preview</button>` : ""}
       <button type="button" class="pt-btn" data-dev="port-open" data-port="${p.port}" title="Open http://localhost:${p.port}">open</button>
       ${p.tab ? `<button type="button" class="pt-btn" data-dev="port-tab" data-tab="${p.tab}" title="Go to the tab it runs in">tab</button>` : ""}
       ${canChange() ? `<button type="button" class="pt-btn stop" data-dev="port-stop" data-pid="${p.pid}" data-port="${p.port}" data-mine="${p.tab ? 1 : 0}" title="End the process (SIGTERM, then SIGKILL)">stop</button>` : ""}</div>`;
@@ -4494,6 +4676,8 @@ async function devAction(b) {
   const d = dev[path] || {};
   const err = (e) => flash(String(e).replace(/^Error: /, ""));
   switch (b.dataset.dev) {
+    case "review":
+      return showReview(path);
     case "commit":
       return ui("commit.js").then((m) => m.openCommit(path));
     case "push":
@@ -4799,6 +4983,8 @@ async function main() {
   applyLayout();
 
   wireEvents();
+  wireRedraw();
+  wireImagePaste();
   wireResize();
   wireActiveList();
   wireShortcuts();
@@ -5435,6 +5621,14 @@ function showDiff(...args) {
   return ui("diff.js").then((m) => m.showDiff(...args));
 }
 
+function showReview(...args) {
+  return ui("diff.js").then((m) => m.showReview(...args));
+}
+
+function openPreview(...args) {
+  return ui("preview.js").then((m) => m.openPreview(...args));
+}
+
 function openUsage(...args) {
   return ui("usage.js").then((m) => m.openUsage(...args));
 }
@@ -5576,5 +5770,6 @@ export {
   theme,
   tipsDue,
   tipsState,
+  ui,
   watchOnly,
 };

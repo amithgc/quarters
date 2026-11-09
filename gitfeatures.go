@@ -137,6 +137,19 @@ type FileDiff struct {
 
 const maxDiff = 400 << 10
 
+// ChangedFiles lists what differs from the last commit in a project, for
+// reviewing it: unlike the side panel, each file of a new folder.
+func (a *App) ChangedFiles(path string) ([]stats.FileChange, error) {
+	if _, ok := a.project(path); !ok {
+		return nil, fmt.Errorf("not one of your projects")
+	}
+	g := stats.GitStatusAll(path)
+	if !g.IsRepo {
+		return nil, fmt.Errorf("%s is not a git repository", filepath.Base(path))
+	}
+	return g.Files, nil
+}
+
 // Diff shows how a file in a project differs from the last commit.
 func (a *App) Diff(path, file string) (FileDiff, error) {
 	root := path

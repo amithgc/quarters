@@ -2,6 +2,29 @@
 
 ## Unreleased
 
+- **Text with letters missing is repaired** (#25). Terminals keep the letters
+  they've drawn on canvases they share and never draw one twice. When the
+  GPU drops those canvases (a reset, the Mac sleeping, a browser reclaiming
+  a tab it put away), everything drawn before went blank, and only new
+  letters showed. They're now drawn afresh when a canvas comes back and
+  after a long absence, and "Redraw the terminals" in the ⌘P box does it by
+  hand.
+- **Paste images in a browser** (#24). ⌘V, Ctrl+V and the phone's paste key
+  now take an image from the browser's clipboard: agents only look on the
+  clipboard of the machine they run on, so nothing happened. The image goes
+  to that machine (too big for one message: it's scaled down; kept for 7
+  days in a private folder) and its path is typed in, which Claude Code shows
+  as `[Image #1]`. Copied text still pastes as text. Watch-only devices can't.
+  On Windows and Linux, Ctrl+V in an agent's tab pastes now, like everywhere
+  else in the browser.
+- **Preview a dev server in a tab, and review all your changes** (#23).
+  **preview** beside a server or a port shows it in a tab next to the agent
+  (`>preview` takes any local address), in the Mac app and in a browser on
+  the same machine. **Review** in the git section goes through every changed
+  file with its diff, new folders included, before you commit. Together with
+  the file tabs, that's the browser and the editor you'd otherwise switch
+  to. The page can only show local servers, never Quarters itself, and it
+  can't reach the window it's in.
 - **Docker on Windows.** The Docker files run in Docker Desktop on Windows:
   a Windows checkout no longer turns the entrypoint script's line endings
   into CRLF (which made the container fail to start with "no such file or

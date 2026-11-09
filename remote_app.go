@@ -24,7 +24,7 @@ var remoteMethods = map[string]bool{
 	"SaveAutomationSizes": true, "RemoveProject": true, "ConfigPath": true, "ReadConfig": true, "SaveConfig": true, "PastedImage": true,
 	"CloseSession": true, "SetSessionGroup": true, "Sessions": true, "Snapshot": true,
 	"Settings": true, "SetFeature": true, "SetClaudeRemote": true, "Chat": true, "TabImage": true, "RemoteControlled": true, "SavePrompts": true, "SetUsageAlertAt": true,
-	"Conversations": true, "Diff": true, "DevLinks": true, "OpenOnMac": true, "ProjectTools": true,
+	"Conversations": true, "Diff": true, "ChangedFiles": true, "DevLinks": true, "OpenOnMac": true, "ProjectTools": true,
 	"Worktrees": true, "CreateWorktree": true, "RemoveWorktree": true, "RestoreInfo": true, "DismissRestore": true,
 	"Queues": true, "QueueAdd": true, "QueueRemove": true, "QueueMove": true, "QueueNext": true,
 	"Usage": true, "Instructions": true, "ReadInstructions": true, "SaveInstructions": true, "Notes": true, "SaveNotes": true,
@@ -32,6 +32,7 @@ var remoteMethods = map[string]bool{
 	"GitCommit": true, "GitPush": true, "DraftCommitMessage": true, "CreatePullRequest": true, "PullRequest": true,
 	"Scripts": true, "Ports": true, "StopPort": true, "SearchProjects": true, "DailySummary": true,
 	"Checkpoints": true, "CheckpointFiles": true, "CheckpointDiff": true, "RestoreCheckpoint": true,
+	"SavePastedImage": true,
 }
 
 // What a device with less than full access may call ("view": watch only;
@@ -40,7 +41,7 @@ var (
 	viewMethods = map[string]bool{
 		"ClientID": true, "Access": true, "Projects": true, "ConfigError": true, "Version": true, "CheckUpdate": true, "Today": true, "Awake": true, "Layout": true, "Stats": true,
 		"Account": true, "AgentAccount": true, "IconData": true, "ConfigPath": true, "PastedImage": true, "Sessions": true,
-		"Snapshot": true, "Settings": true, "Conversations": true, "Diff": true, "DevLinks": true,
+		"Snapshot": true, "Settings": true, "Conversations": true, "Diff": true, "ChangedFiles": true, "DevLinks": true,
 		"ProjectTools": true, "Worktrees": true, "RestoreInfo": true, "SetViewing": true, "Chat": true, "TabImage": true, "RemoteControlled": true,
 		"PushKey": true, "PushSubscribe": true, "PushUnsubscribe": true,
 		"Queues": true, "Usage": true, "Instructions": true, "ReadInstructions": true, "Notes": true,
@@ -48,8 +49,9 @@ var (
 		"PullRequest": true, "Scripts": true, "Ports": true, "SearchProjects": true, "DailySummary": true,
 		"Checkpoints": true, "CheckpointFiles": true, "CheckpointDiff": true,
 	}
-	// queued prompts are typed in later: the same as typing them now
-	typeMethods = map[string]bool{"Write": true, "Resize": true, "Claim": true,
+	// queued prompts are typed in later: the same as typing them now; a pasted
+	// image is typed in as its path
+	typeMethods = map[string]bool{"Write": true, "Resize": true, "Claim": true, "SavePastedImage": true,
 		"QueueAdd": true, "QueueRemove": true, "QueueMove": true, "QueueNext": true}
 )
 

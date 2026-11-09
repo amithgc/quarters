@@ -371,6 +371,8 @@ func (s *Server) clientIP(r *http.Request) string {
 
 const csp = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; " +
 	"font-src 'self'; connect-src 'self'; worker-src 'self'; manifest-src 'self'; frame-ancestors 'none'; " +
+	// a preview tab shows a server on this browser's own machine, nothing else
+	"frame-src http://localhost:* http://127.0.0.1:* https://localhost:* https://127.0.0.1:*; " +
 	"base-uri 'none'; form-action 'self'; object-src 'none'"
 
 // public paths need no sign-in: the sign-in pages and what they show.
