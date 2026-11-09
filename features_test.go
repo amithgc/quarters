@@ -45,6 +45,20 @@ func testApp(t *testing.T) (*App, string) {
 	a := &App{cfg: cfg, convs: map[int]string{}}
 	a.f.init()
 	a.sessions = session.NewManager(func(string, any) {}, nil)
+	// Git status runs in the background (see gitOf) and may write in .git: the
+	// project can't be removed under it. Cleanups run last-added first, so this
+	// comes before the temporary folders go.
+	t.Cleanup(func() {
+		for end := time.Now().Add(10 * time.Second); time.Now().Before(end); time.Sleep(2 * time.Millisecond) {
+			a.fmu.Lock()
+			busy := a.f.gitBusy
+			a.fmu.Unlock()
+			if busy == 0 {
+				return
+			}
+		}
+		t.Error("git status was still running after 10s")
+	})
 	return a, dir
 }
 
