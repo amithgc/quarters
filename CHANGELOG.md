@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.9.0
 
 - **Text with letters missing is repaired** (#25). Terminals keep the letters
   they've drawn on canvases they share and never draw one twice. When the
