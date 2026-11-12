@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.10.1
+
+- **A clearer menu bar menu.** Each Claude plan limit has a usage bar with
+  its percent, turning orange when it fills up or would run out before it
+  resets and red near 100%, with when it runs out at this pace and when it
+  resets. Each waiting session says whether it asks you or it's your turn,
+  how long ago, and how long its prompt cache has left.
+
 ## 0.10.0
 
 - **When your plan runs out, at this pace.** Each Claude plan limit in the
