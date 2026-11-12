@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.10.0
 
 - **When your plan runs out, at this pace.** Each Claude plan limit in the
   side panel says when it reaches 100% at the pace you've used it over the
