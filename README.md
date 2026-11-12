@@ -117,8 +117,17 @@ page, with your tabs still running behind it:
   at, you get a notification and a Dock badge, and the tab is marked.
 - **Who's waiting for you:** the ACTIVE list (with 5 projects or more)
   puts the sessions that finished (or are asking you something) first,
-  longest waiting first, with how long; **⌘J** (or a click on "◐ waiting" in the title bar) goes to the
+  longest waiting first, with how long and how long Claude's prompt cache
+  has left (answer after it runs out and the whole conversation is sent
+  again); **⌘J** (or a click on "◐ waiting" in the title bar) goes to the
   next one.
+- **In the menu bar:** the fullest plan limit, when it runs out at your
+  pace, and who's waiting for you, from any app; pick a session in its menu
+  to go to it.
+- **Secrets in conversations:** when a key or password (GitHub, AWS,
+  Stripe, OpenAI, private keys…) shows up in a Claude conversation, you get
+  a warning, and the project's side panel lists it (masked), so you can
+  rotate it.
 - **Prompt queue:** line up prompts for a session ("add tests", then "fix
   lint"…); each goes in when the agent finishes the one before, never over
   a question it is asking or a message you started typing. On a phone, ⏭
@@ -292,12 +301,15 @@ whether they're answering.
 <td>
 
 - **Plan:** Claude's usage limits and when they reset, as `/usage` shows
-  them, with a warning before you run out (Antigravity: its plan and model
-  quotas).
+  them, when each runs out at the pace you're using it, and warnings at
+  your level, 90% and 100%, before you run out and when it resets
+  (Antigravity: its plan and model quotas).
 - **Agent** and **Automations:** the project's coding agent, and its
   automations with run, stop, edit, delete and ＋ new.
-- **Session:** title, model, permission mode, prompts, context window use,
-  tokens (this session or today) and activity.
+- **Session:** title, model, permission mode, prompts, context window use
+  and how often it was compacted, how long the prompt cache has left,
+  tokens (this session or today), activity, and an estimated cost at API
+  prices if you switch it on.
 - **Git:** branch, ahead/behind, changed files, **Commit…**, **Push** and
   **Open a pull request**, and the pull request's checks.
 - **Claude changed:** the files Claude edited this session; click one for its

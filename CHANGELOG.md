@@ -1,5 +1,35 @@
 # Changelog
 
+## Unreleased
+
+- **When your plan runs out, at this pace.** Each Claude plan limit in the
+  side panel says when it reaches 100% at the pace you've used it over the
+  last 20 minutes (when that's before it resets). Usage warnings now come at
+  your level, then 90% and 100%, when a limit would run out within half an
+  hour, and when a limit you were warned about resets.
+- **Quarters in the menu bar.** The fullest plan limit (and when it runs out
+  at this pace) and how many sessions wait for you, from any app. Its menu
+  lists each limit and each waiting session; pick one to go to it. Switch it
+  off in Settings → Menu bar.
+- **Prompt cache timer.** Claude Code keeps a conversation in Anthropic's
+  prompt cache for 5 minutes (or an hour) after each reply; answer later and
+  the whole conversation is sent again, using more of your plan. The session
+  section, the ACTIVE list and the menu bar show how long it has left.
+- **Compactions.** The session section says how often the conversation was
+  compacted.
+- **Secrets in conversations.** When a key or password (GitHub, AWS, Stripe,
+  OpenAI, Anthropic, Slack, private keys, database passwords…) shows up in a
+  Claude conversation, Quarters warns you so you can rotate it: a
+  notification, and the key, masked, in the project's side panel. Only what
+  Claude writes from then on is read, on this machine; formats that are
+  rarely anything else are matched, and examples and local database
+  passwords are skipped.
+- **Estimated cost** (off by default): what your Claude Code tokens would
+  cost at Anthropic's API prices, per session, today and on Home, by model,
+  with the cache's 5-minute and 1-hour writes, fast mode and US-only
+  inference priced in. On a Pro or Max plan you don't pay this: it shows
+  what the plan is worth.
+
 ## 0.9.0
 
 - **Text with letters missing is repaired** (#25). Terminals keep the letters

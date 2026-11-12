@@ -264,7 +264,8 @@ body.remote .legend { display: none; }
 .ht-live { display: inline-flex; align-items: center; gap: 6px; color: var(--green); font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: .08em; }
 .ht-live i { width: 7px; height: 7px; border-radius: 50%; background: var(--green); animation: ht-live 2s ease-in-out infinite; }
 @keyframes ht-live { 50% { opacity: .3; transform: scale(.7); } }
-.ht-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 14px 0 16px; }
+.ht-stats { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 8px; margin: 14px 0 16px; }
+.ht-stats .hidden { display: none; }
 .ht-stats div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .ht-stats b { font-size: 22px; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; letter-spacing: -.01em; }
 .ht-stats b.green { color: var(--green); }
@@ -366,6 +367,10 @@ body.remote .legend { display: none; }
 .meter.warn > div { background: var(--yellow); }
 .limit { display: flex; flex-direction: column; gap: 4px; }
 .badge { font-size: var(--fs-xs); line-height: 18px; padding: 0 8px; border-radius: 9px; background: rgba(224, 138, 106, .14); color: var(--accent); font-weight: 700; }
+.secret-warn { border: 1px solid var(--red); border-radius: var(--r-sm); padding: 8px 10px; margin: 4px 0 8px; display: flex; flex-direction: column; gap: 6px; font-size: var(--fs-xs); line-height: 16px; }
+.secret-warn ul { margin: 0; padding-left: 16px; display: flex; flex-direction: column; gap: 3px; }
+.secret-warn code { font-family: var(--mono, monospace); overflow-wrap: anywhere; }
+.secret-warn .btn { align-self: flex-start; }
 .tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 .tile { background: var(--tile); border-radius: var(--r-sm); padding: 8px 10px; }
 .tile .t-label { color: var(--muted); font-size: var(--fs-xs); line-height: 16px; }
@@ -446,7 +451,7 @@ body.remote .legend { display: none; }
 @container (max-width: 640px) {
   .home-acts { grid-template-columns: 1fr; }
   .home-keys { grid-template-columns: 1fr 1fr; }
-  .ht-stats { grid-template-columns: 1fr 1fr; }
+  .ht-stats { grid-auto-flow: row; grid-template-columns: 1fr 1fr; }
   .home-title { font-size: 36px; }
   .welcome-mascot { height: 100px; }
 }

@@ -25,10 +25,11 @@ func awakeCmd(int) *exec.Cmd {
 }
 
 // The Dock and the global hotkey are macOS features.
-func setDockBadge(string) {}
-func bounceDock()         {}
-func activateApp()        {}
-func toggleApp()          {}
+func setDockBadge(string)             {}
+func bounceDock()                     {}
+func activateApp()                    {}
+func toggleApp()                      {}
+func setMenuBar(bool, string, string) {}
 
 func registerHotkey(combo string) error {
 	if combo == "" || combo == "off" {

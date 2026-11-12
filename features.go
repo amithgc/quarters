@@ -15,6 +15,7 @@ import (
 	"github.com/amithgc/quarters/internal/projects"
 	"github.com/amithgc/quarters/internal/remote"
 	"github.com/amithgc/quarters/internal/session"
+	"github.com/amithgc/quarters/internal/stats"
 )
 
 // ---- optional features (switched on and off in Settings) ----
@@ -22,18 +23,24 @@ import (
 // featureState is what the optional features keep between calls; App.fmu
 // guards it.
 type featureState struct {
-	viewing   map[string]viewing    // client → the session it shows
-	links     map[int]*sessionLinks // dev server links found in output
-	ports     map[string]portCheck  // "127.0.0.1:3000" → up?
-	git       map[string]gitEntry   // project → git status
-	gitBusy   int
-	alerted   map[string]bool      // usage limits already warned about
-	schedRun  map[string]string    // automation → day it last ran by itself
-	restore   []RestoreItem        // sessions open when Quarters last quit
-	queues    map[int]*promptQueue // session → prompts waiting to be sent
-	awake     *exec.Cmd            // caffeinate, while keeping the Mac awake
-	awakeHold int64                // the top bar's keep-awake hold: when it ends (unix ms), -1 until stopped, 0 none
-	hotkeyErr string
+	viewing    map[string]viewing    // client → the session it shows
+	links      map[int]*sessionLinks // dev server links found in output
+	ports      map[string]portCheck  // "127.0.0.1:3000" → up?
+	git        map[string]gitEntry   // project → git status
+	gitBusy    int
+	limits     map[string]*limitWatch // plan limits: last reading, what was announced
+	schedRun   map[string]string      // automation → day it last ran by itself
+	restore    []RestoreItem          // sessions open when Quarters last quit
+	queues     map[int]*promptQueue   // session → prompts waiting to be sent
+	awake      *exec.Cmd              // caffeinate, while keeping the Mac awake
+	awakeHold  int64                  // the top bar's keep-awake hold: when it ends (unix ms), -1 until stopped, 0 none
+	hotkeyErr  string
+	waiting    []WaitingItem        // tabs waiting for you, as the Mac window sees them
+	menuShown  string               // what the menu bar shows now
+	menuKeys   []string             // the tabs its menu items open
+	secrets    []secretHit          // possible secrets found in Claude's logs, newest last
+	secretScan *stats.SecretScanner // nil while the feature is off
+	scanning   bool
 }
 
 func (f *featureState) init() {
@@ -41,7 +48,7 @@ func (f *featureState) init() {
 	f.links = map[int]*sessionLinks{}
 	f.ports = map[string]portCheck{}
 	f.git = map[string]gitEntry{}
-	f.alerted = map[string]bool{}
+	f.limits = map[string]*limitWatch{}
 	f.schedRun = map[string]string{}
 	f.queues = map[int]*promptQueue{}
 }
@@ -58,7 +65,8 @@ const (
 	scheduleEvery  = 20 * time.Second
 	restoreEvery   = 30 * time.Second // what's open, saved in case of a crash
 	usageEvery     = time.Minute
-	projectsEvery  = 2 * time.Second // the project list, checked for changes
+	secretsEvery   = 10 * time.Second // Claude's logs, read for leaked keys
+	projectsEvery  = 2 * time.Second  // the project list, checked for changes
 )
 
 // background runs the features that work without any window open.
@@ -68,6 +76,7 @@ func (a *App) background() {
 	schedule := time.NewTicker(scheduleEvery)
 	restore := time.NewTicker(restoreEvery)
 	usage := time.NewTicker(usageEvery)
+	secrets := time.NewTicker(secretsEvery)
 	firstUsage := time.After(5 * time.Second)
 	list := time.NewTicker(projectsEvery)
 	var listed []byte
@@ -79,14 +88,17 @@ func (a *App) background() {
 			a.attention()
 		case <-awake.C:
 			a.keepAwake()
+			a.updateMenuBar()
 		case <-schedule.C:
 			a.runSchedules(time.Now())
 		case <-restore.C:
 			a.saveRestore()
+		case <-secrets.C:
+			go a.scanSecrets()
 		case <-firstUsage:
-			go a.usageAlerts()
+			go a.planCheck()
 		case <-usage.C:
-			go a.usageAlerts() // fetches over the network: never holds up the rest
+			go a.planCheck() // fetches over the network: never holds up the rest
 		}
 	}
 }

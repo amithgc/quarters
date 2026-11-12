@@ -23,9 +23,10 @@ type todayCache struct {
 
 // accountCache keeps the plan's limits, fetched from Anthropic.
 type accountCache struct {
-	mu  sync.Mutex
-	at  time.Time
-	val stats.Account
+	mu   sync.Mutex
+	at   time.Time
+	val  stats.Account
+	pace *stats.Pace // recent readings, for "runs out at this pace"
 }
 
 // StatsView is everything the stats panel shows for one project.
@@ -46,7 +47,16 @@ type StatsView struct {
 	Git        stats.Git         `json:"git"`
 	Today      stats.Usage       `json:"today"`
 	TodayCount int               `json:"todaySessions"`
-	Edited     []string          `json:"edited"` // files Claude edited this session
+	Edited     []string          `json:"edited"`    // files Claude edited this session
+	Cost       float64           `json:"cost"`      // this session's, estimated at API prices
+	TodayCost  float64           `json:"todayCost"` // today's, all projects
+	// Compactions is how often this conversation was compacted.
+	Compactions int `json:"compactions"`
+	// CacheUntil is when the prompt cache runs out (unix ms, 0: unknown),
+	// CacheTTL its lifetime in seconds.
+	CacheUntil int64        `json:"cacheUntil"`
+	CacheTTL   int          `json:"cacheTTL"`
+	Secrets    []SecretView `json:"secrets"` // possible secrets in the project's conversations
 }
 
 // MCPView is one MCP server.
@@ -68,6 +78,10 @@ func (a *App) Stats(path string) StatsView {
 		v.Title, v.Model, v.Mode, v.Turns, v.Context = s.Title, s.Model, s.Mode, s.Turns, s.Context
 		v.Start, v.Last = s.Start.UnixMilli(), s.Last.UnixMilli()
 		v.Usage, v.Activity = s.Usage, s.Activity[:]
+		v.Cost, v.Compactions, v.CacheTTL = s.Cost, s.Compactions, int(s.CacheTTL.Seconds())
+		if u := s.CacheUntil(); !u.IsZero() {
+			v.CacheUntil = u.UnixMilli()
+		}
 		v.Tools = s.Tools
 		if cfg.On("changes") {
 			v.Edited = s.Edited
@@ -101,9 +115,10 @@ func (a *App) Stats(path string) StatsView {
 		}
 	}
 	v.Git = a.gitNow(path)
+	v.Secrets = a.secretsOf(path)
 
 	d := a.day()
-	v.Today, v.TodayCount = d.Usage, d.Sessions
+	v.Today, v.TodayCount, v.TodayCost = d.Usage, d.Sessions, d.Cost
 	return v
 }
 
@@ -129,6 +144,7 @@ func (a *App) day() stats.Day {
 // page.
 type TodayView struct {
 	Usage    stats.Usage `json:"usage"`
+	Cost     float64     `json:"cost"` // estimated, at API prices
 	Sessions int         `json:"sessions"`
 	Activity []int       `json:"activity"` // tokens per 5 min, the last 2 h, oldest first
 }
@@ -136,7 +152,7 @@ type TodayView struct {
 // Today is today's use across every project.
 func (a *App) Today() TodayView {
 	d := a.day()
-	return TodayView{Usage: d.Usage, Sessions: d.Sessions, Activity: d.Activity[:]}
+	return TodayView{Usage: d.Usage, Cost: d.Cost, Sessions: d.Sessions, Activity: d.Activity[:]}
 }
 
 // Confirm asks a yes/no question in a native dialog.
@@ -178,6 +194,12 @@ func (a *App) Account() stats.Account {
 	defer a.account.mu.Unlock()
 	if time.Since(a.account.at) > time.Minute || a.account.val.Error != "" && time.Since(a.account.at) > 15*time.Second {
 		next := stats.FetchAccount(a.bg())
+		if a.account.pace == nil {
+			a.account.pace = stats.NewPace()
+		}
+		if next.Error == "" {
+			a.account.pace.Add(&next, time.Now())
+		}
 		// Keep the last good numbers through a brief network hiccup.
 		if next.Error == "" || len(a.account.val.Limits) == 0 || !strings.HasPrefix(next.Error, "Usage unavailable") {
 			a.account.val = next

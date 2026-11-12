@@ -60,6 +60,7 @@ const state = {
   links: [], // dev servers the terminals mentioned
   palette: { open: false, sel: 0, matches: [] },
   queues: {}, // session id -> prompts waiting to be sent
+  health: {}, // session id -> { cacheUntil, cacheTTL, compactions } (Claude tabs)
   usage: null, // tokens per project (Usage)
   instructions: {}, // path -> { files, notes, at }
 };
@@ -173,6 +174,13 @@ function fmtAgo(ms) {
   if (d < 86400) return Math.floor(d / 3600) + "h";
   if (d < 14 * 86400) return Math.floor(d / 86400) + "d";
   return Math.floor(d / 604800) + "w";
+}
+
+// fmtCost is an estimated cost in dollars.
+function fmtCost(n) {
+  if (!n) return "$0";
+  if (n < 0.01) return "<$0.01";
+  return "$" + (n < 100 ? n.toFixed(2) : Math.round(n).toLocaleString());
 }
 
 function fmtDuration(ms) {
@@ -2371,6 +2379,9 @@ async function renderToday(grow) {
   countUp(card.querySelector('[data-n="output"]'), u.Output || 0, fmtTokens);
   countUp(card.querySelector('[data-n="input"]'), prompt, fmtTokens);
   countUp(card.querySelector('[data-n="hit"]'), prompt ? Math.round((100 * (u.CacheRead || 0)) / prompt) : 0, (n) => `${n}%`);
+  const cost = card.querySelector('[data-n="cost"]');
+  cost.parentElement.classList.toggle("hidden", !on("cost"));
+  if (on("cost")) countUp(cost, Math.round((t.cost || 0) * 100), (c) => fmtCost(c / 100));
 
   const box = $("#ht-bars"), peak = Math.max(1, ...act), now = Date.now();
   if (box.children.length !== act.length) {
@@ -2707,6 +2718,7 @@ function renderStats(force) {
   let ss = `<div class="sec-row"><span class="sec">SESSION</span>${state_}</div>`;
   if (cur && cur.path === path) ss += `<button class="end-btn" type="button" data-end-tab title="Ends the session in this tab">${cur.exited ? "Close tab" : cur.kind === "shell" || cur.autoKey ? "End this shell" : `End this ${esc(shortAgent(cur.harness))} session`}</button>`;
 
+  ss += renderSecrets(s.secrets);
   if (other) {
     ss += `<div class="muted">${esc(otherName)} runs as it is here: its model, context and token use show in its own window, not in this panel.</div>`;
   } else if (s.has) {
@@ -2720,7 +2732,9 @@ function renderStats(force) {
       <div class="row"><span class="muted">prompts</span><span>${s.turns}</span></div></div>
       <div class="kv" style="gap:6px">
       <div class="row"><span class="muted">context</span><span>${fmtTokens(s.context)} / ${fmtTokens(s.window)}  <span class="accent">${Math.round(frac * 100)}%</span></span></div>
-      <div class="meter${frac > 0.8 ? " hot" : ""}"><div style="width:${Math.min(100, frac * 100).toFixed(1)}%"></div></div></div>`;
+      <div class="meter${frac > 0.8 ? " hot" : ""}"><div style="width:${Math.min(100, frac * 100).toFixed(1)}%"></div></div>
+      ${s.compactions ? `<div class="muted" style="font-size:11px;line-height:16px" title="Claude Code summarised the conversation to make room (/compact, or by itself when the context filled up)">compacted ${s.compactions}× this session</div>` : ""}</div>`;
+    if (live && on("cache_timer") && s.cacheUntil) ss += renderCache(s.cacheUntil, s.cacheTTL);
   } else {
     ss += `<div class="muted">No Claude Code history in this folder yet.</div>`;
   }
@@ -2742,6 +2756,8 @@ function renderStats(force) {
         <div class="tile"><div class="t-label">cache hit</div><div class="t-value green">${hit}%</div></div>
       </div>`;
     if (state.tokenView === "today") t += `<div class="muted" style="margin-top:-6px;font-size:12px">${s.todaySessions} sessions today, all projects</div>`;
+    if (on("cost"))
+      t += `<div class="kv"><div class="row"><span class="muted" title="What these tokens would cost at Anthropic's API prices. On a Pro or Max plan you don't pay this.">est. cost${state.tokenView === "today" ? " today" : ""} · API prices</span><span>${fmtCost(state.tokenView === "today" ? s.todayCost : s.cost)}</span></div></div>`;
 
     // activity
     const act = s.activity || [];
@@ -2851,6 +2867,30 @@ function fmtResets(ms) {
   return "resets " + new Date(ms).toLocaleDateString([], { weekday: "short", hour: "2-digit", minute: "2-digit" });
 }
 
+// renderCache shows how long the session's prompt cache lasts: answering
+// after it runs out sends the whole conversation again.
+function renderCache(until, ttl) {
+  const left = until - Date.now();
+  const cls = left <= 0 ? "muted" : left < 60000 ? "red" : left < 120000 ? "yellow" : "green";
+  const text = left > 0 ? `${fmtLeft(left)} left` : `expired${fmtAgo(until) === "now" ? "" : ` ${fmtAgo(until)} ago`}`;
+  const tip = `Claude Code keeps the conversation in Anthropic's prompt cache for ${ttl >= 3600 ? "an hour" : "5 minutes"} after each reply. Answer before it runs out and it's read from the cache; after, the whole conversation is sent again, which uses more of your plan.`;
+  return `<div class="kv"><div class="row"><span class="muted" title="${esc(tip)}">prompt cache</span><span class="${cls}">${text} <span class="muted">(${ttl >= 3600 ? "1 h" : "5 min"})</span></span></div></div>`;
+}
+
+// renderSecrets warns about keys and passwords found in the project's
+// Claude conversations (see secrets.go).
+function renderSecrets(list) {
+  if (!list || !list.length) return "";
+  const items = list
+    .slice(0, 5)
+    .map((x) => `<li><b>${esc(x.kind)}</b> <code>${esc(x.masked)}</code> <span class="muted">in ${esc(x.where)} · ${fmtAgo(x.at) === "now" ? "just now" : fmtAgo(x.at) + " ago"}</span></li>`)
+    .join("");
+  return `<div class="secret-warn"><div class="red">⚠ ${list.length === 1 ? "A possible secret" : `${list.length} possible secrets`} in this project's Claude conversations</div>
+    <ul>${items}</ul>
+    <div class="muted">If it's real, rotate it: it was sent to Claude and is kept in Claude Code's logs (~/.claude/projects).</div>
+    <button class="btn" type="button" data-dismiss-secrets>Dismiss</button></div>`;
+}
+
 // renderPlan draws the Claude account's plan limits (what /usage shows).
 function renderPlan(a = state.account, title = "CLAUDE PLAN") {
   if (!a) return "";
@@ -2863,7 +2903,7 @@ function renderPlan(a = state.account, title = "CLAUDE PLAN") {
     h += `<div class="limit">
       <div class="row"><span>${esc(l.label)}${l.active ? ' <span class="muted" title="The limit currently in effect">•</span>' : ""}</span><span class="${hot === "hot" ? "red" : hot ? "yellow" : "accent"}">${pct}%</span></div>
       <div class="meter ${hot}"><div style="width:${Math.min(100, l.percent)}%"></div></div>
-      <div class="muted" style="font-size:11px;line-height:16px">${esc(fmtResets(l.resetsAt))}</div></div>`;
+      <div class="muted" style="font-size:11px;line-height:16px">${l.runsOutAt ? `<span class="${l.runsOutAt - Date.now() < 30 * 60000 ? "red" : "yellow"}" title="When it reaches 100% at the pace you've used it over the last 20 minutes">runs out in ~${fmtLeft(l.runsOutAt - Date.now())} at this pace</span> · ` : ""}${esc(fmtResets(l.resetsAt))}</div></div>`;
   }
   h += `</div>`;
   if (a.error) h += `<div class="muted" style="font-size:11px">${esc(a.error)}</div>`;
@@ -3852,6 +3892,12 @@ function wirePanelAutomations() {
 }
 
 function wireEndTab() {
+  $("#stats").addEventListener("click", async (e) => {
+    if (!e.target.closest("[data-dismiss-secrets]")) return;
+    if (!canChange()) return watchOnly();
+    await Go().DismissSecrets(state.current || state.selected);
+    refreshStats();
+  });
   $("#stats").addEventListener("click", async (e) => {
     if (!e.target.closest("[data-end-tab]")) return;
     if (!canChange()) return watchOnly();
@@ -5064,7 +5110,9 @@ async function main() {
     renderProjects();
     if (Object.keys(state.tabs).length) renderTabs();
     renderActiveList();
+    syncMenuBar();
   });
+  every(10000, refreshHealth, { hidden: true, behind: 1 });
   every(2000, refreshStats);
   every(4000, refreshLinks);
   every(10000, reportViewing, { hidden: true, behind: 1 });
@@ -5423,7 +5471,56 @@ function activeProjects(list) {
 // menus; other agents' aren't recognised yet).
 const asking = (tab) => isClaude(tab) && !!tab.term && !!chatMenu(tab.term);
 
-const waitLabel = (t) => `${asking(t) ? "asks you" : "done"}${fmtAgo(t.doneAt) === "now" ? "" : ` · ${fmtAgo(t.doneAt)}`}`;
+// cacheLeft is how long a Claude tab's prompt cache lasts (ms; null: unknown).
+const cacheLeft = (t) => {
+  const h = state.health[t.id];
+  return on("cache_timer") && h && h.cacheUntil ? h.cacheUntil - Date.now() : null;
+};
+
+const cacheLabel = (t) => {
+  const left = cacheLeft(t);
+  return left === null ? "" : left > 0 ? ` · cache ${fmtLeft(left)}` : " · cache expired";
+};
+
+const waitLabel = (t) => `${asking(t) ? "asks you" : "done"}${fmtAgo(t.doneAt) === "now" ? "" : ` · ${fmtAgo(t.doneAt)}`}${cacheLabel(t)}`;
+
+// refreshHealth reads each Claude tab's prompt cache and compactions from
+// its conversation log.
+let healthBusy = false;
+async function refreshHealth() {
+  if (healthBusy || !on("cache_timer")) return;
+  const live = Object.values(state.tabs).some((list) => list.some((t) => !t.exited && t.kind !== "shell" && isClaude(t)));
+  if (!live) {
+    state.health = {};
+    return;
+  }
+  healthBusy = true;
+  try {
+    const list = (await Go().Health()) || [];
+    state.health = Object.fromEntries(list.map((h) => [h.id, h]));
+  } catch {
+    /* an older server */
+  } finally {
+    healthBusy = false;
+  }
+}
+
+// syncMenuBar tells Quarters which tabs wait for you, for the menu bar.
+let menuSent = "";
+function syncMenuBar() {
+  if (REMOTE) return;
+  const list = waitingTabs().map((t) => ({
+    key: tabKey(t),
+    name: project(t.path)?.name || shortAgent(t.harness),
+    doneAt: t.doneAt || 0,
+    asks: asking(t),
+    cacheUntil: (on("cache_timer") && state.health[t.id]?.cacheUntil) || 0,
+  }));
+  const json = JSON.stringify(list);
+  if (json === menuSent) return;
+  menuSent = json;
+  Promise.resolve(Go().SetWaiting(list)).catch(() => (menuSent = ""));
+}
 
 function nextWaiting() {
   const t = waitingTabs()[0];

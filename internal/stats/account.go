@@ -16,6 +16,9 @@ type Limit struct {
 	Severity string  `json:"severity"` // normal, warning, critical…
 	ResetsAt int64   `json:"resetsAt"` // unix ms
 	Active   bool    `json:"active"`   // the limit currently holding you back
+	// RunsOutAt is when it reaches 100% at the pace you've used it lately
+	// (unix ms; 0: not before it resets, or not known yet).
+	RunsOutAt int64 `json:"runsOutAt"`
 }
 
 // Account is the signed-in Claude account's plan usage.

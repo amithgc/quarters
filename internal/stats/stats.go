@@ -64,6 +64,23 @@ type Session struct {
 	Activity   [Buckets]int // tokens per bucket, oldest first, ending now
 	MaxContext int
 	Edited     []string // files Claude edited or wrote, first edit first
+	Cost       float64  // estimated, at API prices (see Response.Cost)
+	// Compactions is how often the conversation was compacted (by
+	// /compact, or by Claude Code when the context filled up).
+	Compactions int
+	// CacheAt is when the main thread last talked to the API, and CacheTTL
+	// how long its prompt cache lives after that (5 minutes, or an hour).
+	CacheAt  time.Time
+	CacheTTL time.Duration
+}
+
+// CacheUntil is when the session's prompt cache runs out: replying later
+// sends the whole conversation again at the full price (zero: unknown).
+func (s Session) CacheUntil() time.Time {
+	if s.CacheAt.IsZero() || s.CacheTTL == 0 {
+		return time.Time{}
+	}
+	return s.CacheAt.Add(s.CacheTTL)
 }
 
 // fileAgg is the running tally for one log file, read incrementally.
@@ -73,9 +90,11 @@ type fileAgg struct {
 	tools     map[string]int
 	lastID    string
 	lastUsage Usage
+	lastCost  float64
 	lastTime  time.Time
 	byMinute  map[int64]int // unix minute → tokens
 	today     Usage
+	todayCost float64
 	todayKey  string
 }
 
@@ -90,6 +109,7 @@ func NewReader() *Reader { return &Reader{files: map[string]*fileAgg{}} }
 
 type logLine struct {
 	Type           string `json:"type"`
+	Subtype        string `json:"subtype"`
 	Timestamp      string `json:"timestamp"`
 	IsSidechain    bool   `json:"isSidechain"`
 	PermissionMode string `json:"permissionMode"`
@@ -99,13 +119,46 @@ type logLine struct {
 		Model   string          `json:"model"`
 		Role    string          `json:"role"`
 		Content json.RawMessage `json:"content"`
-		Usage   *struct {
-			Input      int `json:"input_tokens"`
-			Output     int `json:"output_tokens"`
-			CacheRead  int `json:"cache_read_input_tokens"`
-			CacheWrite int `json:"cache_creation_input_tokens"`
-		} `json:"usage"`
+		Usage   *logUsage       `json:"usage"`
 	} `json:"message"`
+}
+
+// logUsage is a response's usage as Claude Code logs it.
+type logUsage struct {
+	Input         int `json:"input_tokens"`
+	Output        int `json:"output_tokens"`
+	CacheRead     int `json:"cache_read_input_tokens"`
+	CacheWrite    int `json:"cache_creation_input_tokens"`
+	CacheCreation *struct {
+		Write5m int `json:"ephemeral_5m_input_tokens"`
+		Write1h int `json:"ephemeral_1h_input_tokens"`
+	} `json:"cache_creation"`
+	Speed string `json:"speed"`
+	Geo   string `json:"inference_geo"`
+}
+
+func (l *logUsage) usage() Usage { return Usage{l.Input, l.Output, l.CacheRead, l.CacheWrite} }
+
+// response is the usage with what its price depends on.
+func (l *logUsage) response(model string) Response {
+	r := Response{Model: model, Usage: l.usage(), Speed: l.Speed, Geo: l.Geo}
+	if l.CacheCreation != nil {
+		r.Write1h = l.CacheCreation.Write1h
+	}
+	return r
+}
+
+// cacheTTL is how long the prompt cache this response wrote lives: an hour
+// when it wrote to the 1-hour cache, 5 minutes otherwise; 0 when it wrote
+// nothing (and so didn't change it).
+func (l *logUsage) cacheTTL() time.Duration {
+	switch {
+	case l.CacheCreation != nil && l.CacheCreation.Write1h > 0:
+		return time.Hour
+	case l.CacheWrite > 0:
+		return 5 * time.Minute
+	}
+	return 0
 }
 
 type contentBlock struct {
@@ -142,6 +195,7 @@ func (r *Reader) update(path string) (*fileAgg, error) {
 
 	f, err := os.Open(path)
 	if err != nil {
+		delete(r.files, path) // gone, or never was: don't keep asking about it
 		return agg, err
 	}
 	defer f.Close()
@@ -187,6 +241,10 @@ func (a *fileAgg) parse(line []byte) {
 		}
 	}
 	switch l.Type {
+	case "system":
+		if l.Subtype == "compact_boundary" && !l.IsSidechain {
+			s.Compactions++
+		}
 	case "ai-title":
 		s.Title = l.AITitle
 	case "permission-mode":
@@ -228,30 +286,41 @@ func (a *fileAgg) parse(line []byte) {
 		if m.Usage == nil {
 			return
 		}
-		u := Usage{m.Usage.Input, m.Usage.Output, m.Usage.CacheRead, m.Usage.CacheWrite}
+		u := m.Usage.usage()
+		cost := m.Usage.response(m.Model).Cost()
 		// One API response is logged as several lines (one per content
 		// block) repeating its usage; count it once, keeping the latest.
 		if m.ID != "" && m.ID == a.lastID {
 			s.Usage.add(a.lastUsage, -1)
-			a.account(a.lastTime, a.lastUsage, -1)
+			s.Cost -= a.lastCost
+			a.account(a.lastTime, a.lastUsage, -a.lastCost, -1)
 		}
-		a.lastID, a.lastUsage, a.lastTime = m.ID, u, ts
+		a.lastID, a.lastUsage, a.lastCost, a.lastTime = m.ID, u, cost, ts
 		s.Usage.add(u, 1)
-		a.account(ts, u, 1)
+		s.Cost += cost
+		a.account(ts, u, cost, 1)
 		if !l.IsSidechain {
 			s.Context = u.Input + u.CacheRead + u.CacheWrite
 			s.MaxContext = max(s.MaxContext, s.Context)
+			if !ts.IsZero() && m.Model != "<synthetic>" {
+				s.CacheAt = ts
+				if ttl := m.Usage.cacheTTL(); ttl > 0 || s.CacheTTL == 0 {
+					s.CacheTTL = max(ttl, 5*time.Minute)
+				}
+			}
 		}
 	}
 }
 
-// account adds a response to today's tally and the activity chart.
-func (a *fileAgg) account(ts time.Time, u Usage, sign int) {
+// account adds a response to today's tally and the activity chart (sign
+// -1 takes one away again; cost is then negative too).
+func (a *fileAgg) account(ts time.Time, u Usage, cost float64, sign int) {
 	if ts.IsZero() {
 		return
 	}
 	if todayKey(ts) == a.todayKey {
 		a.today.add(u, sign)
+		a.todayCost += cost
 	}
 	if time.Since(ts) < 3*time.Hour {
 		a.byMinute[ts.Unix()/60] += sign * (u.Input + u.Output + u.CacheWrite)
@@ -281,6 +350,11 @@ func (r *Reader) Session(claudeDir string) (Session, bool) {
 	if path == "" {
 		return Session{}, false
 	}
+	return r.SessionFile(path)
+}
+
+// SessionFile returns the tally of one conversation's log.
+func (r *Reader) SessionFile(path string) (Session, bool) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	agg, err := r.update(path)
@@ -329,6 +403,7 @@ func (a *fileAgg) addActivity(chart *[Buckets]int) {
 // activity chart of the last two hours.
 type Day struct {
 	Usage    Usage
+	Cost     float64 // estimated, at API prices
 	Sessions int
 	Activity [Buckets]int
 }
@@ -359,6 +434,7 @@ func (r *Reader) Today(root string) Day {
 			if err == nil {
 				if agg.today != (Usage{}) {
 					d.Usage.add(agg.today, 1)
+					d.Cost += agg.todayCost
 					d.Sessions++
 				}
 				agg.addActivity(&d.Activity)

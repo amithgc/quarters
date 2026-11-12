@@ -32,7 +32,7 @@ var remoteMethods = map[string]bool{
 	"GitCommit": true, "GitPush": true, "DraftCommitMessage": true, "CreatePullRequest": true, "PullRequest": true,
 	"Scripts": true, "Ports": true, "StopPort": true, "SearchProjects": true, "DailySummary": true,
 	"Checkpoints": true, "CheckpointFiles": true, "CheckpointDiff": true, "RestoreCheckpoint": true,
-	"SavePastedImage": true,
+	"SavePastedImage": true, "Health": true, "DismissSecrets": true,
 }
 
 // What a device with less than full access may call ("view": watch only;
@@ -47,7 +47,7 @@ var (
 		"Queues": true, "Usage": true, "Instructions": true, "ReadInstructions": true, "Notes": true,
 		"ListDir": true, "ListFiles": true, "FileStatus": true, "ReadFile": true, "FileStamp": true,
 		"PullRequest": true, "Scripts": true, "Ports": true, "SearchProjects": true, "DailySummary": true,
-		"Checkpoints": true, "CheckpointFiles": true, "CheckpointDiff": true,
+		"Checkpoints": true, "CheckpointFiles": true, "CheckpointDiff": true, "Health": true,
 	}
 	// queued prompts are typed in later: the same as typing them now; a pasted
 	// image is typed in as its path

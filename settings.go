@@ -81,6 +81,9 @@ func (a *App) SetFeature(key string, on bool) error {
 			a.applyHotkey()
 		case "keep_awake":
 			go a.keepAwake()
+		case "menu_bar":
+			go a.planCheck()
+			go a.updateMenuBar()
 		}
 	}
 	return err
