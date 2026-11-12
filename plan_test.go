@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -62,31 +63,34 @@ func TestMenuBarContent(t *testing.T) {
 		{Key: "k1", Name: "api\tgateway", DoneAt: now.Add(-3 * time.Minute).UnixMilli(), CacheUntil: now.Add(2 * time.Minute).UnixMilli()},
 		{Key: "k2", Name: "shop", Asks: true, DoneAt: now.UnixMilli(), CacheUntil: now.Add(-time.Minute).UnixMilli()},
 	}
-	title, items, keys := menuBarContent(acct, waiting, now)
+	title, rows, keys := menuBarContent(acct, waiting, now)
 	if title != "◐2  42% ~45m" {
 		t.Errorf("title = %q", title)
 	}
-	want := strings.Join([]string{
-		"-1\tClaude plan · Max",
-		"-1\tCurrent session — 42% · runs out in ~45 min at this pace",
-		"-1\tWeekly · all models — 18% · resets " + now.Add(72*time.Hour).Format("Mon 15:04"),
-		"-",
-		"-1\tWaiting for you",
-		"1\tapi gateway — your turn · 3 min · cache 2 min left",
-		"2\tshop — asks you · cache expired",
-		"-",
-		"0\tOpen Quarters",
-	}, "\n")
-	if items != want {
-		t.Errorf("items:\n%s\nwant:\n%s", items, want)
+	want := []menuRow{
+		{Kind: "plan", Text: "Claude plan", Detail: "Max"},
+		{Kind: "limit", Text: "Current session", Detail: "Runs out in ~45 min · resets in 2h 10m", Percent: 42, Level: "warn"},
+		{Kind: "limit", Text: "Weekly · all models", Detail: "Resets " + now.Add(72*time.Hour).Format("Mon 15:04"), Percent: 18},
+		{Kind: "sep"},
+		{Kind: "section", Text: "Waiting for you"},
+		{Kind: "tab", Text: "api gateway", Detail: "Your turn · 3 min ago · cache 2 min left", Tag: 1},
+		{Kind: "tab", Text: "shop", Detail: "Asks you · cache expired", Tag: 2, Asks: true},
+		{Kind: "sep"},
+		{Kind: "open", Text: "Open Quarters"},
+	}
+	if fmt.Sprint(rows) != fmt.Sprint(want) {
+		t.Errorf("rows:\n%v\nwant:\n%v", rows, want)
 	}
 	if len(keys) != 2 || keys[0] != "k1" || keys[1] != "k2" {
 		t.Errorf("keys = %v", keys)
 	}
+	if l := limitLevel(stats.Limit{Percent: 95}); l != "crit" {
+		t.Errorf("95%% is %q", l)
+	}
 
-	title, items, _ = menuBarContent(stats.Account{Error: "Not signed in — run claude and /login"}, nil, now)
-	if title != "" || !strings.HasPrefix(items, "-1\tClaude plan: Not signed in") || !strings.Contains(items, "Nobody is waiting for you") {
-		t.Errorf("signed out: %q / %q", title, items)
+	title, rows, _ = menuBarContent(stats.Account{Error: "Not signed in — run claude and /login"}, nil, now)
+	if title != "" || rows[0].Kind != "note" || !strings.HasPrefix(rows[0].Detail, "Not signed in") || rows[2].Kind != "empty" {
+		t.Errorf("signed out: %q / %v", title, rows)
 	}
 }
 

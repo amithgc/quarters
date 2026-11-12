@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -54,7 +55,10 @@ func (a *App) updateMenuBar() {
 	var title, items string
 	var keys []string
 	if on {
-		title, items, keys = menuBarContent(a.cachedAccount(), a.f.waiting, time.Now())
+		var rows []menuRow
+		title, rows, keys = menuBarContent(a.cachedAccount(), a.f.waiting, time.Now())
+		b, _ := json.Marshal(rows)
+		items = string(b)
 	}
 	shown := fmt.Sprint(on, "\x00", title, "\x00", items)
 	same := shown == a.f.menuShown
@@ -88,13 +92,38 @@ func (a *App) menuBarClick(tag int) {
 	}
 }
 
+// menuRow is one row of the menu bar's menu, drawn natively by setMenuBar.
+type menuRow struct {
+	// Kind is plan (Text, and the plan's name in Detail), limit (a usage
+	// bar), note (a warning: Text, Detail), section (a header), tab (a
+	// waiting tab that opens with Tag), empty (nobody waits), sep or open.
+	Kind    string  `json:"kind"`
+	Text    string  `json:"text,omitempty"`
+	Detail  string  `json:"detail,omitempty"`
+	Percent float64 `json:"percent,omitempty"`
+	Level   string  `json:"level,omitempty"` // "", "warn" or "crit": how the row is coloured
+	Tag     int     `json:"tag,omitempty"`
+	Asks    bool    `json:"asks,omitempty"`
+}
+
+// limitLevel is how alarming a limit looks: "crit" when nearly used up,
+// "warn" when filling up or on pace to run out before it resets.
+func limitLevel(l stats.Limit) string {
+	switch {
+	case l.Percent >= 90 || l.Severity == "critical":
+		return "crit"
+	case l.Percent >= 75 || l.RunsOutAt > 0 || l.Severity == "warning":
+		return "warn"
+	}
+	return ""
+}
+
 // menuBarContent is what the menu bar shows: its title ("◐2  42% ~45m":
 // tabs waiting, the plan's fullest limit and when it runs out at this pace)
-// and its menu, one item per line ("tag\ttext"; see setMenuBar). keys[i] is
-// the tab item tag i+1 opens.
-func menuBarContent(acct stats.Account, waiting []WaitingItem, now time.Time) (title, items string, keys []string) {
-	clean := func(s string) string { return strings.NewReplacer("\t", " ", "\n", " ", "\r", " ").Replace(s) }
-	var t, m []string
+// and its menu's rows. keys[i] is the tab that tag i+1 opens.
+func menuBarContent(acct stats.Account, waiting []WaitingItem, now time.Time) (title string, rows []menuRow, keys []string) {
+	clean := strings.NewReplacer("\t", " ", "\n", " ", "\r", " ").Replace
+	var t []string
 	if len(waiting) > 0 {
 		t = append(t, fmt.Sprintf("◐%d", len(waiting)))
 	}
@@ -118,47 +147,48 @@ func menuBarContent(acct stats.Account, waiting []WaitingItem, now time.Time) (t
 
 	switch {
 	case len(acct.Limits) > 0:
-		head := "Claude plan"
-		if acct.Plan != "" {
-			head += " · " + acct.Plan
-		}
-		m = append(m, "-1\t"+clean(head))
+		rows = append(rows, menuRow{Kind: "plan", Text: "Claude plan", Detail: acct.Plan})
 		for _, l := range acct.Limits {
-			line := fmt.Sprintf("%s — %d%%", l.Label, int(l.Percent))
+			var d []string
 			if l.RunsOutAt > 0 {
-				line += " · runs out in ~" + fmtLeft(time.UnixMilli(l.RunsOutAt).Sub(now)) + " at this pace"
-			} else if r := resetsIn(l.ResetsAt, now); r != "" {
-				line += " · " + r
+				d = append(d, "Runs out in ~"+fmtLeft(time.UnixMilli(l.RunsOutAt).Sub(now)))
 			}
-			m = append(m, "-1\t"+clean(line))
+			if r := resetsIn(l.ResetsAt, now); r != "" {
+				d = append(d, r)
+			}
+			detail := strings.Join(d, " · ")
+			if detail != "" {
+				detail = strings.ToUpper(detail[:1]) + detail[1:]
+			}
+			rows = append(rows, menuRow{Kind: "limit", Text: l.Label, Detail: detail, Percent: max(0, min(100, l.Percent)), Level: limitLevel(l)})
 		}
-		m = append(m, "-")
+		rows = append(rows, menuRow{Kind: "sep"})
 	case acct.Error != "":
-		m = append(m, "-1\t"+clean("Claude plan: "+acct.Error), "-")
+		rows = append(rows, menuRow{Kind: "note", Text: "Claude plan unavailable", Detail: acct.Error, Level: "warn"}, menuRow{Kind: "sep"})
 	}
 
 	if len(waiting) == 0 {
-		m = append(m, "-1\tNobody is waiting for you")
+		rows = append(rows, menuRow{Kind: "empty", Text: "All caught up", Detail: "No agent is waiting for you"})
 	} else {
-		m = append(m, "-1\tWaiting for you")
+		rows = append(rows, menuRow{Kind: "section", Text: "Waiting for you"})
 	}
 	for _, w := range waiting {
-		line := w.Name + " — " + map[bool]string{true: "asks you", false: "your turn"}[w.Asks]
+		d := []string{map[bool]string{true: "Asks you", false: "Your turn"}[w.Asks]}
 		if ago := now.Sub(time.UnixMilli(w.DoneAt)); w.DoneAt > 0 && ago >= time.Minute {
-			line += " · " + fmtLeft(ago)
+			d = append(d, fmtLeft(ago)+" ago")
 		}
 		if w.CacheUntil > 0 {
 			if left := time.UnixMilli(w.CacheUntil).Sub(now); left > 0 {
-				line += " · cache " + fmtLeft(left) + " left"
+				d = append(d, "cache "+fmtLeft(left)+" left")
 			} else {
-				line += " · cache expired"
+				d = append(d, "cache expired")
 			}
 		}
 		keys = append(keys, w.Key)
-		m = append(m, fmt.Sprintf("%d\t%s", len(keys), clean(line)))
+		rows = append(rows, menuRow{Kind: "tab", Text: clean(w.Name), Detail: strings.Join(d, " · "), Tag: len(keys), Asks: w.Asks})
 	}
-	m = append(m, "-", "0\tOpen Quarters")
-	return strings.Join(t, "  "), strings.Join(m, "\n"), keys
+	rows = append(rows, menuRow{Kind: "sep"}, menuRow{Kind: "open", Text: "Open Quarters"})
+	return strings.Join(t, "  "), rows, keys
 }
 
 // fmtShort is a duration as "25m" or "1h10m", for the menu bar's title.
